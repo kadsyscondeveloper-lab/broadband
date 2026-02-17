@@ -6,6 +6,7 @@ import '../../widgets/app_drawer.dart';
 import '../kyc/kyc_upload_screen.dart';
 import '../refer/refer_earn_screen.dart';
 import '../bills/bills_screens.dart';
+import '../recharge/provider_list_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final HomeViewModel viewModel;
@@ -230,10 +231,19 @@ class _ServiceItem extends StatelessWidget {
         Navigator.push(screenContext, MaterialPageRoute(builder: (_) => const MyBillsScreen()));
         break;
 
-    // New Plan — switches bottom tab to Pay (index 2)
-    // or you could push a dedicated NewPlanScreen here
+    // New Plan — shows broadband providers → wifi plan cards
       case 'New Plan':
-        onNavigateToPay?.call();
+        Navigator.push(screenContext, MaterialPageRoute(
+          builder: (_) => ProviderListScreen(
+            serviceType: 'Broadband Postpaid',
+            providers: [
+              'ACT Fibernet', 'AirJaldi - Rural Broadband', 'Airtel Broadband',
+              'Alliance Broadband Services Pvt. Ltd.', 'Comway Broadband',
+              'Connect Broadband', 'DEN Broadband', 'Hathway Broadband',
+              'MTNL Broadband', 'YOU Broadband', 'Speedonet Broadband',
+            ],
+          ),
+        ));
         break;
     }
   }
