@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import 'service_detail_screen.dart';
+import 'wifi_plans_screen.dart';
 
 class ProviderListScreen extends StatefulWidget {
   final String serviceType;
@@ -19,9 +20,31 @@ class ProviderListScreen extends StatefulWidget {
 class _ProviderListScreenState extends State<ProviderListScreen> {
   String _searchQuery = '';
 
+  // These service types show the WiFi plan screen instead of the generic detail
+  static const _wifiServiceTypes = {
+    'Broadband Postpaid',
+    'New Plan',
+    'WiFi Plans',
+  };
+
   List<String> get _filtered => widget.providers
       .where((p) => p.toLowerCase().contains(_searchQuery.toLowerCase()))
       .toList();
+
+  void _onProviderTap(String providerName) {
+    if (_wifiServiceTypes.contains(widget.serviceType)) {
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => WifiPlansScreen(providerName: providerName),
+      ));
+    } else {
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => ServiceDetailScreen(
+          serviceType: widget.serviceType,
+          providerName: providerName,
+        ),
+      ));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -124,12 +147,7 @@ class _ProviderListScreenState extends State<ProviderListScreen> {
                       _filtered[i],
                       style: const TextStyle(fontSize: 14, color: AppColors.textDark),
                     ),
-                    onTap: () => Navigator.push(context, MaterialPageRoute(
-                      builder: (_) => ServiceDetailScreen(
-                        serviceType: widget.serviceType,
-                        providerName: _filtered[i],
-                      ),
-                    )),
+                    onTap: () => _onProviderTap(_filtered[i]),
                   );
                 },
               ),

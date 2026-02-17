@@ -4,6 +4,7 @@ import '../../viewmodels/home_viewmodel.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_drawer.dart';
 import '../kyc/kyc_upload_screen.dart';
+import '../recharge/wifi_plans_screen.dart';
 import '../refer/refer_earn_screen.dart';
 import '../bills/bills_screens.dart';
 import '../recharge/provider_list_screen.dart';
@@ -232,18 +233,12 @@ class _ServiceItem extends StatelessWidget {
         break;
 
     // New Plan — shows broadband providers → wifi plan cards
+    // Replace this entire case block:
       case 'New Plan':
         Navigator.push(screenContext, MaterialPageRoute(
-          builder: (_) => ProviderListScreen(
-            serviceType: 'Broadband Postpaid',
-            providers: [
-              'ACT Fibernet', 'AirJaldi - Rural Broadband', 'Airtel Broadband',
-              'Alliance Broadband Services Pvt. Ltd.', 'Comway Broadband',
-              'Connect Broadband', 'DEN Broadband', 'Hathway Broadband',
-              'MTNL Broadband', 'YOU Broadband', 'Speedonet Broadband',
-            ],
-          ),
+          builder: (_) => const WifiPlansScreen(),
         ));
+        break;
         break;
     }
   }
