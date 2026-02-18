@@ -7,7 +7,6 @@ import '../kyc/kyc_upload_screen.dart';
 import '../recharge/wifi_plans_screen.dart';
 import '../refer/refer_earn_screen.dart';
 import '../bills/bills_screens.dart';
-import '../recharge/provider_list_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final HomeViewModel viewModel;
@@ -239,7 +238,7 @@ class _ServiceItem extends StatelessWidget {
           builder: (_) => const WifiPlansScreen(),
         ));
         break;
-        break;
+
     }
   }
 

@@ -4,16 +4,12 @@ import 'views/payments/payments_screen.dart';
 import 'views/help/help_screen.dart';
 import 'views/pay/pay_screen.dart';
 import 'views/profile/profile_screen.dart';
-import 'views/kyc/kyc_upload_screen.dart';
-import 'views/refer/refer_earn_screen.dart';
-import 'views/bills/bills_screens.dart';
 import 'viewmodels/home_viewmodel.dart';
 import 'viewmodels/payments_viewmodel.dart';
 import 'viewmodels/help_viewmodel.dart';
 import 'viewmodels/pay_viewmodel.dart';
 import 'viewmodels/profile_viewmodel.dart';
 import 'widgets/app_bottom_nav.dart';
-import 'theme/app_theme.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -25,7 +21,6 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _currentIndex = 0;
 
-  // Instantiate all ViewModels
   final _homeVM = HomeViewModel();
   final _paymentsVM = PaymentsViewModel();
   final _helpVM = HelpViewModel();
@@ -34,6 +29,10 @@ class _AppShellState extends State<AppShell> {
 
   void _onTabTapped(int index) {
     setState(() => _currentIndex = index);
+  }
+
+  void _navigateToHome() {
+    setState(() => _currentIndex = 0);
   }
 
   void _navigateToProfile() {
@@ -59,7 +58,12 @@ class _AppShellState extends State<AppShell> {
       case 3:
         return HelpScreen(viewModel: _helpVM);
       case 4:
-        return ProfileScreen(viewModel: _profileVM);
+      // Pass onNavigateToHome so the back arrow switches to Home tab
+      // instead of calling Navigator.pop (which would cause a black screen)
+        return ProfileScreen(
+          viewModel: _profileVM,
+          onNavigateToHome: _navigateToHome,
+        );
       default:
         return HomeScreen(viewModel: _homeVM);
     }

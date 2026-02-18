@@ -4,8 +4,13 @@ import '../../viewmodels/profile_viewmodel.dart';
 
 class ProfileScreen extends StatefulWidget {
   final ProfileViewModel viewModel;
+  final VoidCallback? onNavigateToHome;
 
-  const ProfileScreen({super.key, required this.viewModel});
+  const ProfileScreen({
+    super.key,
+    required this.viewModel,
+    this.onNavigateToHome,
+  });
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -67,9 +72,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
         backgroundColor: AppColors.primary,
         title: const Text('Edit Profile'),
         centerTitle: true,
+        // Use Home callback when available (tab mode); fall back to pop (pushed route mode)
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            if (widget.onNavigateToHome != null) {
+              widget.onNavigateToHome!();
+            } else {
+              Navigator.pop(context);
+            }
+          },
         ),
       ),
       body: ListenableBuilder(
