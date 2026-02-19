@@ -1,24 +1,31 @@
 import 'package:flutter/foundation.dart';
 import '../services/user_service.dart';
+import '../services/kyc_service.dart';
+import '../widgets/dashboard_section.dart'; // DashboardData lives here
 
 class HomeViewModel extends ChangeNotifier {
-  final _service = UserService();
+  final _service    = UserService();
+  final _kycService = KycService();
 
-  FullProfile? _profile;
-  bool _isLoading        = false;
-  bool _isKycUnderReview = false;
-  int  _featureBannerIndex = 0;
-  int  _promoBannerIndex   = 1;
+  FullProfile?   _profile;
+  bool           _isLoading          = false;
+  KycStatus?     _kycStatus;
+  DashboardData? _dashboardData;
+  int            _featureBannerIndex = 0;
+  int            _promoBannerIndex   = 1;
 
   // ── Getters ───────────────────────────────────────────────────────────────
 
-  FullProfile? get profile        => _profile;
-  bool   get isLoading            => _isLoading;
-  bool   get isKycUnderReview     => _isKycUnderReview;
-  int    get featureBannerIndex   => _featureBannerIndex;
-  int    get promoBannerIndex     => _promoBannerIndex;
+  FullProfile?   get profile            => _profile;
+  bool           get isLoading          => _isLoading;
+  KycStatus?     get kycStatus          => _kycStatus;
+  DashboardData? get dashboardData      => _dashboardData;
+  int            get featureBannerIndex => _featureBannerIndex;
+  int            get promoBannerIndex   => _promoBannerIndex;
 
-  // Convenience — UI uses these directly
+  // Legacy compat
+  bool get isKycUnderReview => _kycStatus?.isPending ?? false;
+
   String get userName      => _profile?.name          ?? '';
   double get walletBalance => _profile?.walletBalance ?? 0.0;
 
@@ -28,13 +35,28 @@ class HomeViewModel extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
-    _profile = await _service.getProfile();
+    // Load profile + KYC in parallel
+    final results = await Future.wait([
+      _service.getProfile(),
+      _kycService.getStatus(),
+    ]);
 
-    // Drive the KYC banner from the real status
-    final kyc = _profile?.kycStatus ?? '';
-    _isKycUnderReview = kyc == 'pending' || kyc == 'under_review';
+    _profile   = results[0] as FullProfile?;
+    _kycStatus = results[1] as KycStatus;
+
+    // ── TODO: Replace with real API call when backend is ready ───────────
+    // _dashboardData = await _dashboardService.getDashboard();
+    _dashboardData = DashboardData.mock();
+    // ─────────────────────────────────────────────────────────────────────
 
     _isLoading = false;
+    notifyListeners();
+  }
+
+  // ── Refresh KYC only (call after returning from KycScreen) ────────────────
+
+  Future<void> refreshKycStatus() async {
+    _kycStatus = await _kycService.getStatus();
     notifyListeners();
   }
 
@@ -51,7 +73,7 @@ class HomeViewModel extends ChangeNotifier {
   }
 
   void dismissKycBanner() {
-    _isKycUnderReview = false;
+    _kycStatus = KycStatus.notSubmitted();
     notifyListeners();
   }
 

@@ -88,39 +88,45 @@ class KycViewModel extends ChangeNotifier {
   void removeIdFile()      { _idFile = null;      notifyListeners(); }
 
   Future<File?> _showPickerSheet(BuildContext ctx) async {
-    File? picked;
-
-    await showModalBottomSheet<void>(
+    // Step 1: show the sheet and wait for the user to pick a SOURCE (not a file yet)
+    final source = await showModalBottomSheet<String>(
       context: ctx,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (sheetCtx) => _FilePickerSheet(
-        onCamera: () async {
-          Navigator.pop(sheetCtx);
-          final img = await _imgPicker.pickImage(
-              source: ImageSource.camera, imageQuality: 80);
-          if (img != null) picked = File(img.path);
-        },
-        onGallery: () async {
-          Navigator.pop(sheetCtx);
-          final img = await _imgPicker.pickImage(
-              source: ImageSource.gallery, imageQuality: 80);
-          if (img != null) picked = File(img.path);
-        },
-        onDocument: () async {
-          Navigator.pop(sheetCtx);
-          final result = await FilePicker.platform.pickFiles(
-            type: FileType.custom,
-            allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
-          );
-          if (result != null && result.files.single.path != null) {
-            picked = File(result.files.single.path!);
-          }
-        },
+        onCamera:   () => Navigator.pop(sheetCtx, 'camera'),
+        onGallery:  () => Navigator.pop(sheetCtx, 'gallery'),
+        onDocument: () => Navigator.pop(sheetCtx, 'document'),
       ),
     );
 
-    return picked;
+    if (source == null) return null;
+
+    // Step 2: NOW do the async file picking after the sheet has fully closed
+    switch (source) {
+      case 'camera':
+        final img = await _imgPicker.pickImage(
+            source: ImageSource.camera, imageQuality: 80);
+        return img != null ? File(img.path) : null;
+
+      case 'gallery':
+        final img = await _imgPicker.pickImage(
+            source: ImageSource.gallery, imageQuality: 80);
+        return img != null ? File(img.path) : null;
+
+      case 'document':
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+        );
+        if (result != null && result.files.single.path != null) {
+          return File(result.files.single.path!);
+        }
+        return null;
+
+      default:
+        return null;
+    }
   }
 
   // ── Submit ────────────────────────────────────────────────────────────────
@@ -163,7 +169,6 @@ class KycViewModel extends ChangeNotifier {
 }
 
 // ── File picker bottom sheet ──────────────────────────────────────────────────
-// Kept in this file since it's only used by this ViewModel
 
 class _FilePickerSheet extends StatelessWidget {
   final VoidCallback onCamera;
@@ -248,7 +253,6 @@ class _SheetOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Use primary color from theme or fallback
     const primary = Color(0xFF1A1A2E);
 
     return GestureDetector(
