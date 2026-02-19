@@ -1,8 +1,7 @@
 import 'package:dio/dio.dart';
 import '../core/api_client.dart';
 import '../core/storage_service.dart';
-import '../models/api_response.dart';
-import '../viewmodels/auth_viewmodel.dart';
+import '../models/auth_models.dart';
 
 /// AuthResult — same shape as your old stub so ViewModels need zero changes.
 class AuthResult {

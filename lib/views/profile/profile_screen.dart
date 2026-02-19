@@ -23,15 +23,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late final TextEditingController _addressController;
   late final TextEditingController _pinCodeController;
 
+  bool _controllersInitialized = false;
+
   @override
   void initState() {
     super.initState();
-    final user = widget.viewModel.user;
-    _nameController = TextEditingController(text: user.name);
-    _emailController = TextEditingController(text: user.email);
-    _houseNoController = TextEditingController(text: user.houseNo);
-    _addressController = TextEditingController(text: user.address);
-    _pinCodeController = TextEditingController(text: user.pinCode);
+    _nameController    = TextEditingController();
+    _emailController   = TextEditingController();
+    _houseNoController = TextEditingController();
+    _addressController = TextEditingController();
+    _pinCodeController = TextEditingController();
+
+    // Load profile then populate controllers
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await widget.viewModel.loadProfile();
+      _populateControllers();
+    });
+  }
+
+  void _populateControllers() {
+    final vm = widget.viewModel;
+    _nameController.text    = vm.name;
+    _emailController.text   = vm.email;
+    _houseNoController.text = vm.houseNo;
+    _addressController.text = vm.address;
+    _pinCodeController.text = vm.pinCode;
+    _controllersInitialized = true;
   }
 
   @override
@@ -61,6 +78,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       );
       widget.viewModel.resetUpdateState();
+    } else if (widget.viewModel.updateError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(widget.viewModel.updateError!),
+          backgroundColor: AppColors.primary,
+        ),
+      );
     }
   }
 
@@ -72,7 +96,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         backgroundColor: AppColors.primary,
         title: const Text('Edit Profile'),
         centerTitle: true,
-        // Use Home callback when available (tab mode); fall back to pop (pushed route mode)
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
           onPressed: () {
@@ -88,6 +111,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
         listenable: widget.viewModel,
         builder: (context, _) {
           final vm = widget.viewModel;
+
+          // Loading state
+          if (vm.isLoading) {
+            return const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            );
+          }
+
+          // Error state
+          if (vm.loadError != null && vm.profile == null) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline, color: AppColors.primary, size: 48),
+                    const SizedBox(height: 16),
+                    Text(vm.loadError!, textAlign: TextAlign.center,
+                        style: const TextStyle(color: AppColors.textGrey)),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: () async {
+                        await vm.loadProfile();
+                        _populateControllers();
+                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                      child: const Text('Retry', style: TextStyle(color: Colors.white)),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          // Populate controllers once after load (guards against rebuild overwrite)
+          if (!_controllersInitialized && vm.profile != null) {
+            _populateControllers();
+          }
+
           return Column(
             children: [
               Expanded(
@@ -139,7 +202,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       // Mobile No (read-only)
                       _ProfileField(
                         label: 'Mobile No.',
-                        controller: TextEditingController(text: vm.user.phone),
+                        controller: TextEditingController(text: vm.phone),
                         readOnly: true,
                       ),
                       const SizedBox(height: 20),
@@ -171,26 +234,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(height: 16),
 
                       // State dropdown
-                      const Text(
-                        'State',
-                        style: TextStyle(fontSize: 13, color: AppColors.textGrey, fontWeight: FontWeight.w500),
-                      ),
+                      const _FieldLabel(text: 'State'),
                       const SizedBox(height: 8),
                       _DropdownField(
-                        value: vm.user.state,
+                        value: vm.state,
                         items: vm.states,
                         onChanged: vm.updateState,
                       ),
                       const SizedBox(height: 16),
 
                       // City dropdown
-                      const Text(
-                        'City',
-                        style: TextStyle(fontSize: 13, color: AppColors.textGrey, fontWeight: FontWeight.w500),
-                      ),
+                      const _FieldLabel(text: 'City'),
                       const SizedBox(height: 8),
                       _DropdownField(
-                        value: vm.user.city,
+                        value: vm.city,
                         items: vm.cities,
                         onChanged: vm.updateCity,
                       ),
@@ -221,6 +278,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               ),
+
               // Update button
               Container(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
@@ -250,7 +308,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ? const SizedBox(
                       height: 20,
                       width: 20,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2),
                     )
                         : const Text(
                       'Update',
@@ -269,6 +328,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+}
+
+// ── Shared field widgets ──────────────────────────────────────────────────────
+
+class _FieldLabel extends StatelessWidget {
+  final String text;
+  const _FieldLabel({required this.text});
+
+  @override
+  Widget build(BuildContext context) => Text(
+    text,
+    style: const TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w500,
+      color: AppColors.textGrey,
+    ),
+  );
 }
 
 class _ProfileField extends StatelessWidget {
@@ -308,10 +384,15 @@ class _ProfileField extends StatelessWidget {
             controller: controller,
             readOnly: readOnly,
             keyboardType: keyboardType,
-            style: const TextStyle(fontSize: 15, color: AppColors.textDark, fontWeight: FontWeight.w500),
+            style: const TextStyle(
+              fontSize: 15,
+              color: AppColors.textDark,
+              fontWeight: FontWeight.w500,
+            ),
             decoration: const InputDecoration(
               border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              contentPadding:
+              EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             ),
           ),
         ),
@@ -333,6 +414,9 @@ class _DropdownField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // If the current value isn't in the list, fall back to first item
+    final effectiveValue = items.contains(value) ? value : items.first;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
@@ -342,7 +426,7 @@ class _DropdownField extends StatelessWidget {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: items.contains(value) ? value : items.first,
+          value: effectiveValue,
           isExpanded: true,
           icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textGrey),
           items: items

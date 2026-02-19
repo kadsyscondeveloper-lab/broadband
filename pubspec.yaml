@@ -12,10 +12,15 @@ dependencies:
   # HTTP client with interceptors
   dio: ^5.4.3
 
-  # Local token storage (simple key-value)
+  # Local token storage
   shared_preferences: ^2.2.3
 
-  # Existing deps (keep whatever you already have)
+  # Pick images from camera or gallery
+  image_picker: ^1.0.7
+
+  # Pick PDF and other document files
+  file_picker: ^8.1.2
+
   cupertino_icons: ^1.0.6
 
 dev_dependencies:

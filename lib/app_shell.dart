@@ -21,27 +21,25 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _currentIndex = 0;
 
-  final _homeVM = HomeViewModel();
+  final _homeVM     = HomeViewModel();
   final _paymentsVM = PaymentsViewModel();
-  final _helpVM = HelpViewModel();
-  final _payVM = PayViewModel();
-  final _profileVM = ProfileViewModel();
+  final _helpVM     = HelpViewModel();
+  final _payVM      = PayViewModel();
+  final _profileVM  = ProfileViewModel();
 
-  void _onTabTapped(int index) {
-    setState(() => _currentIndex = index);
+  @override
+  void initState() {
+    super.initState();
+    // Load real profile data as soon as the shell mounts
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _homeVM.loadProfile();
+    });
   }
 
-  void _navigateToHome() {
-    setState(() => _currentIndex = 0);
-  }
-
-  void _navigateToProfile() {
-    setState(() => _currentIndex = 4);
-  }
-
-  void _navigateToPay() {
-    setState(() => _currentIndex = 2);
-  }
+  void _onTabTapped(int index) => setState(() => _currentIndex = index);
+  void _navigateToHome()       => setState(() => _currentIndex = 0);
+  void _navigateToProfile()    => setState(() => _currentIndex = 4);
+  void _navigateToPay()        => setState(() => _currentIndex = 2);
 
   Widget _buildBody() {
     switch (_currentIndex) {
@@ -58,8 +56,6 @@ class _AppShellState extends State<AppShell> {
       case 3:
         return HelpScreen(viewModel: _helpVM);
       case 4:
-      // Pass onNavigateToHome so the back arrow switches to Home tab
-      // instead of calling Navigator.pop (which would cause a black screen)
         return ProfileScreen(
           viewModel: _profileVM,
           onNavigateToHome: _navigateToHome,

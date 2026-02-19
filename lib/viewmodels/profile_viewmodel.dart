@@ -1,87 +1,137 @@
 import 'package:flutter/foundation.dart';
-import '../models/user_model.dart';
+import '../services/user_service.dart';
 
 class ProfileViewModel extends ChangeNotifier {
-  UserModel _user = UserModel(
-    name: 'Paradeep Tech',
-    phone: '6354785693',
-    email: 'paradeeptech@gmail.com',
-    state: 'Delhi',
-    city: 'Bawana',
-    houseNo: '3E-1 NITHARI Rohini North West Delhi India 110086',
-    address: 'fhhhhj',
-    pinCode: '110086',
-    walletBalance: 0.00,
-  );
+  final _service = UserService();
 
-  bool _isUpdating = false;
+  FullProfile? _profile;
+  bool   _isLoading   = false;
+  bool   _isUpdating  = false;
+  String? _loadError;
   String? _updateError;
-  bool _updateSuccess = false;
+  bool   _updateSuccess = false;
 
-  UserModel get user => _user;
-  bool get isUpdating => _isUpdating;
-  String? get updateError => _updateError;
-  bool get updateSuccess => _updateSuccess;
+  // ── Getters ───────────────────────────────────────────────────────────────
 
-  final List<String> states = ['Delhi', 'Maharashtra', 'Karnataka', 'Tamil Nadu', 'Uttar Pradesh'];
-  final List<String> cities = ['Bawana', 'Rohini', 'Dwarka', 'Lajpat Nagar', 'Saket'];
+  FullProfile? get profile      => _profile;
+  bool         get isLoading    => _isLoading;
+  bool         get isUpdating   => _isUpdating;
+  String?      get loadError    => _loadError;
+  String?      get updateError  => _updateError;
+  bool         get updateSuccess => _updateSuccess;
 
-  void updateName(String value) {
-    _user = _user.copyWith(name: value);
+  // Convenience getters used directly in the UI
+  String get name          => _profile?.name          ?? '';
+  String get phone         => _profile?.phone         ?? '';
+  String get email         => _profile?.email         ?? '';
+  String get state         => _profile?.address.state   ?? '';
+  String get city          => _profile?.address.city    ?? '';
+  String get houseNo       => _profile?.address.houseNo ?? '';
+  String get address       => _profile?.address.address ?? '';
+  String get pinCode       => _profile?.address.pinCode ?? '';
+  double get walletBalance => _profile?.walletBalance ?? 0.0;
+  String get kycStatus     => _profile?.kycStatus     ?? 'not_submitted';
+
+  final List<String> states = [
+    'Andhra Pradesh', 'Assam', 'Bihar', 'Delhi', 'Gujarat',
+    'Haryana', 'Karnataka', 'Kerala', 'Madhya Pradesh',
+    'Maharashtra', 'Punjab', 'Rajasthan', 'Tamil Nadu',
+    'Telangana', 'Uttar Pradesh', 'West Bengal',
+  ];
+
+  final List<String> cities = [
+    'Ahmedabad', 'Bangalore', 'Bawana', 'Chennai', 'Delhi',
+    'Dwarka', 'Gurgaon', 'Hyderabad', 'Jaipur', 'Kolkata',
+    'Lajpat Nagar', 'Lucknow', 'Mumbai', 'Noida', 'Pune',
+    'Rohini', 'Saket', 'Surat',
+  ];
+
+  // ── Load profile from API ─────────────────────────────────────────────────
+
+  Future<void> loadProfile() async {
+    _isLoading  = true;
+    _loadError  = null;
+    notifyListeners();
+
+    _profile = await _service.getProfile();
+    if (_profile == null) {
+      _loadError = 'Failed to load profile. Please try again.';
+    }
+
+    _isLoading = false;
     notifyListeners();
   }
 
-  void updateEmail(String value) {
-    _user = _user.copyWith(email: value);
+  // ── Local field updates (before hitting save) ─────────────────────────────
+
+  void updateName(String v)    { _profile = _profile?.copyWith(name: v);    notifyListeners(); }
+  void updateEmail(String v)   { _profile = _profile?.copyWith(email: v);   notifyListeners(); }
+  void updateState(String v)   {
+    _profile = _profile?.copyWith(address: ProfileAddress(
+      houseNo: houseNo, address: address, city: city, state: v, pinCode: pinCode,
+    ));
+    notifyListeners();
+  }
+  void updateCity(String v)    {
+    _profile = _profile?.copyWith(address: ProfileAddress(
+      houseNo: houseNo, address: address, city: v, state: state, pinCode: pinCode,
+    ));
+    notifyListeners();
+  }
+  void updateHouseNo(String v) {
+    _profile = _profile?.copyWith(address: ProfileAddress(
+      houseNo: v, address: address, city: city, state: state, pinCode: pinCode,
+    ));
+    notifyListeners();
+  }
+  void updateAddress(String v) {
+    _profile = _profile?.copyWith(address: ProfileAddress(
+      houseNo: houseNo, address: v, city: city, state: state, pinCode: pinCode,
+    ));
+    notifyListeners();
+  }
+  void updatePinCode(String v) {
+    _profile = _profile?.copyWith(address: ProfileAddress(
+      houseNo: houseNo, address: address, city: city, state: state, pinCode: v,
+    ));
     notifyListeners();
   }
 
-  void updateState(String value) {
-    _user = _user.copyWith(state: value);
-    notifyListeners();
-  }
-
-  void updateCity(String value) {
-    _user = _user.copyWith(city: value);
-    notifyListeners();
-  }
-
-  void updateHouseNo(String value) {
-    _user = _user.copyWith(houseNo: value);
-    notifyListeners();
-  }
-
-  void updateAddress(String value) {
-    _user = _user.copyWith(address: value);
-    notifyListeners();
-  }
-
-  void updatePinCode(String value) {
-    _user = _user.copyWith(pinCode: value);
-    notifyListeners();
-  }
+  // ── Save to API ───────────────────────────────────────────────────────────
 
   Future<void> updateProfile() async {
-    _isUpdating = true;
-    _updateError = null;
+    if (_profile == null) return;
+    _isUpdating   = true;
+    _updateError  = null;
     _updateSuccess = false;
     notifyListeners();
 
-    try {
-      // Simulate API call
-      await Future.delayed(const Duration(seconds: 1));
+    // Run both calls concurrently
+    final results = await Future.wait([
+      _service.updateProfile(name: name, email: email),
+      _service.updatePrimaryAddress(
+        houseNo:  houseNo,
+        address:  address,
+        city:     city,
+        state:    state,
+        pinCode:  pinCode,
+      ),
+    ]);
+
+    final failed = results.where((r) => !r.success).toList();
+    if (failed.isEmpty) {
       _updateSuccess = true;
-    } catch (e) {
-      _updateError = e.toString();
-    } finally {
-      _isUpdating = false;
-      notifyListeners();
+    } else {
+      _updateError = failed.map((r) => r.error).join(', ');
     }
+
+    _isUpdating = false;
+    notifyListeners();
   }
 
   void resetUpdateState() {
     _updateSuccess = false;
-    _updateError = null;
+    _updateError   = null;
     notifyListeners();
   }
 }
