@@ -88,6 +88,8 @@ class PayScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bottomNavHeight = 64 + 16 + MediaQuery.of(context).padding.bottom;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: ListenableBuilder(
@@ -95,43 +97,73 @@ class PayScreen extends StatelessWidget {
         builder: (context, _) {
           return CustomScrollView(
             slivers: [
+              // ── Header ─────────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Container(
-                  padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 16, left: 20, right: 20, bottom: 32),
+                  padding: EdgeInsets.only(
+                    top: MediaQuery.of(context).padding.top + 16,
+                    left: 20, right: 20, bottom: 32,
+                  ),
                   decoration: const BoxDecoration(
                     color: AppColors.primary,
-                    borderRadius: BorderRadius.only(bottomLeft: Radius.circular(28), bottomRight: Radius.circular(28)),
+                    borderRadius: BorderRadius.only(
+                      bottomLeft:  Radius.circular(28),
+                      bottomRight: Radius.circular(28),
+                    ),
                   ),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
+                      decoration: BoxDecoration(
+                          color: Colors.white, borderRadius: BorderRadius.circular(10)),
                       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        const Text('BHARAT BILL PAYMENT', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.5, color: AppColors.textDark)),
+                        const Text('BHARAT BILL PAYMENT',
+                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13,
+                                letterSpacing: 0.5, color: AppColors.textDark)),
                         Row(children: [
-                          Container(width: 24, height: 24, decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle)),
+                          Container(width: 24, height: 24,
+                              decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle)),
                           const SizedBox(width: 4),
-                          const Text('Bharat\nConnect', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Color(0xFF1565C0))),
+                          const Text('Bharat\nConnect',
+                              style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700,
+                                  color: Color(0xFF1565C0))),
                         ]),
                       ]),
                     ),
                     const SizedBox(height: 20),
-                    const Text('Current Balance', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                    const Text('Current Balance',
+                        style: TextStyle(color: Colors.white70, fontSize: 14)),
                     const SizedBox(height: 6),
-                    Text('₹${viewModel.currentBalance.toStringAsFixed(2)}', style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w800)),
+                    Text('₹${viewModel.currentBalance.toStringAsFixed(2)}',
+                        style: const TextStyle(color: Colors.white, fontSize: 36,
+                            fontWeight: FontWeight.w800)),
                   ]),
                 ),
               ),
+
+              // ── Recharge section ────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-                  child: _ServiceSection(title: 'Recharge', services: viewModel.rechargeServices, getIcon: _getIcon, onTap: (l) => _navigate(context, l)),
+                  child: _ServiceSection(
+                    title: 'Recharge',
+                    services: viewModel.rechargeServices,
+                    getIcon: _getIcon,
+                    onTap: (l) => _navigate(context, l),
+                  ),
                 ),
               ),
+
+              // ── Bill Payment section ────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                  child: _ServiceSection(title: 'Bill Payment', services: viewModel.billPaymentServices, getIcon: _getIcon, onTap: (l) => _navigate(context, l)),
+                  padding: EdgeInsets.fromLTRB(16, 16, 16, bottomNavHeight + 8),
+                  child: _ServiceSection(
+                    title: 'Bill Payment',
+                    services: viewModel.billPaymentServices,
+                    getIcon: _getIcon,
+                    onTap: (l) => _navigate(context, l),
+                  ),
                 ),
               ),
             ],
@@ -142,48 +174,94 @@ class PayScreen extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SERVICE SECTION  — uses Wrap instead of GridView (no overflow ever)
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _ServiceSection extends StatelessWidget {
   final String title;
   final List<Map<String, dynamic>> services;
   final IconData Function(String) getIcon;
   final Function(String) onTap;
 
-  const _ServiceSection({required this.title, required this.services, required this.getIcon, required this.onTap});
+  const _ServiceSection({
+    required this.title,
+    required this.services,
+    required this.getIcon,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
+    // Each item gets 1/4 of screen width
+    final itemWidth = (MediaQuery.of(context).size.width - 32 - 40) / 4;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.cardBg, borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 2))],
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.textDark)),
-        const SizedBox(height: 20),
-        GridView.builder(
-          shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 4, mainAxisSpacing: 16, crossAxisSpacing: 8, childAspectRatio: 0.82),
-          itemCount: services.length,
-          itemBuilder: (context, index) {
-            final s = services[index];
-            return GestureDetector(
-              onTap: () => onTap(s['label'] as String),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Container(
-                  width: 52, height: 52,
-                  decoration: const BoxDecoration(color: Color(0xFFEEEEF5), shape: BoxShape.circle),
-                  child: Icon(getIcon(s['icon'] as String), color: const Color(0xFF3D4066), size: 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.textDark)),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 0,
+            runSpacing: 16,
+            children: services.map((s) {
+              return SizedBox(
+                width: itemWidth,
+                child: GestureDetector(
+                  onTap: () => onTap(s['label'] as String),
+                  behavior: HitTestBehavior.opaque,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFEEEEF5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          getIcon(s['icon'] as String),
+                          color: const Color(0xFF3D4066),
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        s['label'] as String,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: AppColors.textDark,
+                          fontWeight: FontWeight.w500,
+                          height: 1.3,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 6),
-                Text(s['label'] as String, textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 10, color: AppColors.textDark, fontWeight: FontWeight.w500, height: 1.3),
-                    maxLines: 2, overflow: TextOverflow.ellipsis),
-              ]),
-            );
-          },
-        ),
-      ]),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
     );
   }
 }
