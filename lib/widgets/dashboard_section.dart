@@ -113,14 +113,14 @@ class _TopStatsRow extends StatelessWidget {
     return Row(
       children: [
         Expanded(child: _StatCard(
-          icon: Icons.arrow_upward_rounded,
+          icon: Icons.upload_outlined,
           label: 'Upload',
           value: '${data.uploadGb.toStringAsFixed(1)} GB',
           color: const Color(0xFF4CAF50),
         )),
         const SizedBox(width: 10),
         Expanded(child: _StatCard(
-          icon: Icons.arrow_downward_rounded,
+          icon: Icons.download_outlined,
           label: 'Download',
           value: '${data.downloadGb.toStringAsFixed(1)} GB',
           color: const Color(0xFF2196F3),
@@ -128,7 +128,7 @@ class _TopStatsRow extends StatelessWidget {
         const SizedBox(width: 10),
         // Ping — replace '12 ms' with real latency from your API
         const Expanded(child: _StatCard(
-          icon: Icons.speed_rounded,
+          icon: Icons.wifi_tethering,
           label: 'Ping',
           value: '12 ms',
           color: Color(0xFF9C27B0),
@@ -169,14 +169,7 @@ class _StatCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            width: 38, height: 38,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.10),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
+          Icon(icon, color: const Color(0xFF1A1A2E), size: 22),
           const SizedBox(height: 8),
           Text(value,
               style: const TextStyle(

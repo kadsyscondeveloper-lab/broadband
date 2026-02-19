@@ -39,6 +39,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final vm = widget.viewModel;
+    // Nav bar height (64) + lift (16) + safe area bottom
+    final bottomNavHeight = 64 + 16 + MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
       key: _scaffoldKey,
@@ -67,33 +69,38 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (context, _) {
           return CustomScrollView(
             slivers: [
-              SliverToBoxAdapter(
-                child: AppHeader(
+
+              // ── Sticky Header ─────────────────────────────────────────────
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: _StickyHeaderDelegate(
                   userName: vm.userName,
                   walletBalance: vm.walletBalance,
                   onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
                   onNotificationTap: () {},
                 ),
               ),
+
+              // ── Body ──────────────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.fromLTRB(16, 16, 16, bottomNavHeight + 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
 
-                      // 1. ── My Connection (no title) ─────────────────
+                      // 1. ── My Connection ───────────────────────────────
                       DashboardSection(
                         data: vm.dashboardData,
                         onPayNow: widget.onNavigateToPay,
                       ),
                       const SizedBox(height: 16),
 
-                      // 2. ── KYC Status Banner ─────────────────────────
+                      // 2. ── KYC Status Banner ───────────────────────────
                       _KycStatusBanner(kycStatus: vm.kycStatus, onTap: _openKyc),
                       const SizedBox(height: 16),
 
-                      // 3. ── Manage Services ───────────────────────────
+                      // 3. ── Manage Services ─────────────────────────────
                       _ManageServicesCard(
                         services: vm.services,
                         onNavigateToPay: widget.onNavigateToPay,
@@ -101,25 +108,24 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // 4. ── Speedo OTT Cards ──────────────────────────
+                      // 4. ── Speedo OTT Cards ────────────────────────────
                       _SpeedoCards(),
                       const SizedBox(height: 16),
 
-                      // 5. ── Promo Banner ──────────────────────────────
+                      // 5. ── Promo Banner ────────────────────────────────
                       _PromoBanner(
                         currentIndex: vm.promoBannerIndex,
                         onPageChanged: vm.onPromoBannerPageChanged,
                       ),
                       const SizedBox(height: 16),
 
-                      // 6. ── Refer & Earn ──────────────────────────────
+                      // 6. ── Features / Refer & Earn ─────────────────────
                       _FeaturesSection(
                         currentIndex: vm.featureBannerIndex,
                         onPageChanged: vm.onFeatureBannerPageChanged,
                       ),
                       const SizedBox(height: 24),
                       const _FooterText(),
-                      const SizedBox(height: 20),
                     ],
                   ),
                 ),
@@ -130,6 +136,44 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STICKY HEADER DELEGATE
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final String userName;
+  final double walletBalance;
+  final VoidCallback onMenuTap;
+  final VoidCallback onNotificationTap;
+
+  const _StickyHeaderDelegate({
+    required this.userName,
+    required this.walletBalance,
+    required this.onMenuTap,
+    required this.onNotificationTap,
+  });
+
+  @override
+  double get minExtent => 112;
+
+  @override
+  double get maxExtent => 112;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return AppHeader(
+      userName: userName,
+      walletBalance: walletBalance,
+      onMenuTap: onMenuTap,
+      onNotificationTap: onNotificationTap,
+    );
+  }
+
+  @override
+  bool shouldRebuild(_StickyHeaderDelegate old) =>
+      old.userName != userName || old.walletBalance != walletBalance;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -149,28 +193,6 @@ class _KycStatusBanner extends StatelessWidget {
     if (s.isRejected) return _RejectedBanner(onFix: onTap);
     return const SizedBox.shrink();
   }
-}
-
-class _ApprovedBanner extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: Colors.green.withOpacity(0.4)),
-    ),
-    child: const Row(children: [
-      Icon(Icons.verified_rounded, color: Colors.green, size: 26),
-      SizedBox(width: 12),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('KYC Verified ✓',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Colors.green)),
-        SizedBox(height: 4),
-        Text('Your identity has been successfully verified.',
-            style: TextStyle(fontSize: 12, color: Color(0xFF2E7D32), height: 1.4)),
-      ])),
-    ]),
-  );
 }
 
 class _PendingBanner extends StatelessWidget {
@@ -572,7 +594,7 @@ class _FooterText extends StatelessWidget {
     return const Padding(
       padding: EdgeInsets.symmetric(vertical: 8),
       child: Text('With love,\nfrom Speedonet',
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800,
+          style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800,
               color: Color(0xFFCCCCDD), height: 1.2)),
     );
   }
