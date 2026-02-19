@@ -47,7 +47,6 @@ class DashboardData {
   double get usagePercent =>
       isUnlimited ? 0 : (dataUsedGb / dataTotalGb).clamp(0.0, 1.0);
 
-  // ── MOCK — swap out once API is ready ────────────────────────────────────
   static DashboardData mock() => DashboardData(
     connectionState:   RouterConnectionState.online,
     planName:          'Speedo Gold 100',
@@ -82,34 +81,16 @@ class DashboardSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
 
-        // Row 1: Router status + Plan
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Expanded(child: _ConnectionCard(state: d.connectionState)),
-          const SizedBox(width: 12),
-          Expanded(child: _PlanCard(data: d)),
-        ]),
+        // Row 1: Upload | Download | Ping — 3 separate cards
+        _TopStatsRow(data: d),
         const SizedBox(height: 12),
 
-        // Row 2: Data usage gauge
+        // Row 2: Plan card with connection status inline
+        _PlanCardWide(data: d),
+        const SizedBox(height: 12),
+
+        // Row 3: Data usage gauge
         _DataUsageCard(data: d),
-        const SizedBox(height: 12),
-
-        // Row 3: Upload / Download
-        Row(children: [
-          Expanded(child: _StatChip(
-            icon: Icons.arrow_upward_rounded,
-            label: 'Upload',
-            value: '${d.uploadGb.toStringAsFixed(1)} GB',
-            color: const Color(0xFF4CAF50),
-          )),
-          const SizedBox(width: 12),
-          Expanded(child: _StatChip(
-            icon: Icons.arrow_downward_rounded,
-            label: 'Download',
-            value: '${d.downloadGb.toStringAsFixed(1)} GB',
-            color: const Color(0xFF2196F3),
-          )),
-        ]),
         const SizedBox(height: 12),
 
         // Row 4: Billing card
@@ -120,66 +101,128 @@ class DashboardSection extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CONNECTION STATUS CARD
+// TOP STATS ROW — 3 individual cards side by side
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _ConnectionCard extends StatelessWidget {
-  final RouterConnectionState state;
-  const _ConnectionCard({required this.state});
+class _TopStatsRow extends StatelessWidget {
+  final DashboardData data;
+  const _TopStatsRow({required this.data});
 
-  Color get _color {
-    switch (state) {
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: _StatCard(
+          icon: Icons.arrow_upward_rounded,
+          label: 'Upload',
+          value: '${data.uploadGb.toStringAsFixed(1)} GB',
+          color: const Color(0xFF4CAF50),
+        )),
+        const SizedBox(width: 10),
+        Expanded(child: _StatCard(
+          icon: Icons.arrow_downward_rounded,
+          label: 'Download',
+          value: '${data.downloadGb.toStringAsFixed(1)} GB',
+          color: const Color(0xFF2196F3),
+        )),
+        const SizedBox(width: 10),
+        // Ping — replace '12 ms' with real latency from your API
+        const Expanded(child: _StatCard(
+          icon: Icons.speed_rounded,
+          label: 'Ping',
+          value: '12 ms',
+          color: Color(0xFF9C27B0),
+        )),
+      ],
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final IconData icon;
+  final String label, value;
+  final Color color;
+
+  const _StatCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 38, height: 38,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(height: 8),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1A1A2E))),
+          const SizedBox(height: 2),
+          Text(label,
+              style: const TextStyle(fontSize: 10, color: Color(0xFF888888))),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PLAN CARD WIDE  (plan info left | divider | connection status right)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PlanCardWide extends StatelessWidget {
+  final DashboardData data;
+  const _PlanCardWide({required this.data});
+
+  Color get _stateColor {
+    switch (data.connectionState) {
       case RouterConnectionState.online:  return const Color(0xFF4CAF50);
       case RouterConnectionState.limited: return const Color(0xFFFFA726);
       case RouterConnectionState.offline: return const Color(0xFFF44336);
     }
   }
 
-  String get _label {
-    switch (state) {
+  String get _stateLabel {
+    switch (data.connectionState) {
       case RouterConnectionState.online:  return 'Online';
       case RouterConnectionState.limited: return 'Limited';
       case RouterConnectionState.offline: return 'Offline';
     }
   }
 
-  IconData get _icon {
-    switch (state) {
+  IconData get _stateIcon {
+    switch (data.connectionState) {
       case RouterConnectionState.online:  return Icons.wifi_rounded;
       case RouterConnectionState.limited: return Icons.wifi_lock_rounded;
       case RouterConnectionState.offline: return Icons.wifi_off_rounded;
     }
   }
-
-  @override
-  Widget build(BuildContext context) {
-    return _Card(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(
-            width: 8, height: 8,
-            decoration: BoxDecoration(color: _color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 6),
-          Text(_label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _color)),
-        ]),
-        const SizedBox(height: 12),
-        Icon(_icon, size: 32, color: _color),
-        const SizedBox(height: 8),
-        const Text('Router', style: TextStyle(fontSize: 12, color: Color(0xFF888888))),
-        const Text('Status', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
-      ]),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PLAN CARD
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _PlanCard extends StatelessWidget {
-  final DashboardData data;
-  const _PlanCard({required this.data});
 
   Color get _expiryColor {
     if (data.daysRemaining <= 5)  return const Color(0xFFF44336);
@@ -190,31 +233,75 @@ class _PlanCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _Card(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Active Plan', style: TextStyle(fontSize: 12, color: Color(0xFF888888))),
-        const SizedBox(height: 6),
-        Text(
-          data.planName,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E)),
-          maxLines: 2, overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+
+          // ── Left: plan info ──────────────────────────────────────────────
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Active Plan',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF888888))),
+              const SizedBox(height: 4),
+              Text(
+                data.planName,
+                style: const TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E)),
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 8),
+              Row(children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A1A2E),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(data.planSpeed,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700)),
+                ),
+                const SizedBox(width: 10),
+                Icon(Icons.calendar_today_rounded, size: 12, color: _expiryColor),
+                const SizedBox(width: 3),
+                Text('${data.daysRemaining}d left',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: _expiryColor)),
+              ]),
+            ]),
           ),
-          child: Text(data.planSpeed,
-              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
-        ),
-        const SizedBox(height: 10),
-        Row(children: [
-          Icon(Icons.calendar_today_rounded, size: 12, color: _expiryColor),
-          const SizedBox(width: 4),
-          Text('${data.daysRemaining}d left',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _expiryColor)),
-        ]),
-      ]),
+
+          // ── Divider ──────────────────────────────────────────────────────
+          Container(
+            width: 1, height: 52,
+            color: const Color(0xFFEEEEEE),
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+          ),
+
+          // ── Right: connection status ──────────────────────────────────────
+          Column(mainAxisSize: MainAxisSize.min, children: [
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                width: 7, height: 7,
+                decoration: BoxDecoration(color: _stateColor, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 5),
+              Text(_stateLabel,
+                  style: TextStyle(
+                      fontSize: 11, fontWeight: FontWeight.w700, color: _stateColor)),
+            ]),
+            const SizedBox(height: 8),
+            Icon(_stateIcon, size: 28, color: _stateColor),
+            const SizedBox(height: 4),
+            const Text('Router',
+                style: TextStyle(fontSize: 10, color: Color(0xFF888888))),
+          ]),
+        ],
+      ),
     );
   }
 }
@@ -240,9 +327,14 @@ class _DataUsageCard extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           const Text('Data Usage',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1A1A2E))),
           Text(
-            data.isUnlimited ? 'Unlimited' : '${data.dataTotalGb.toStringAsFixed(0)} GB plan',
+            data.isUnlimited
+                ? 'Unlimited'
+                : '${data.dataTotalGb.toStringAsFixed(0)} GB plan',
             style: const TextStyle(fontSize: 12, color: Color(0xFF888888)),
           ),
         ]),
@@ -251,7 +343,6 @@ class _DataUsageCard extends StatelessWidget {
         if (data.isUnlimited)
           _UnlimitedBadge()
         else ...[
-          // Semicircle gauge
           Center(
             child: SizedBox(
               width: 140, height: 80,
@@ -263,9 +354,13 @@ class _DataUsageCard extends StatelessWidget {
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
                       Text(
                         data.dataUsedGb.toStringAsFixed(1),
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: _barColor),
+                        style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            color: _barColor),
                       ),
-                      const Text('GB used', style: TextStyle(fontSize: 11, color: Color(0xFF888888))),
+                      const Text('GB used',
+                          style: TextStyle(fontSize: 11, color: Color(0xFF888888))),
                     ]),
                   ),
                 ),
@@ -274,7 +369,6 @@ class _DataUsageCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // Linear bar
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: LinearProgressIndicator(
@@ -288,8 +382,12 @@ class _DataUsageCard extends StatelessWidget {
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Text('${data.dataUsedGb.toStringAsFixed(1)} GB used',
                 style: const TextStyle(fontSize: 12, color: Color(0xFF555555))),
-            Text('${(data.dataTotalGb - data.dataUsedGb).toStringAsFixed(1)} GB left',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _barColor)),
+            Text(
+                '${(data.dataTotalGb - data.dataUsedGb).toStringAsFixed(1)} GB left',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _barColor)),
           ]),
         ],
       ]),
@@ -304,7 +402,8 @@ class _UnlimitedBadge extends StatelessWidget {
       const Icon(Icons.all_inclusive_rounded, size: 40, color: Color(0xFF1A1A2E)),
       const SizedBox(height: 8),
       const Text('Unlimited Data',
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
+          style: TextStyle(
+              fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
       const SizedBox(height: 4),
       Text('No data cap on your current plan',
           style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
@@ -354,39 +453,6 @@ class _ArcPainter extends CustomPainter {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// UPLOAD / DOWNLOAD STAT CHIP
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _StatChip extends StatelessWidget {
-  final IconData icon;
-  final String label, value;
-  final Color color;
-
-  const _StatChip({required this.icon, required this.label, required this.value, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return _Card(
-      child: Row(children: [
-        Container(
-          width: 40, height: 40,
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: color, size: 20),
-        ),
-        const SizedBox(width: 12),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF888888))),
-          const SizedBox(height: 2),
-          Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
-        ]),
-      ]),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // BILLING CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -395,7 +461,10 @@ class _BillingCard extends StatelessWidget {
   final VoidCallback? onPayNow;
   const _BillingCard({required this.data, this.onPayNow});
 
-  static const _months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  static const _months = [
+    'Jan','Feb','Mar','Apr','May','Jun',
+    'Jul','Aug','Sep','Oct','Nov','Dec',
+  ];
 
   String _formatDate(DateTime d) => '${d.day} ${_months[d.month - 1]} ${d.year}';
 
@@ -423,8 +492,11 @@ class _BillingCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            hasOutstanding ? '₹${data.outstandingAmount.toStringAsFixed(0)}' : '₹0',
-            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.white),
+            hasOutstanding
+                ? '₹${data.outstandingAmount.toStringAsFixed(0)}'
+                : '₹0',
+            style: const TextStyle(
+                fontSize: 28, fontWeight: FontWeight.w900, color: Colors.white),
           ),
           if (data.nextBillDate != null) ...[
             const SizedBox(height: 4),
@@ -442,10 +514,14 @@ class _BillingCard extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               decoration: BoxDecoration(
-                color: Colors.white, borderRadius: BorderRadius.circular(12),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
               ),
               child: const Text('Pay Now',
-                  style: TextStyle(color: Color(0xFF1A1A2E), fontWeight: FontWeight.w800, fontSize: 14)),
+                  style: TextStyle(
+                      color: Color(0xFF1A1A2E),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14)),
             ),
           )
         else
@@ -473,13 +549,17 @@ class _SkeletonDashboardState extends State<_SkeletonDashboard>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1200))
       ..repeat(reverse: true);
     _anim = Tween(begin: 0.4, end: 1.0).animate(_ctrl);
   }
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -489,18 +569,16 @@ class _SkeletonDashboardState extends State<_SkeletonDashboard>
         opacity: _anim.value,
         child: Column(children: [
           Row(children: [
-            Expanded(child: _SkeletonBox(height: 110)),
-            const SizedBox(width: 12),
-            Expanded(child: _SkeletonBox(height: 110)),
+            Expanded(child: _SkeletonBox(height: 90)),
+            const SizedBox(width: 10),
+            Expanded(child: _SkeletonBox(height: 90)),
+            const SizedBox(width: 10),
+            Expanded(child: _SkeletonBox(height: 90)),
           ]),
+          const SizedBox(height: 12),
+          _SkeletonBox(height: 80),
           const SizedBox(height: 12),
           _SkeletonBox(height: 180),
-          const SizedBox(height: 12),
-          Row(children: [
-            Expanded(child: _SkeletonBox(height: 70)),
-            const SizedBox(width: 12),
-            Expanded(child: _SkeletonBox(height: 70)),
-          ]),
           const SizedBox(height: 12),
           _SkeletonBox(height: 90),
         ]),
@@ -516,7 +594,8 @@ class _SkeletonBox extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     height: height,
     decoration: BoxDecoration(
-      color: const Color(0xFFEEEEEE), borderRadius: BorderRadius.circular(16),
+      color: const Color(0xFFEEEEEE),
+      borderRadius: BorderRadius.circular(16),
     ),
   );
 }
@@ -536,7 +615,13 @@ class _Card extends StatelessWidget {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(16),
-      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.05),
+          blurRadius: 8,
+          offset: const Offset(0, 2),
+        ),
+      ],
     ),
     child: child,
   );

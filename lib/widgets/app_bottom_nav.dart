@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import '../theme/app_theme.dart';
 
 class AppBottomNav extends StatelessWidget {
@@ -45,38 +46,116 @@ class AppBottomNav extends StatelessWidget {
                 isActive: currentIndex == 1,
                 onTap: () => onTap(1),
               ),
-              // Center Pay Button
+
+              // ── Center Glassmorphism Pay Button ──────────────────────────
               Expanded(
                 child: GestureDetector(
                   onTap: () => onTap(2),
                   behavior: HitTestBehavior.opaque,
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Outer glow halo
                       Container(
-                        width: 52,
-                        height: 52,
+                        width: 48,
+                        height: 48,
                         decoration: BoxDecoration(
-                          color: AppColors.primary,
                           shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.primary.withOpacity(0.35),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
+                          gradient: RadialGradient(
+                            colors: [
+                              AppColors.primary.withOpacity(0.22),
+                              AppColors.primary.withOpacity(0.07),
+                              Colors.transparent,
+                            ],
+                            stops: const [0.0, 0.55, 1.0],
+                          ),
                         ),
-                        child: const Icon(
-                          Icons.currency_rupee,
-                          color: AppColors.white,
-                          size: 22,
+                        child: Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: ClipOval(
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      AppColors.primary.withOpacity(0.95),
+                                      AppColors.primary,
+                                      const Color(0xFFB71C1C),
+                                    ],
+                                  ),
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.35),
+                                    width: 1.5,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.primary.withOpacity(0.45),
+                                      blurRadius: 14,
+                                      spreadRadius: 1,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                    BoxShadow(
+                                      color: Colors.white.withOpacity(0.15),
+                                      blurRadius: 5,
+                                      offset: const Offset(-2, -2),
+                                    ),
+                                  ],
+                                ),
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    // Frosted inner highlight arc
+                                    Positioned(
+                                      top: 3,
+                                      left: 5,
+                                      right: 5,
+                                      child: Container(
+                                        height: 10,
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(20),
+                                          gradient: LinearGradient(
+                                            colors: [
+                                              Colors.white.withOpacity(0.35),
+                                              Colors.white.withOpacity(0.0),
+                                            ],
+                                            begin: Alignment.topCenter,
+                                            end: Alignment.bottomCenter,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const Icon(
+                                      Icons.currency_rupee_rounded,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Pay',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.3,
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
+
               _NavItem(
                 icon: Icons.headset_mic_outlined,
                 activeIcon: Icons.headset_mic,

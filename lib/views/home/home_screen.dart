@@ -144,8 +144,7 @@ class _KycStatusBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = kycStatus;
-    if (s == null || s.isNotSubmitted) return const SizedBox.shrink();
-    if (s.isApproved) return _ApprovedBanner();
+    if (s == null || s.isNotSubmitted || s.isApproved) return const SizedBox.shrink();
     if (s.isPending)  return _PendingBanner(onCheckStatus: onTap);
     if (s.isRejected) return _RejectedBanner(onFix: onTap);
     return const SizedBox.shrink();
