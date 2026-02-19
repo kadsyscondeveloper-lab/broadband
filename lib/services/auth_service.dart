@@ -1,105 +1,231 @@
-import 'dart:async';
+import 'package:dio/dio.dart';
+import '../core/api_client.dart';
+import '../core/storage_service.dart';
+import '../models/api_response.dart';
+import '../viewmodels/auth_viewmodel.dart';
 
-/// Simulated response from the auth backend.
+/// AuthResult — same shape as your old stub so ViewModels need zero changes.
 class AuthResult {
-  final bool success;
-  final String? token;
+  final bool    success;
+  final String? token;   // kept for backward compat (access token)
   final String? error;
+  final AuthData? data;
 
-  const AuthResult({required this.success, this.token, this.error});
+  const AuthResult({
+    required this.success,
+    this.token,
+    this.error,
+    this.data,
+  });
 }
 
-/// Data layer — handles all authentication API calls.
-/// Replace the `Future.delayed` stubs with real HTTP calls (e.g. dio / http).
+/// AuthService — real HTTP calls to your Node.js backend.
+/// ViewModels call the same method names as before — no ViewModel changes needed.
 class AuthService {
   // Singleton
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
   AuthService._internal();
 
-  // Simulated valid credentials for demo
-  static const _demoPhone = '9999999999';
-  static const _demoPassword = 'speedonet123';
-  static const _demoOtp = '123456';
+  final _api     = ApiClient();
+  final _storage = StorageService();
 
-  String? _sessionToken;
-  String? get sessionToken => _sessionToken;
-  bool get isLoggedIn => _sessionToken != null;
+  bool get isLoggedIn => _storage.hasToken;
+  String? get sessionToken => _storage.accessToken;
 
-  /// Login with mobile number + password.
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  /// Saves tokens + user info to storage after a successful auth response.
+  Future<void> _persist(AuthData authData) async {
+    await _storage.saveTokens(
+      accessToken:  authData.tokens.accessToken,
+      refreshToken: authData.tokens.refreshToken,
+    );
+    await _storage.saveUserInfo(
+      id:    authData.user.id,
+      phone: authData.user.phone,
+      name:  authData.user.name,
+    );
+  }
+
+  AuthResult _handleDioError(DioException e) {
+    final ex = ApiException.fromDio(e);
+    return AuthResult(success: false, error: ex.message);
+  }
+
+  // ── Login with password ───────────────────────────────────────────────────
+
   Future<AuthResult> loginWithPassword({
     required String phone,
     required String password,
   }) async {
-    await Future.delayed(const Duration(milliseconds: 1200));
+    try {
+      final res = await _api.post('/auth/login', data: {
+        'phone':    phone,
+        'password': password,
+      });
 
-    if (phone.isEmpty || phone.length < 10) {
-      return const AuthResult(
-          success: false, error: 'Please enter a valid 10-digit mobile number.');
-    }
-    if (password.length < 6) {
-      return const AuthResult(
-          success: false, error: 'Password must be at least 6 characters.');
-    }
+      final authData = AuthData.fromJson(res.data['data'] ?? {});
+      await _persist(authData);
 
-    // Demo check — replace with real API call
-    if (phone == _demoPhone && password == _demoPassword) {
-      _sessionToken = 'tok_${DateTime.now().millisecondsSinceEpoch}';
-      return AuthResult(success: true, token: _sessionToken);
+      return AuthResult(
+        success: true,
+        token:   authData.tokens.accessToken,
+        data:    authData,
+      );
+    } on DioException catch (e) {
+      return _handleDioError(e);
+    } catch (e) {
+      return AuthResult(success: false, error: e.toString());
     }
-
-    return const AuthResult(
-        success: false, error: 'Invalid mobile number or password.');
   }
 
-  /// Send OTP to the given phone number.
-  Future<AuthResult> sendOtp({required String phone}) async {
-    await Future.delayed(const Duration(milliseconds: 900));
+  // ── Signup ────────────────────────────────────────────────────────────────
 
-    if (phone.isEmpty || phone.length < 10) {
-      return const AuthResult(
-          success: false, error: 'Please enter a valid 10-digit mobile number.');
+  Future<AuthResult> signup({
+    required String name,
+    required String phone,
+    required String password,
+    String? email,
+    String? referralCode,
+  }) async {
+    try {
+      final res = await _api.post('/auth/signup', data: {
+        'name':          name,
+        'phone':         phone,
+        'password':      password,
+        if (email != null) 'email': email,
+        if (referralCode != null && referralCode.isNotEmpty)
+          'referral_code': referralCode,
+      });
+
+      final authData = AuthData.fromJson(res.data['data'] ?? {});
+      await _persist(authData);
+
+      return AuthResult(
+        success: true,
+        token:   authData.tokens.accessToken,
+        data:    authData,
+      );
+    } on DioException catch (e) {
+      return _handleDioError(e);
+    } catch (e) {
+      return AuthResult(success: false, error: e.toString());
     }
-
-    // In production, trigger an SMS OTP here.
-    return const AuthResult(success: true);
   }
 
-  /// Verify OTP and log the user in.
+  // ── Send OTP ─────────────────────────────────────────────────────────────
+
+  Future<AuthResult> sendOtp({
+    required String phone,
+    String purpose = 'login',
+  }) async {
+    try {
+      final res = await _api.post('/auth/otp/send', data: {
+        'phone':   phone,
+        'purpose': purpose,
+      });
+
+      // Surface the dev OTP in the result so the ViewModel can show it
+      final devOtp = res.data['data']?['_dev_otp'] as String?;
+      return AuthResult(
+        success: true,
+        token:   devOtp, // reusing 'token' field to pass dev OTP (ViewModel shows it)
+      );
+    } on DioException catch (e) {
+      return _handleDioError(e);
+    } catch (e) {
+      return AuthResult(success: false, error: e.toString());
+    }
+  }
+
+  // ── Verify OTP ────────────────────────────────────────────────────────────
+
   Future<AuthResult> verifyOtp({
     required String phone,
     required String otp,
   }) async {
-    await Future.delayed(const Duration(milliseconds: 1000));
+    try {
+      final res = await _api.post('/auth/otp/verify', data: {
+        'phone': phone,
+        'otp':   otp,
+      });
 
-    if (otp.length != 6) {
-      return const AuthResult(
-          success: false, error: 'Please enter the 6-digit OTP.');
+      final authData = AuthData.fromJson(res.data['data'] ?? {});
+      await _persist(authData);
+
+      return AuthResult(
+        success: true,
+        token:   authData.tokens.accessToken,
+        data:    authData,
+      );
+    } on DioException catch (e) {
+      return _handleDioError(e);
+    } catch (e) {
+      return AuthResult(success: false, error: e.toString());
     }
-
-    if (otp == _demoOtp) {
-      _sessionToken = 'tok_${DateTime.now().millisecondsSinceEpoch}';
-      return AuthResult(success: true, token: _sessionToken);
-    }
-
-    return const AuthResult(success: false, error: 'Incorrect OTP. Try again.');
   }
 
-  /// Send password reset link / OTP to phone.
+  // ── Forgot password ───────────────────────────────────────────────────────
+
   Future<AuthResult> forgotPassword({required String phone}) async {
-    await Future.delayed(const Duration(milliseconds: 900));
-
-    if (phone.isEmpty || phone.length < 10) {
-      return const AuthResult(
-          success: false, error: 'Please enter a valid 10-digit mobile number.');
+    try {
+      await _api.post('/auth/forgot-password', data: {'phone': phone});
+      return const AuthResult(success: true);
+    } on DioException catch (e) {
+      return _handleDioError(e);
+    } catch (e) {
+      return AuthResult(success: false, error: e.toString());
     }
-
-    return const AuthResult(success: true);
   }
 
-  /// Log out the current session.
+  // ── Reset password ────────────────────────────────────────────────────────
+
+  Future<AuthResult> resetPassword({
+    required String phone,
+    required String otp,
+    required String newPassword,
+  }) async {
+    try {
+      await _api.post('/auth/reset-password', data: {
+        'phone':        phone,
+        'otp':          otp,
+        'new_password': newPassword,
+      });
+      return const AuthResult(success: true);
+    } on DioException catch (e) {
+      return _handleDioError(e);
+    } catch (e) {
+      return AuthResult(success: false, error: e.toString());
+    }
+  }
+
+  // ── Get current user (me) ─────────────────────────────────────────────────
+
+  Future<AuthUser?> getMe() async {
+    try {
+      final res = await _api.get('/auth/me');
+      return AuthUser.fromJson(res.data['data']['user'] ?? {});
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ── Logout ────────────────────────────────────────────────────────────────
+
   Future<void> logout() async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    _sessionToken = null;
+    try {
+      await _api.post('/auth/logout');
+    } catch (_) {
+      // Even if server call fails, clear local storage
+    }
+    await _storage.clearAll();
+  }
+
+  Future<void> logoutAll() async {
+    try {
+      await _api.post('/auth/logout-all');
+    } catch (_) {}
+    await _storage.clearAll();
   }
 }

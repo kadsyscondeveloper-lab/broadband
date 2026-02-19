@@ -1,56 +1,48 @@
 import 'package:flutter/foundation.dart';
 import '../services/auth_service.dart';
 
-enum AuthMode { password, otp }
+enum AuthMode   { password, otp }
 enum AuthStatus { idle, loading, success, error }
 
+/// AuthViewModel — identical public interface to the old one.
+/// ViewModels know nothing about HTTP — that's AuthService's job.
 class AuthViewModel extends ChangeNotifier {
   final AuthService _service;
 
   AuthViewModel({AuthService? service})
       : _service = service ?? AuthService();
 
-  // ── State ────────────────────────────────────────────────────────────────
+  // ── State ─────────────────────────────────────────────────────────────────
 
-  AuthMode _mode = AuthMode.password;
-  AuthStatus _status = AuthStatus.idle;
-  String? _errorMessage;
-  bool _isPasswordVisible = false;
-  bool _otpSent = false;
+  AuthMode   _mode             = AuthMode.password;
+  AuthStatus _status           = AuthStatus.idle;
+  String?    _errorMessage;
+  bool       _isPasswordVisible = false;
+  bool       _otpSent           = false;
+  String?    _devOtp;           // shown in UI during development
 
-  // Form field values (set from the View)
-  String _phone = '';
+  String _phone    = '';
   String _password = '';
-  String _otp = '';
+  String _otp      = '';
 
-  // ── Getters ──────────────────────────────────────────────────────────────
+  // ── Getters ───────────────────────────────────────────────────────────────
 
-  AuthMode get mode => _mode;
-  AuthStatus get status => _status;
-  String? get errorMessage => _errorMessage;
-  bool get isLoading => _status == AuthStatus.loading;
-  bool get isPasswordVisible => _isPasswordVisible;
-  bool get otpSent => _otpSent;
-  String get phone => _phone;
+  AuthMode   get mode              => _mode;
+  AuthStatus get status            => _status;
+  String?    get errorMessage      => _errorMessage;
+  bool       get isLoading         => _status == AuthStatus.loading;
+  bool       get isPasswordVisible => _isPasswordVisible;
+  bool       get otpSent           => _otpSent;
+  String?    get devOtp            => _devOtp;
+  String     get phone             => _phone;
 
-  // ── Setters (called by TextFields) ───────────────────────────────────────
+  // ── Field setters (called by TextFields) ──────────────────────────────────
 
-  void setPhone(String value) {
-    _phone = value.trim();
-    _clearError();
-  }
+  void setPhone(String v)    { _phone    = v.trim(); _clearError(); }
+  void setPassword(String v) { _password = v;        _clearError(); }
+  void setOtp(String v)      { _otp      = v.trim(); _clearError(); }
 
-  void setPassword(String value) {
-    _password = value;
-    _clearError();
-  }
-
-  void setOtp(String value) {
-    _otp = value.trim();
-    _clearError();
-  }
-
-  // ── UI actions ───────────────────────────────────────────────────────────
+  // ── UI actions ────────────────────────────────────────────────────────────
 
   void togglePasswordVisibility() {
     _isPasswordVisible = !_isPasswordVisible;
@@ -58,57 +50,55 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   void switchMode(AuthMode mode) {
-    _mode = mode;
-    _otpSent = false;
+    _mode        = mode;
+    _otpSent     = false;
+    _devOtp      = null;
     _errorMessage = null;
-    _status = AuthStatus.idle;
+    _status      = AuthStatus.idle;
     notifyListeners();
   }
 
-  // ── Auth actions ─────────────────────────────────────────────────────────
+  // ── Auth actions ──────────────────────────────────────────────────────────
 
-  /// Primary login with password.
   Future<bool> loginWithPassword() async {
     _setLoading();
     final result = await _service.loginWithPassword(
-      phone: _phone,
+      phone:    _phone,
       password: _password,
     );
     return _handleResult(result);
   }
 
-  /// Step 1 of OTP flow — request OTP.
   Future<void> requestOtp() async {
     _setLoading();
     final result = await _service.sendOtp(phone: _phone);
     if (result.success) {
       _otpSent = true;
-      _status = AuthStatus.idle;
+      _devOtp  = result.token; // server returns dev OTP in 'token' field
+      _status  = AuthStatus.idle;
     } else {
-      _status = AuthStatus.error;
+      _status       = AuthStatus.error;
       _errorMessage = result.error;
     }
     notifyListeners();
   }
 
-  /// Step 2 of OTP flow — verify OTP.
   Future<bool> verifyOtp() async {
     _setLoading();
     final result = await _service.verifyOtp(phone: _phone, otp: _otp);
     return _handleResult(result);
   }
 
-  /// Forgot password flow.
   Future<bool> forgotPassword() async {
     _setLoading();
     final result = await _service.forgotPassword(phone: _phone);
     return _handleResult(result);
   }
 
-  // ── Helpers ──────────────────────────────────────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
   void _setLoading() {
-    _status = AuthStatus.loading;
+    _status       = AuthStatus.loading;
     _errorMessage = null;
     notifyListeners();
   }
@@ -119,7 +109,7 @@ class AuthViewModel extends ChangeNotifier {
       notifyListeners();
       return true;
     } else {
-      _status = AuthStatus.error;
+      _status       = AuthStatus.error;
       _errorMessage = result.error;
       notifyListeners();
       return false;
@@ -129,15 +119,16 @@ class AuthViewModel extends ChangeNotifier {
   void _clearError() {
     if (_errorMessage != null || _status == AuthStatus.error) {
       _errorMessage = null;
-      _status = AuthStatus.idle;
+      _status       = AuthStatus.idle;
       notifyListeners();
     }
   }
 
   void resetState() {
-    _status = AuthStatus.idle;
+    _status       = AuthStatus.idle;
     _errorMessage = null;
-    _otpSent = false;
+    _otpSent      = false;
+    _devOtp       = null;
     notifyListeners();
   }
 }

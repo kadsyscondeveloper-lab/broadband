@@ -1,6 +1,5 @@
-name: speedonet_broadband
-description: Speedonet ISP Mobile App
-publish_to: 'none'
+name: speedonet
+description: Speedonet broadband app
 version: 1.0.0+1
 
 environment:
@@ -9,6 +8,14 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+
+  # HTTP client with interceptors
+  dio: ^5.4.3
+
+  # Local token storage (simple key-value)
+  shared_preferences: ^2.2.3
+
+  # Existing deps (keep whatever you already have)
   cupertino_icons: ^1.0.6
 
 dev_dependencies:
