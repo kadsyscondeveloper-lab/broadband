@@ -90,11 +90,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
 
                       // 1. ── My Connection ───────────────────────────────
-                      DashboardSection(
+                      /*DashboardSection(
                         data: vm.dashboardData,
                         onPayNow: widget.onNavigateToPay,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 16),*/
 
                       // 2. ── KYC Status Banner ───────────────────────────
                       _KycStatusBanner(kycStatus: vm.kycStatus, onTap: _openKyc),

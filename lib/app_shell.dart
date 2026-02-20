@@ -49,7 +49,7 @@ class _AppShellState extends State<AppShell> {
           onNavigateToPay: _navigateToPay,
         );
       case 1:
-        return PaymentsScreen(viewModel: _paymentsVM);
+        return const PaymentsScreen();
       case 2:
         return PayScreen(viewModel: _payVM);
       case 3:

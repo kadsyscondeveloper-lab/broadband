@@ -1,204 +1,247 @@
+// lib/views/payments/payments_screen.dart
+
 import 'package:flutter/material.dart';
+import '../../models/plan_model.dart';
+import '../../services/plan_service.dart';
 import '../../theme/app_theme.dart';
-import '../../viewmodels/payments_viewmodel.dart';
 
 class PaymentsScreen extends StatefulWidget {
-  final PaymentsViewModel viewModel;
-
-  const PaymentsScreen({super.key, required this.viewModel});
+  const PaymentsScreen({super.key});
 
   @override
   State<PaymentsScreen> createState() => _PaymentsScreenState();
 }
 
 class _PaymentsScreenState extends State<PaymentsScreen> {
+  final _service = PlanService();
+
+  List<PlanTransaction> _transactions = [];
+  bool _isLoading = true;
+  String? _error;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.viewModel.loadTransactions();
-    });
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { _isLoading = true; _error = null; });
+    try {
+      _transactions = await _service.getTransactions();
+    } catch (e) {
+      _error = e.toString();
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        title: const Text('Payment History'),
-        centerTitle: true,
-        automaticallyImplyLeading: false,
-      ),
-      body: ListenableBuilder(
-        listenable: widget.viewModel,
-        builder: (context, _) {
-          final vm = widget.viewModel;
-
-          if (vm.isLoading) {
-            return const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
-            );
-          }
-
-          if (!vm.hasTransactions) {
-            return _EmptyTransactions(
-              onCheckTap: vm.checkForTransactions,
-            );
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: vm.transactions.length,
-            itemBuilder: (context, index) {
-              final t = vm.transactions[index];
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.cardBg,
-                  borderRadius: BorderRadius.circular(12),
+      body: RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: _load,
+        child: CustomScrollView(
+          slivers: [
+            // ── Header ──────────────────────────────────────────────────
+            SliverToBoxAdapter(
+              child: Container(
+                padding: EdgeInsets.only(
+                  top: MediaQuery.of(context).padding.top + 16,
+                  left: 20, right: 20, bottom: 24,
                 ),
-                child: Row(
+                decoration: const BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.only(
+                    bottomLeft:  Radius.circular(28),
+                    bottomRight: Radius.circular(28),
+                  ),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(t.title, style: const TextStyle(fontWeight: FontWeight.w600)),
-                          Text(t.date.toString(), style: const TextStyle(color: AppColors.textGrey, fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                    Text(
-                      '₹${t.amount.toStringAsFixed(2)}',
-                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-                    ),
+                    Text('Payment History',
+                        style: TextStyle(color: Colors.white, fontSize: 22,
+                            fontWeight: FontWeight.w800)),
+                    SizedBox(height: 4),
+                    Text('All your Speedonet plan transactions',
+                        style: TextStyle(color: Colors.white70, fontSize: 13)),
                   ],
                 ),
-              );
-            },
-          );
-        },
+              ),
+            ),
+
+            // ── Body ────────────────────────────────────────────────────
+            if (_isLoading)
+              const SliverFillRemaining(
+                child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+              )
+            else if (_error != null)
+              SliverFillRemaining(
+                child: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  const Icon(Icons.error_outline, size: 48, color: AppColors.textLight),
+                  const SizedBox(height: 12),
+                  Text(_error!, style: const TextStyle(color: AppColors.textGrey),
+                      textAlign: TextAlign.center),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: _load,
+                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                    child: const Text('Retry', style: TextStyle(color: Colors.white)),
+                  ),
+                ])),
+              )
+            else if (_transactions.isEmpty)
+                const SliverFillRemaining(child: _EmptyState())
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                          (_, i) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _TransactionCard(tx: _transactions[i]),
+                      ),
+                      childCount: _transactions.length,
+                    ),
+                  ),
+                ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _EmptyTransactions extends StatelessWidget {
-  final VoidCallback onCheckTap;
+// ─────────────────────────────────────────────────────────────────────────────
+// TRANSACTION CARD
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const _EmptyTransactions({required this.onCheckTap});
+class _TransactionCard extends StatelessWidget {
+  final PlanTransaction tx;
+  const _TransactionCard({required this.tx});
+
+  Color get _statusColor {
+    switch (tx.status) {
+      case 'success': return Colors.green;
+      case 'failed':  return Colors.red;
+      default:        return Colors.orange;
+    }
+  }
+
+  IconData get _typeIcon {
+    switch (tx.type) {
+      case 'credit': return Icons.add_circle_outline;
+      case 'refund': return Icons.refresh_outlined;
+      default:       return Icons.remove_circle_outline;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final date = tx.createdAt;
+    final dateStr = '${date.day}/${date.month}/${date.year}';
+    final timeStr = '${date.hour.toString().padLeft(2,'0')}:${date.minute.toString().padLeft(2,'0')}';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Row(children: [
+        // Icon
+        Container(
+          width: 46, height: 46,
+          decoration: BoxDecoration(
+            color: _statusColor.withOpacity(0.10),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(_typeIcon, color: _statusColor, size: 22),
+        ),
+        const SizedBox(width: 12),
+
+        // Details
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(tx.planName ?? tx.note ?? 'Transaction',
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14,
+                  color: AppColors.textDark),
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 3),
+          Text('$dateStr at $timeStr',
+              style: const TextStyle(fontSize: 11, color: AppColors.textGrey)),
+          const SizedBox(height: 3),
+          Row(children: [
+            _Chip(label: tx.status, color: _statusColor),
+            if (tx.paymentMode != null) ...[
+              const SizedBox(width: 6),
+              _Chip(label: tx.paymentMode!, color: AppColors.textLight),
+            ],
+            const SizedBox(width: 6),
+            _Chip(label: tx.orderRef, color: AppColors.textLight),
+          ]),
+        ])),
+
+        // Amount
+        Text(
+          '${tx.type == 'credit' || tx.type == 'refund' ? '+' : '-'}₹${tx.amount.toStringAsFixed(0)}',
+          style: TextStyle(
+            fontSize: 16, fontWeight: FontWeight.w800,
+            color: tx.type == 'debit' ? AppColors.textDark : Colors.green,
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _Chip({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(label, style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.w600),
+          maxLines: 1, overflow: TextOverflow.ellipsis),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EMPTY STATE
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(40),
-          decoration: BoxDecoration(
-            color: AppColors.cardBg,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 100, height: 100,
+            decoration: BoxDecoration(color: Colors.grey.shade100, shape: BoxShape.circle),
+            child: Icon(Icons.receipt_long_outlined, size: 48, color: Colors.grey.shade300),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Illustration
-              Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  shape: BoxShape.circle,
-                ),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Icon(Icons.description_outlined, size: 60, color: Colors.grey.shade300),
-                    Positioned(
-                      child: Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8),
-                          ],
-                        ),
-                        child: const Icon(Icons.search, size: 28, color: Colors.grey),
-                      ),
-                    ),
-                    Positioned(
-                      right: 20,
-                      bottom: 20,
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: const BoxDecoration(
-                          color: AppColors.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.close, size: 14, color: Colors.white),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 28),
-              const Text(
-                "Oops! You haven't any\ntransaction yet",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textDark,
-                  height: 1.3,
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                "You'll see your transactions here\nafter they are processed",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textGrey,
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: onCheckTap,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'Check for transactions',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+          const SizedBox(height: 24),
+          const Text("No transactions yet",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textDark)),
+          const SizedBox(height: 8),
+          const Text("Your plan purchases will appear here",
+              style: TextStyle(fontSize: 13, color: AppColors.textGrey), textAlign: TextAlign.center),
+        ]),
       ),
     );
   }
