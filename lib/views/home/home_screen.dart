@@ -108,6 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         services: vm.services,
                         onNavigateToPay: widget.onNavigateToPay,
                         onKycTap: _openKyc,
+                        homeViewModel: vm, // ← ADDED
                       ),
                       const SizedBox(height: 16),
 
@@ -286,8 +287,14 @@ class _ManageServicesCard extends StatelessWidget {
   final List<Map<String, String>> services;
   final VoidCallback? onNavigateToPay;
   final VoidCallback? onKycTap;
+  final HomeViewModel? homeViewModel; // ← ADDED
 
-  const _ManageServicesCard({required this.services, this.onNavigateToPay, this.onKycTap});
+  const _ManageServicesCard({
+    required this.services,
+    this.onNavigateToPay,
+    this.onKycTap,
+    this.homeViewModel, // ← ADDED
+  });
 
   IconData _getIcon(String iconKey) {
     switch (iconKey) {
@@ -316,8 +323,12 @@ class _ManageServicesCard extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: services.take(4).map((s) => _ServiceItem(
-            icon: _getIcon(s['icon']!), label: s['label']!,
-            screenContext: context, onNavigateToPay: onNavigateToPay, onKycTap: onKycTap,
+            icon: _getIcon(s['icon']!),
+            label: s['label']!,
+            screenContext: context,
+            onNavigateToPay: onNavigateToPay,
+            onKycTap: onKycTap,
+            homeViewModel: homeViewModel, // ← ADDED
           )).toList(),
         ),
         if (services.length > 4) ...[
@@ -326,8 +337,12 @@ class _ManageServicesCard extends StatelessWidget {
             children: services.skip(4).map((s) => Padding(
               padding: const EdgeInsets.only(right: 16),
               child: _ServiceItem(
-                icon: _getIcon(s['icon']!), label: s['label']!,
-                screenContext: context, onNavigateToPay: onNavigateToPay, onKycTap: onKycTap,
+                icon: _getIcon(s['icon']!),
+                label: s['label']!,
+                screenContext: context,
+                onNavigateToPay: onNavigateToPay,
+                onKycTap: onKycTap,
+                homeViewModel: homeViewModel, // ← ADDED
               ),
             )).toList(),
           ),
@@ -343,31 +358,54 @@ class _ServiceItem extends StatelessWidget {
   final BuildContext screenContext;
   final VoidCallback? onNavigateToPay;
   final VoidCallback? onKycTap;
+  final HomeViewModel? homeViewModel; // ← ADDED
 
   const _ServiceItem({
-    required this.icon, required this.label, required this.screenContext,
-    this.onNavigateToPay, this.onKycTap,
+    required this.icon,
+    required this.label,
+    required this.screenContext,
+    this.onNavigateToPay,
+    this.onKycTap,
+    this.homeViewModel, // ← ADDED
   });
 
   void _onTap() {
     switch (label) {
-      case 'Pay Bills':   onNavigateToPay?.call(); break;
-      case 'KYC':         onKycTap?.call(); break;
-      case 'Outstanding': Navigator.push(screenContext, MaterialPageRoute(builder: (_) => const PendingBillsScreen())); break;
-      case 'My Bills':    Navigator.push(screenContext, MaterialPageRoute(builder: (_) => const MyBillsScreen())); break;
-      case 'New Plan':    Navigator.push(screenContext, MaterialPageRoute(builder: (_) => const WifiPlansScreen())); break;
+      case 'Pay Bills':
+        onNavigateToPay?.call();
+        break;
+      case 'KYC':
+        onKycTap?.call();
+        break;
+      case 'Outstanding':
+        Navigator.push(screenContext, MaterialPageRoute(builder: (_) => const PendingBillsScreen()));
+        break;
+      case 'My Bills':
+        Navigator.push(screenContext, MaterialPageRoute(builder: (_) => const MyBillsScreen()));
+        break;
+      case 'New Plan':
+        Navigator.push(
+          screenContext, // ← CHANGED FROM context
+          MaterialPageRoute(
+            builder: (_) => WifiPlansScreen(homeViewModel: homeViewModel), // ← CHANGED
+          ),
+        );
+        break;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: _onTap, behavior: HitTestBehavior.opaque,
+      onTap: _onTap,
+      behavior: HitTestBehavior.opaque,
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(
-          width: 58, height: 58,
+          width: 58,
+          height: 58,
           decoration: BoxDecoration(
-            color: AppColors.background, shape: BoxShape.circle,
+            color: AppColors.background,
+            shape: BoxShape.circle,
             border: Border.all(color: AppColors.borderColor, width: 1.5),
           ),
           child: Icon(icon, color: AppColors.textDark, size: 24),
@@ -375,11 +413,17 @@ class _ServiceItem extends StatelessWidget {
         const SizedBox(height: 8),
         SizedBox(
           width: 64,
-          child: Text(label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 11, color: AppColors.textDark,
-                  fontWeight: FontWeight.w500, height: 1.3),
-              maxLines: 2),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 11,
+              color: AppColors.textDark,
+              fontWeight: FontWeight.w500,
+              height: 1.3,
+            ),
+            maxLines: 2,
+          ),
         ),
       ]),
     );

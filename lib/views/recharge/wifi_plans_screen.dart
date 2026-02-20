@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
+import '../../viewmodels/home_viewmodel.dart';
 import '../plans/plans_screen.dart';
 
 class WifiPlansScreen extends StatelessWidget {
   final String providerName;
+  final HomeViewModel? homeViewModel; // ← Add this
 
   const WifiPlansScreen({
     super.key,
     this.providerName = "Speedonet Plans",
+    this.homeViewModel, // ← Add this
   });
 
   @override
@@ -23,7 +26,7 @@ class WifiPlansScreen extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: const PlansScreen(),
+      body: PlansScreen(homeViewModel: homeViewModel), // ← Pass it down
     );
   }
 }

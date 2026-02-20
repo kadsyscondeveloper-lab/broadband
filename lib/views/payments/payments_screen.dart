@@ -152,53 +152,80 @@ class _TransactionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
       ),
-      child: Row(children: [
-        // Icon
-        Container(
-          width: 46, height: 46,
-          decoration: BoxDecoration(
-            color: _statusColor.withOpacity(0.10),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(_typeIcon, color: _statusColor, size: 22),
-        ),
-        const SizedBox(width: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top row: Icon + Details
+          Row(
+            children: [
+              // Icon
+              Container(
+                width: 46, height: 46,
+                decoration: BoxDecoration(
+                  color: _statusColor.withOpacity(0.10),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(_typeIcon, color: _statusColor, size: 22),
+              ),
+              const SizedBox(width: 12),
 
-        // Details
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(
-            tx.planName ?? tx.description,   // ← was tx.planName ?? tx.note
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14,
-                color: AppColors.textDark),
-            maxLines: 1, overflow: TextOverflow.ellipsis,
+              // Details (expanded to prevent overflow)
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tx.planName ?? tx.description,   // ← was tx.planName ?? tx.note
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: AppColors.textDark,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '$dateStr at $timeStr',
+                      style: const TextStyle(fontSize: 11, color: AppColors.textGrey),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 3),
-          Text('$dateStr at $timeStr',
-              style: const TextStyle(fontSize: 11, color: AppColors.textGrey)),
-          const SizedBox(height: 3),
-          Row(children: [
-            if (tx.paymentStatus != null)                          // ← was tx.status
-              _Chip(label: tx.paymentStatus!, color: _statusColor),
-            if (tx.referenceType != null) ...[                     // ← was tx.paymentMode
-              const SizedBox(width: 6),
-              _Chip(label: tx.referenceType!, color: AppColors.textLight),
-            ],
-            if (tx.orderRef != null) ...[                          // ← orderRef is now String?
-              const SizedBox(width: 6),
-              _Chip(label: tx.orderRef!, color: AppColors.textLight),
-            ],
-          ]),
-        ])),
 
-        // Amount
-        Text(
-          tx.amountLabel,                                          // ← was manual +/- formatting
-          style: TextStyle(
-            fontSize: 16, fontWeight: FontWeight.w800,
-            color: tx.isCredit ? Colors.green : AppColors.textDark,
+          // Amount (moved below, with proper spacing)
+          Padding(
+            padding: const EdgeInsets.only(top: 10, left: 58),
+            child: Text(
+              tx.amountLabel,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: tx.isCredit ? Colors.green : AppColors.textDark,
+              ),
+            ),
           ),
-        ),
-      ]),
+
+          // Chips row (Status, Reference Type, Order Ref)
+          Padding(
+            padding: const EdgeInsets.only(top: 8, left: 58),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                if (tx.paymentStatus != null)
+                  _Chip(label: tx.paymentStatus!, color: _statusColor),
+                if (tx.referenceType != null)
+                  _Chip(label: tx.referenceType!, color: AppColors.textLight),
+                if (tx.orderRef != null)
+                  _Chip(label: tx.orderRef!, color: AppColors.textLight),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -216,8 +243,16 @@ class _Chip extends StatelessWidget {
         color: color.withOpacity(0.10),
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Text(label, style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.w600),
-          maxLines: 1, overflow: TextOverflow.ellipsis),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 9,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 }

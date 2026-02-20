@@ -4,9 +4,12 @@ import 'package:flutter/material.dart';
 import '../../models/plan_model.dart';
 import '../../theme/app_theme.dart';
 import '../../viewmodels/plans_viewmodel.dart';
+import '../../viewmodels/home_viewmodel.dart'; // ← ADD THIS
 
 class PlansScreen extends StatefulWidget {
-  const PlansScreen({super.key});
+  final HomeViewModel? homeViewModel; // ← ADD THIS
+
+  const PlansScreen({super.key, this.homeViewModel}); // ← ADD THIS
 
   @override
   State<PlansScreen> createState() => _PlansScreenState();
@@ -45,6 +48,8 @@ class _PlansScreenState extends State<PlansScreen>
           await _vm.purchasePlan(plan.id, paymentMode: mode);
           if (!mounted) return;
           if (_vm.purchaseState == PlanPurchaseState.success) {
+            // ✅ KEY: Refresh wallet balance after successful purchase
+            await widget.homeViewModel?.refreshWalletBalance();
             _showSuccessDialog(_vm.purchaseResult!);
           } else {
             _showErrorSnack(_vm.purchaseError ?? 'Purchase failed');
@@ -102,8 +107,7 @@ class _PlansScreenState extends State<PlansScreen>
                     children: [
                       Row(children: [
                         GestureDetector(
-                          onTap: () => Navigator.pop(context),
-                          child: const Icon(Icons.arrow_back, color: Colors.white),
+                          child: const Icon(Icons.router, color: Colors.white),
                         ),
                         const SizedBox(width: 12),
                         const Text('Choose a Plan',

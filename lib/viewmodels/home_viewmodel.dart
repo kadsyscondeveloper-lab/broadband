@@ -53,6 +53,21 @@ class HomeViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Refresh wallet balance (call after purchase) ──────────────────────────
+
+  Future<void> refreshWalletBalance() async {
+    try {
+      final updatedProfile = await _service.getProfile();
+      if (updatedProfile != null) {
+        _profile = updatedProfile;
+        notifyListeners();
+      }
+    } catch (e) {
+      print('Error refreshing wallet: $e');
+      // Don't throw — just log the error
+    }
+  }
+
   // ── Refresh KYC only (call after returning from KycScreen) ────────────────
 
   Future<void> refreshKycStatus() async {
