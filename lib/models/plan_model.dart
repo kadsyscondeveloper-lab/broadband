@@ -20,14 +20,13 @@ class Plan {
   });
 
   factory Plan.fromJson(Map<String, dynamic> j) => Plan(
-    id:           j['id']            as int,
-    name:         j['name']          as String,
-    speedMbps:    j['speed_mbps']    as int,
-    dataLimit:    j['data_limit']    as String, // ← was j['data_limit_gb'] as int?
-    validityDays: j['validity_days'] as int,
-    price:        (j['price'] as num).toDouble(),
-    category:     j['category']      as String?,
-    // description removed — column does not exist in broadband_plans
+    id: int.tryParse(j['id'].toString()) ?? 0,
+    name: j['name']?.toString() ?? '',
+    speedMbps: (j['speed_mbps'] as num?)?.toInt() ?? 0,
+    dataLimit: j['data_limit']?.toString() ?? 'Unlimited',
+    validityDays: (j['validity_days'] as num?)?.toInt() ?? 0,
+    price: (j['price'] as num?)?.toDouble() ?? 0.0,
+    category: j['category']?.toString(),
   );
 
   /// True when the plan has no data cap (e.g. "Unlimited", "unlimited")
@@ -77,21 +76,21 @@ class ActiveSubscription {
 
   factory ActiveSubscription.fromJson(Map<String, dynamic> j) =>
       ActiveSubscription(
-        id:           j['subscription_id'] as int,            // ← was j['id']
+        id:           int.tryParse(j['subscription_id'].toString()) ?? 0,
         orderRef:     j['order_ref']        as String,
         status:       j['status']           as String,
         amountPaid:   (j['amount_paid'] as num).toDouble(),
-        startsAt:     j['start_date']  != null               // ← was j['starts_at']
-            ? DateTime.tryParse(j['start_date'] as String)
+        startsAt:     j['start_date'] != null
+            ? DateTime.tryParse(j['start_date'].toString())
             : null,
         expiresAt:    j['expires_at'] != null
-            ? DateTime.tryParse(j['expires_at'] as String)
+            ? DateTime.tryParse(j['expires_at'].toString())
             : null,
-        planId:       j['plan_id']          as int,
+        planId:       int.tryParse(j['plan_id'].toString()) ?? 0,
         planName:     j['plan_name']        as String,
-        speedMbps:    j['speed_mbps']       as int,
-        dataLimit:    j['data_limit']       as String,        // ← was j['data_limit_gb'] as int?
-        validityDays: j['validity_days']    as int,
+        speedMbps:    (j['speed_mbps'] as num?)?.toInt() ?? 0,
+        dataLimit:    j['data_limit']?.toString() ?? 'Unlimited',
+        validityDays: (j['validity_days'] as num?)?.toInt() ?? 0,
       );
 
   bool get isUnlimited =>
@@ -136,7 +135,7 @@ class PlanTransaction {
   });
 
   factory PlanTransaction.fromJson(Map<String, dynamic> j) => PlanTransaction(
-    id:            j['id']              as int,
+    id:            int.tryParse(j['id'].toString()) ?? 0,
     type:          j['type']            as String,
     amount:        (j['amount'] as num).toDouble(),
     balanceAfter:  (j['balance_after'] as num).toDouble(),
