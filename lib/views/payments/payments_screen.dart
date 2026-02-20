@@ -124,7 +124,7 @@ class _TransactionCard extends StatelessWidget {
   const _TransactionCard({required this.tx});
 
   Color get _statusColor {
-    switch (tx.status) {
+    switch (tx.paymentStatus) {          // ← was tx.status
       case 'success': return Colors.green;
       case 'failed':  return Colors.red;
       default:        return Colors.orange;
@@ -166,31 +166,36 @@ class _TransactionCard extends StatelessWidget {
 
         // Details
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(tx.planName ?? tx.note ?? 'Transaction',
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14,
-                  color: AppColors.textDark),
-              maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(
+            tx.planName ?? tx.description,   // ← was tx.planName ?? tx.note
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14,
+                color: AppColors.textDark),
+            maxLines: 1, overflow: TextOverflow.ellipsis,
+          ),
           const SizedBox(height: 3),
           Text('$dateStr at $timeStr',
               style: const TextStyle(fontSize: 11, color: AppColors.textGrey)),
           const SizedBox(height: 3),
           Row(children: [
-            _Chip(label: tx.status, color: _statusColor),
-            if (tx.paymentMode != null) ...[
+            if (tx.paymentStatus != null)                          // ← was tx.status
+              _Chip(label: tx.paymentStatus!, color: _statusColor),
+            if (tx.referenceType != null) ...[                     // ← was tx.paymentMode
               const SizedBox(width: 6),
-              _Chip(label: tx.paymentMode!, color: AppColors.textLight),
+              _Chip(label: tx.referenceType!, color: AppColors.textLight),
             ],
-            const SizedBox(width: 6),
-            _Chip(label: tx.orderRef, color: AppColors.textLight),
+            if (tx.orderRef != null) ...[                          // ← orderRef is now String?
+              const SizedBox(width: 6),
+              _Chip(label: tx.orderRef!, color: AppColors.textLight),
+            ],
           ]),
         ])),
 
         // Amount
         Text(
-          '${tx.type == 'credit' || tx.type == 'refund' ? '+' : '-'}₹${tx.amount.toStringAsFixed(0)}',
+          tx.amountLabel,                                          // ← was manual +/- formatting
           style: TextStyle(
             fontSize: 16, fontWeight: FontWeight.w800,
-            color: tx.type == 'debit' ? AppColors.textDark : Colors.green,
+            color: tx.isCredit ? Colors.green : AppColors.textDark,
           ),
         ),
       ]),

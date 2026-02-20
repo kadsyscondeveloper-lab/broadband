@@ -15,6 +15,7 @@ class HomeScreen extends StatefulWidget {
   final VoidCallback? onNavigateToProfile;
   final VoidCallback? onNavigateToNewPlans;
   final VoidCallback? onNavigateToPay;
+  final VoidCallback? onWalletTap;
 
   const HomeScreen({
     super.key,
@@ -22,6 +23,7 @@ class HomeScreen extends StatefulWidget {
     this.onNavigateToProfile,
     this.onNavigateToNewPlans,
     this.onNavigateToPay,
+    this.onWalletTap,
   });
 
   @override
@@ -78,6 +80,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   walletBalance: vm.walletBalance,
                   onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
                   onNotificationTap: () {},
+                  onWalletTap:       widget.onWalletTap,
                 ),
               ),
 
@@ -147,12 +150,14 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
   final double walletBalance;
   final VoidCallback onMenuTap;
   final VoidCallback onNotificationTap;
+  final VoidCallback? onWalletTap;
 
   const _StickyHeaderDelegate({
     required this.userName,
     required this.walletBalance,
     required this.onMenuTap,
     required this.onNotificationTap,
+    this.onWalletTap,
   });
 
   @override
@@ -168,12 +173,15 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
       walletBalance: walletBalance,
       onMenuTap: onMenuTap,
       onNotificationTap: onNotificationTap,
+      onWalletTap:       onWalletTap,
     );
   }
 
   @override
   bool shouldRebuild(_StickyHeaderDelegate old) =>
-      old.userName != userName || old.walletBalance != walletBalance;
+      old.userName      != userName      ||
+          old.walletBalance != walletBalance ||
+          old.onWalletTap   != onWalletTap;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -346,9 +346,11 @@ class _PlanCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 _Tag(icon: Icons.calendar_today_outlined, label: plan.validityLabel),
               ]),
-              if (plan.description != null) ...[
+              // description removed — column does not exist in broadband_plans
+              if (plan.category != null) ...[               // ← show category badge instead
                 const SizedBox(height: 4),
-                Text(plan.description!, style: const TextStyle(fontSize: 11, color: AppColors.textGrey),
+                Text(plan.category!,
+                    style: const TextStyle(fontSize: 11, color: AppColors.textGrey),
                     maxLines: 1, overflow: TextOverflow.ellipsis),
               ],
             ])),
@@ -575,7 +577,7 @@ class _SuccessDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final planName  = (result['plan'] as Map<String, dynamic>?)?['name'] ?? 'Plan';
     final expiresAt = result['expires_at'] != null
-        ? DateTime.parse(result['expires_at'] as String)
+        ? DateTime.tryParse(result['expires_at'] as String)
         : null;
 
     return Dialog(

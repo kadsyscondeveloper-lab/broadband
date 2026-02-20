@@ -1,9 +1,11 @@
+// lib/app_shell.dart
 import 'package:flutter/material.dart';
 import 'views/home/home_screen.dart';
 import 'views/payments/payments_screen.dart';
 import 'views/help/help_screen.dart';
 import 'views/pay/pay_screen.dart';
 import 'views/profile/profile_screen.dart';
+import 'views/wallet/wallet_recharge_screen.dart';
 import 'viewmodels/home_viewmodel.dart';
 import 'viewmodels/payments_viewmodel.dart';
 import 'viewmodels/help_viewmodel.dart';
@@ -35,18 +37,40 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
-  void _onTabTapped(int index) => setState(() => _currentIndex = index);
-  void _navigateToHome()       => setState(() => _currentIndex = 0);
-  void _navigateToProfile()    => setState(() => _currentIndex = 4);
-  void _navigateToPay()        => setState(() => _currentIndex = 2);
+  // ── Navigation helpers ────────────────────────────────────────────────────
+
+  void _onTabTapped(int index)  => setState(() => _currentIndex = index);
+  void _navigateToHome()        => setState(() => _currentIndex = 0);
+  void _navigateToProfile()     => setState(() => _currentIndex = 4);
+  void _navigateToPay()         => setState(() => _currentIndex = 2);
+
+  /// Opens the wallet recharge screen as a full push route.
+  /// On success, refreshes the home header balance via [HomeViewModel.loadProfile].
+  void _openWalletRecharge() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WalletRechargeScreen(
+          initialBalance:   _homeVM.walletBalance,
+          onRechargeSuccess: (double newBalance) {
+            // Reload profile so the header balance updates immediately
+            _homeVM.loadProfile();
+          },
+        ),
+      ),
+    );
+  }
+
+  // ── Body builder ──────────────────────────────────────────────────────────
 
   Widget _buildBody() {
     switch (_currentIndex) {
       case 0:
         return HomeScreen(
-          viewModel: _homeVM,
+          viewModel:          _homeVM,
           onNavigateToProfile: _navigateToProfile,
-          onNavigateToPay: _navigateToPay,
+          onNavigateToPay:     _navigateToPay,
+          onWalletTap:         _openWalletRecharge, // ← wired here
         );
       case 1:
         return const PaymentsScreen();
@@ -56,7 +80,7 @@ class _AppShellState extends State<AppShell> {
         return HelpScreen(viewModel: _helpVM);
       case 4:
         return ProfileScreen(
-          viewModel: _profileVM,
+          viewModel:       _profileVM,
           onNavigateToHome: _navigateToHome,
         );
       default:
@@ -64,14 +88,16 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  // ── Build ─────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: true,
-      body: _buildBody(),
+      body:              _buildBody(),
       bottomNavigationBar: _BottomNav(
         currentIndex: _currentIndex,
-        onTap: _onTabTapped,
+        onTap:        _onTabTapped,
       ),
     );
   }
@@ -88,7 +114,7 @@ class _AppShellState extends State<AppShell> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BOTTOM NAV
+// BOTTOM NAV  (unchanged from your original)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _BottomNav extends StatelessWidget {
@@ -109,10 +135,10 @@ class _BottomNav extends StatelessWidget {
       height: _liftAbove + _barHeight + bottomPad,
       child: Stack(
         clipBehavior: Clip.none,
-        alignment: Alignment.bottomCenter,
+        alignment:    Alignment.bottomCenter,
         children: [
 
-          // ── Bar ──────────────────────────────────────────────────────────
+          // ── Bar ──────────────────────────────────────────────────────
           Positioned(
             bottom: 0, left: 0, right: 0,
             child: Container(
@@ -125,9 +151,9 @@ class _BottomNav extends StatelessWidget {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.10),
+                    color:      Colors.black.withOpacity(0.10),
                     blurRadius: 20,
-                    offset: const Offset(0, -4),
+                    offset:     const Offset(0, -4),
                   ),
                 ],
               ),
@@ -139,18 +165,18 @@ class _BottomNav extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       _NavItem(
-                        icon: Icons.home_outlined,
+                        icon:       Icons.home_outlined,
                         activeIcon: Icons.home,
-                        label: 'Home',
-                        isActive: currentIndex == 0,
-                        onTap: () => onTap(0),
+                        label:      'Home',
+                        isActive:   currentIndex == 0,
+                        onTap:      () => onTap(0),
                       ),
                       _NavItem(
-                        icon: Icons.receipt_long_outlined,
+                        icon:       Icons.receipt_long_outlined,
                         activeIcon: Icons.receipt_long,
-                        label: 'Payments',
-                        isActive: currentIndex == 1,
-                        onTap: () => onTap(1),
+                        label:      'Payments',
+                        isActive:   currentIndex == 1,
+                        onTap:      () => onTap(1),
                       ),
 
                       // Hollow centre — Pay label only
@@ -164,7 +190,7 @@ class _BottomNav extends StatelessWidget {
                                 color: currentIndex == 2
                                     ? AppColors.primary
                                     : AppColors.textLight,
-                                fontSize: 10,
+                                fontSize:   10,
                                 fontWeight: currentIndex == 2
                                     ? FontWeight.w700
                                     : FontWeight.w400,
@@ -176,18 +202,18 @@ class _BottomNav extends StatelessWidget {
                       ),
 
                       _NavItem(
-                        icon: Icons.headset_mic_outlined,
+                        icon:       Icons.headset_mic_outlined,
                         activeIcon: Icons.headset_mic,
-                        label: 'Help',
-                        isActive: currentIndex == 3,
-                        onTap: () => onTap(3),
+                        label:      'Help',
+                        isActive:   currentIndex == 3,
+                        onTap:      () => onTap(3),
                       ),
                       _NavItem(
-                        icon: Icons.person_outline,
+                        icon:       Icons.person_outline,
                         activeIcon: Icons.person,
-                        label: 'Profile',
-                        isActive: currentIndex == 4,
-                        onTap: () => onTap(4),
+                        label:      'Profile',
+                        isActive:   currentIndex == 4,
+                        onTap:      () => onTap(4),
                       ),
                     ],
                   ),
@@ -196,42 +222,49 @@ class _BottomNav extends StatelessWidget {
             ),
           ),
 
-          // ── Floating Pay button ───────────────────────────────────────────
+          // ── Floating Pay button ───────────────────────────────────────
           Positioned(
             bottom: _barHeight + bottomPad - _btnSize / 2 - _liftAbove + 18,
             child: GestureDetector(
               onTap: () => onTap(2),
               child: Container(
-                width: _btnSize,
+                width:  _btnSize,
                 height: _btnSize,
                 decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(_btnRadius),
+                  color:         AppColors.primary,
+                  borderRadius:  BorderRadius.circular(_btnRadius),
+                  boxShadow: [
+                    BoxShadow(
+                      color:      AppColors.primary.withOpacity(0.40),
+                      blurRadius: 12,
+                      offset:     const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: Center(
                   child: Container(
-                    width: 38,
+                    width:  38,
                     height: 38,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color:        Colors.white,
                       borderRadius: BorderRadius.circular(60),
                     ),
                     child: Center(
                       child: Container(
-                        width: 26,
+                        width:  26,
                         height: 26,
                         decoration: BoxDecoration(
-                          color: Colors.transparent,     // no fill
-                          shape: BoxShape.circle,
+                          color:  Colors.transparent,
+                          shape:  BoxShape.circle,
                           border: Border.all(
-                            color: AppColors.primary,    // red stroke
+                            color: AppColors.primary,
                             width: 1.5,
                           ),
                         ),
                         child: Icon(
                           Icons.currency_rupee_rounded,
                           color: AppColors.primary,
-                          size: 14,
+                          size:  14,
                         ),
                       ),
                     ),
@@ -253,8 +286,8 @@ class _BottomNav extends StatelessWidget {
 class _NavItem extends StatelessWidget {
   final IconData icon;
   final IconData activeIcon;
-  final String label;
-  final bool isActive;
+  final String   label;
+  final bool     isActive;
   final VoidCallback onTap;
 
   const _NavItem({
@@ -269,22 +302,22 @@ class _NavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
+        onTap:     onTap,
+        behavior:  HitTestBehavior.opaque,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               isActive ? activeIcon : icon,
               color: isActive ? AppColors.primary : AppColors.textLight,
-              size: 22,
+              size:  22,
             ),
             const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(
-                color: isActive ? AppColors.primary : AppColors.textLight,
-                fontSize: 10,
+                color:      isActive ? AppColors.primary : AppColors.textLight,
+                fontSize:   10,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
