@@ -8,7 +8,7 @@ import '../models/plan_model.dart';
 class PlanService {
   static const String _base = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://192.168.0.114:3000/api/v1', // Android emulator localhost
+    defaultValue: 'http://103.88.81.7:3000/api/v1', // Android emulator localhost
   );
 
   final _storage = StorageService();

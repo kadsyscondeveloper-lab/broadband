@@ -41,6 +41,9 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final vm = widget.viewModel;
+    final topPadding = MediaQuery.of(context).padding.top;
+    // AppHeader renders: topPadding + 8 (top) + 44 (content) + 16 (bottom) = topPadding + 68
+    final headerHeight = topPadding + 68.0;
     // Nav bar height (64) + lift (16) + safe area bottom
     final bottomNavHeight = 64 + 16 + MediaQuery.of(context).padding.bottom;
 
@@ -56,12 +59,12 @@ class _HomeScreenState extends State<HomeScreen> {
           onMenuItemTap: (item) {
             _scaffoldKey.currentState?.closeDrawer();
             switch (item) {
-              case 'Profile':  widget.onNavigateToProfile?.call(); break;
-              case 'KYC':      _openKyc(); break;
+              case 'Profile':      widget.onNavigateToProfile?.call(); break;
+              case 'KYC':          _openKyc(); break;
               case 'Refer & Earn':
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const ReferEarnScreen()));
                 break;
-              case 'New Plans': widget.onNavigateToNewPlans?.call(); break;
+              case 'New Plans':    widget.onNavigateToNewPlans?.call(); break;
             }
           },
         ),
@@ -73,15 +76,22 @@ class _HomeScreenState extends State<HomeScreen> {
             slivers: [
 
               // ── Sticky Header ─────────────────────────────────────────────
-              SliverPersistentHeader(
+              // Using SliverAppBar avoids the SliverGeometry layoutExtent/paintExtent
+              // mismatch that occurs with SliverPersistentHeader on different screen sizes.
+              SliverAppBar(
                 pinned: true,
-                delegate: _StickyHeaderDelegate(
+                automaticallyImplyLeading: false,
+                toolbarHeight: headerHeight,
+                expandedHeight: headerHeight,
+                collapsedHeight: headerHeight,
+                elevation: 0,
+                backgroundColor: Colors.transparent,
+                flexibleSpace: AppHeader(
                   userName: vm.userName,
                   walletBalance: vm.walletBalance,
                   onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
                   onNotificationTap: () {},
                   onWalletTap: widget.onWalletTap,
-                  topPadding: MediaQuery.of(context).padding.top,
                 ),
               ),
 
@@ -141,59 +151,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// STICKY HEADER DELEGATE
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
-  final String userName;
-  final double walletBalance;
-  final VoidCallback onMenuTap;
-  final VoidCallback onNotificationTap;
-  final VoidCallback? onWalletTap;
-  final double topPadding;
-
-  const _StickyHeaderDelegate({
-    required this.userName,
-    required this.walletBalance,
-    required this.onMenuTap,
-    required this.onNotificationTap,
-    required this.topPadding,
-    this.onWalletTap,
-  });
-
-  static const double _headerHeight = 112.0;
-
-  @override
-  double get minExtent => _headerHeight + topPadding;
-
-  @override
-  double get maxExtent => _headerHeight + topPadding;
-
-  @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    // Wrap with top padding so the header content sits below the status bar.
-    // This ensures paintExtent == layoutExtent and avoids the SliverGeometry error.
-    return Padding(
-      padding: EdgeInsets.only(top: topPadding),
-      child: AppHeader(
-        userName: userName,
-        walletBalance: walletBalance,
-        onMenuTap: onMenuTap,
-        onNotificationTap: onNotificationTap,
-        onWalletTap: onWalletTap,
-      ),
-    );
-  }
-
-  @override
-  bool shouldRebuild(_StickyHeaderDelegate old) =>
-      old.userName      != userName      ||
-          old.walletBalance != walletBalance ||
-          old.topPadding    != topPadding    ||
-          old.onWalletTap   != onWalletTap;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
