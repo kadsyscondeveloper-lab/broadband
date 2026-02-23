@@ -32,71 +32,50 @@ class _AtomPaymentScreenState extends State<AtomPaymentScreen> {
   void _initWebView() {
     final r = widget.initiateResult;
 
-    // Build the Atom checkout HTML page locally
-    // Atom SDK is loaded from their CDN, then atom.pay() is called with the token
-    final html = '''
+    if (r.atomUrl == null || r.encData == null) {
+      Navigator.pop(context, AtomPaymentResult.failed(r.orderRef ?? ''));
+      return;
+    }
+
+    final html = """
 <!DOCTYPE html>
 <html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Payment</title>
-  <style>
-    body { margin: 0; background: #f5f5f5; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-    #loading { text-align: center; font-family: sans-serif; color: #666; }
-  </style>
-</head>
-<body>
-  <div id="loading">
-    <p>Loading payment gateway...</p>
-  </div>
-  <script src="${r.cdnUrl}"></script>
-  <script>
-    window.addEventListener('load', function() {
-      atom.pay({
-        'atomTokenId': '${r.atomTokenId}',
-        'mercId':      '${r.mercId}',
-        'custEmail':   '',
-        'custMobile':  '',
-        'returnHandler': function(t) {
-          // t.status: 'success' | 'failed' | 'cancel'
-          // Signal Flutter via URL navigation
-          window.location.href = 'atomcallback://result?status=' + t.status + '&txnid=' + (t.txnId || '') + '&orderRef=${r.orderRef}';
-        }
-      });
-    });
-  </script>
-</body>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirecting...</title>
+  </head>
+  <body onload="document.forms[0].submit();">
+    <form method="post" action="${r.atomUrl}">
+      <input type="hidden" name="encData" value="${r.encData}" />
+    </form>
+    <p style="text-align:center;font-family:sans-serif;">
+      Redirecting to secure payment gateway...
+    </p>
+  </body>
 </html>
-''';
+""";
 
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(NavigationDelegate(
-        onPageStarted:  (_) => setState(() => _isLoading = true),
-        onPageFinished: (_) => setState(() => _isLoading = false),
-        onWebResourceError: (err) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Page error: ${err.description}'),
-                  backgroundColor: AppColors.primary),
-            );
-          }
-        },
-        onNavigationRequest: (req) {
-          // Intercept the callback URL we set in returnHandler
-          if (req.url.startsWith('atomcallback://')) {
-            _handleAtomCallback(req.url);
-            return NavigationDecision.prevent;
-          }
-          // Also intercept our backend callback URL
-          if (req.url.contains('/payments/atom/callback')) {
-            _pollAndClose(widget.initiateResult.orderRef!);
-            return NavigationDecision.prevent;
-          }
-          return NavigationDecision.navigate;
-        },
-      ))
-      ..loadHtmlString(html, baseUrl: 'https://kadsyscon.in');
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (_) => setState(() => _isLoading = true),
+          onPageFinished: (_) => setState(() => _isLoading = false),
+
+          onNavigationRequest: (req) {
+            // Atom will redirect to your backend callback URL
+            if (req.url.contains('/payments/atom/callback')) {
+              _pollAndClose(r.orderRef!);
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
+        ),
+      )
+      ..loadHtmlString(
+        html,
+        baseUrl: 'https://kadsyscon.in',
+      );
   }
 
   void _handleAtomCallback(String url) {
