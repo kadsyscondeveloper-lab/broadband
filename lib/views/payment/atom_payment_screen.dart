@@ -4,11 +4,8 @@ import 'package:webview_flutter/webview_flutter.dart';
 import '../../services/atom_payment_service.dart';
 import '../../theme/app_theme.dart';
 
-/// Launches the Atom checkout in a WebView.
-/// Pops with [AtomPaymentResult] when done.
 class AtomPaymentScreen extends StatefulWidget {
   final AtomInitiateResult initiateResult;
-
   const AtomPaymentScreen({super.key, required this.initiateResult});
 
   @override
@@ -32,35 +29,10 @@ class _AtomPaymentScreenState extends State<AtomPaymentScreen> {
   void _initWebView() {
     final r = widget.initiateResult;
 
-    if (r.atomUrl == null || r.encData == null) {
-      Navigator.pop(context, AtomPaymentResult.failed(r.orderRef ?? ''));
+    if (r.orderRef == null) {
+      Navigator.pop(context, AtomPaymentResult.failed(''));
       return;
     }
-
-    final html = """
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Redirecting...</title>
-  </head>
-  <body>
-    <form id="payForm" method="post" action="${r.atomUrl}">
-      <input type="hidden" name="encData" value="${r.encData}" />
-    </form>
-    <p style="text-align:center;font-family:sans-serif;margin-top:40px;">
-      Redirecting to secure payment gateway...
-    </p>
-    <script>
-      window.onload = function() {
-        setTimeout(function() {
-          document.getElementById('payForm').submit();
-        }, 100);
-      };
-    </script>
-  </body>
-</html>
-""";
 
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -81,8 +53,7 @@ class _AtomPaymentScreenState extends State<AtomPaymentScreen> {
             setState(() => _isLoading = false);
           },
           onWebResourceError: (error) {
-            debugPrint(
-                '>>> WebView error: ${error.description} (${error.errorCode})');
+            debugPrint('>>> WebView error: ${error.description} (${error.errorCode})');
           },
           onNavigationRequest: (req) {
             debugPrint('>>> Navigating to: ${req.url}');
@@ -95,24 +66,11 @@ class _AtomPaymentScreenState extends State<AtomPaymentScreen> {
         ),
       )
       ..loadRequest(
-        Uri.parse('http://103.88.81.7:3000/api/v1/payments/atom/redirect/${r
-            .orderRef}'),
+        Uri.parse('http://192.168.0.102:3000/api/v1/payments/atom/redirect/${r.orderRef}'),
         headers: {
-          'Authorization': 'Bearer ${widget.initiateResult.authToken}',
+          'Authorization': 'Bearer ${r.authToken ?? ''}',
         },
       );
-  }
-
-  void _handleAtomCallback(String url) {
-    final uri = Uri.parse(url.replaceFirst('atomcallback://', 'https://atomcallback/'));
-    final status = uri.queryParameters['status'];
-
-    if (status == 'cancel') {
-      Navigator.pop(context, AtomPaymentResult.cancelled());
-      return;
-    }
-
-    _pollAndClose(widget.initiateResult.orderRef!);
   }
 
   Future<void> _pollAndClose(String orderRef) async {
@@ -130,8 +88,8 @@ class _AtomPaymentScreenState extends State<AtomPaymentScreen> {
       Navigator.pop(context, AtomPaymentResult.pending(orderRef));
     } else if (status.isSuccess) {
       Navigator.pop(context, AtomPaymentResult.success(
-        orderRef: orderRef,
-        amount: double.tryParse(status.totalAmount) ?? 0,
+        orderRef:     orderRef,
+        amount:       double.tryParse(status.totalAmount) ?? 0,
         gatewayTxnId: status.gatewayTxnId,
       ));
     } else {
@@ -156,7 +114,7 @@ class _AtomPaymentScreenState extends State<AtomPaymentScreen> {
             showDialog(
               context: context,
               builder: (_) => AlertDialog(
-                title: const Text('Cancel Payment?'),
+                title:   const Text('Cancel Payment?'),
                 content: const Text('Are you sure you want to cancel this payment?'),
                 actions: [
                   TextButton(
@@ -165,7 +123,7 @@ class _AtomPaymentScreenState extends State<AtomPaymentScreen> {
                   ),
                   TextButton(
                     onPressed: () {
-                      Navigator.pop(context); // close dialog
+                      Navigator.pop(context);
                       Navigator.pop(context, AtomPaymentResult.cancelled());
                     },
                     child: const Text(
@@ -183,13 +141,11 @@ class _AtomPaymentScreenState extends State<AtomPaymentScreen> {
         children: [
           WebViewWidget(controller: _controller),
 
-          // Page loading indicator
           if (_isLoading && !_isPolling)
             const Center(
               child: CircularProgressIndicator(color: AppColors.primary),
             ),
 
-          // Polling overlay
           if (_isPolling)
             Container(
               color: Colors.black.withOpacity(0.6),
@@ -197,7 +153,7 @@ class _AtomPaymentScreenState extends State<AtomPaymentScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(28),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color:        Colors.white,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
@@ -208,9 +164,9 @@ class _AtomPaymentScreenState extends State<AtomPaymentScreen> {
                       Text(
                         _statusMsg ?? 'Verifying payment…',
                         style: const TextStyle(
-                          fontSize: 15,
+                          fontSize:   15,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textDark,
+                          color:      AppColors.textDark,
                         ),
                       ),
                     ],
@@ -223,8 +179,6 @@ class _AtomPaymentScreenState extends State<AtomPaymentScreen> {
     );
   }
 }
-
-// ── Result model returned to the caller ──────────────────────────────────────
 
 enum AtomPaymentResultType { success, failed, cancelled, pending }
 
@@ -245,13 +199,12 @@ class AtomPaymentResult {
     required String orderRef,
     required double amount,
     String? gatewayTxnId,
-  }) =>
-      AtomPaymentResult._(
-        type: AtomPaymentResultType.success,
-        orderRef: orderRef,
-        amount: amount,
-        gatewayTxnId: gatewayTxnId,
-      );
+  }) => AtomPaymentResult._(
+    type:         AtomPaymentResultType.success,
+    orderRef:     orderRef,
+    amount:       amount,
+    gatewayTxnId: gatewayTxnId,
+  );
 
   factory AtomPaymentResult.failed(String orderRef) =>
       AtomPaymentResult._(type: AtomPaymentResultType.failed, orderRef: orderRef);
@@ -262,8 +215,8 @@ class AtomPaymentResult {
   factory AtomPaymentResult.pending(String orderRef) =>
       AtomPaymentResult._(type: AtomPaymentResultType.pending, orderRef: orderRef);
 
-  bool get isSuccess => type == AtomPaymentResultType.success;
-  bool get isFailed => type == AtomPaymentResultType.failed;
+  bool get isSuccess   => type == AtomPaymentResultType.success;
+  bool get isFailed    => type == AtomPaymentResultType.failed;
   bool get isCancelled => type == AtomPaymentResultType.cancelled;
-  bool get isPending => type == AtomPaymentResultType.pending;
+  bool get isPending   => type == AtomPaymentResultType.pending;
 }

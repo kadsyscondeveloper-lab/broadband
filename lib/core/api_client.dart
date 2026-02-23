@@ -2,17 +2,7 @@ import 'package:dio/dio.dart';
 import 'app_config.dart';
 import 'storage_service.dart';
 
-/// ─────────────────────────────────────────────────────────────────────────────
-/// ApiClient — the ONLY place that creates HTTP requests in the whole app.
-///
-/// Interceptor chain (in order):
-///   1. AuthInterceptor   → attaches "Authorization: Bearer <token>" to every request
-///   2. LogInterceptor    → prints request/response in debug mode
-///   3. ErrorInterceptor  → converts HTTP errors into typed ApiException
-///   4. RefreshInterceptor→ on 401, silently refreshes token and retries once
-/// ─────────────────────────────────────────────────────────────────────────────
 class ApiClient {
-  // Singleton
   static final ApiClient _instance = ApiClient._internal();
   factory ApiClient() => _instance;
   ApiClient._internal() {
@@ -23,6 +13,9 @@ class ApiClient {
   final _storage = StorageService();
 
   Dio get dio => _dio;
+
+  // ← ADD THIS — exposes the current access token for WebView auth header
+  String? get token => _storage.accessToken;
 
   void _init() {
     _dio = Dio(BaseOptions(
@@ -35,10 +28,8 @@ class ApiClient {
       },
     ));
 
-    // 1. Auth header injection
     _dio.interceptors.add(_AuthInterceptor(_storage));
 
-    // 2. Request/response logger (only active in debug builds)
     _dio.interceptors.add(LogInterceptor(
       requestBody:  true,
       responseBody: true,
@@ -46,11 +37,8 @@ class ApiClient {
       logPrint:     (obj) => print('[API] $obj'),
     ));
 
-    // 3. Token refresh + error normalisation
     _dio.interceptors.add(_RefreshInterceptor(_dio, _storage));
   }
-
-  // ── Convenience wrappers ───────────────────────────────────────────────────
 
   Future<Response> get(String path, {Map<String, dynamic>? params}) =>
       _dio.get(path, queryParameters: params);
@@ -67,8 +55,6 @@ class ApiClient {
   Future<Response> delete(String path) => _dio.delete(path);
 }
 
-// ── Auth Interceptor ──────────────────────────────────────────────────────────
-
 class _AuthInterceptor extends Interceptor {
   final StorageService _storage;
   _AuthInterceptor(this._storage);
@@ -83,8 +69,6 @@ class _AuthInterceptor extends Interceptor {
   }
 }
 
-// ── Refresh + Error Interceptor ───────────────────────────────────────────────
-
 class _RefreshInterceptor extends Interceptor {
   final Dio          _dio;
   final StorageService _storage;
@@ -94,7 +78,6 @@ class _RefreshInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
-    // ── 401 → try to refresh token, then retry original request ──────────────
     if (err.response?.statusCode == 401 && !_isRefreshing) {
       final refreshToken = _storage.refreshToken;
       if (refreshToken == null) {
@@ -113,13 +96,11 @@ class _RefreshInterceptor extends Interceptor {
           accessToken:  tokens['access_token'],
           refreshToken: tokens['refresh_token'],
         );
-        // Retry the original request with the new token
         final opts = err.requestOptions;
         opts.headers['Authorization'] = 'Bearer ${tokens['access_token']}';
         final retried = await _dio.fetch(opts);
         handler.resolve(retried);
       } catch (_) {
-        // Refresh failed → force logout
         await _storage.clearAll();
         handler.next(err);
       } finally {
@@ -128,17 +109,14 @@ class _RefreshInterceptor extends Interceptor {
       return;
     }
 
-    // ── Convert DioException → ApiException (typed, easy to handle in VMs) ──
     handler.next(err);
   }
 }
 
-// ── Typed exception ───────────────────────────────────────────────────────────
-
 class ApiException implements Exception {
   final String message;
   final int?   statusCode;
-  final List<Map<String, dynamic>>? errors; // validation field errors
+  final List<Map<String, dynamic>>? errors;
 
   const ApiException({
     required this.message,
@@ -157,7 +135,6 @@ class ApiException implements Exception {
             .toList(),
       );
     }
-    // Network / timeout errors
     if (e.type == DioExceptionType.connectionTimeout ||
         e.type == DioExceptionType.receiveTimeout) {
       return const ApiException(

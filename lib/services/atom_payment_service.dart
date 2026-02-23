@@ -2,8 +2,6 @@
 import 'package:dio/dio.dart';
 import '../core/api_client.dart';
 
-// ── Models ────────────────────────────────────────────────────────────────────
-
 class AtomInitiateResult {
   final bool success;
   final String? atomUrl;
@@ -11,6 +9,7 @@ class AtomInitiateResult {
   final String? orderRef;
   final String? amount;
   final String? error;
+  final String? authToken; // ← NEW
 
   const AtomInitiateResult({
     required this.success,
@@ -19,6 +18,7 @@ class AtomInitiateResult {
     this.orderRef,
     this.amount,
     this.error,
+    this.authToken,
   });
 }
 
@@ -48,8 +48,6 @@ class AtomPaymentStatus {
       );
 }
 
-// ── Service ───────────────────────────────────────────────────────────────────
-
 class AtomPaymentService {
   static final AtomPaymentService _i = AtomPaymentService._();
   factory AtomPaymentService() => _i;
@@ -57,7 +55,6 @@ class AtomPaymentService {
 
   final _api = ApiClient();
 
-  /// Step 1 — Call backend to create pending order and get encData.
   Future<AtomInitiateResult> initiateWalletRecharge(double amount) async {
     try {
       final res = await _api.post(
@@ -68,11 +65,12 @@ class AtomPaymentService {
       final data = res.data['data'] as Map<String, dynamic>;
 
       return AtomInitiateResult(
-        success:  true,
-        atomUrl:  data['atomUrl']  as String?,
-        encData:  data['encData']  as String?,
-        orderRef: data['orderRef'] as String?,
-        amount:   data['amount']   as String?,
+        success:   true,
+        atomUrl:   data['atomUrl']  as String?,
+        encData:   data['encData']  as String?,
+        orderRef:  data['orderRef'] as String?,
+        amount:    data['amount']   as String?,
+        authToken: _api.token,      // ← grab token from ApiClient
       );
     } on DioException catch (e) {
       return AtomInitiateResult(
@@ -85,7 +83,6 @@ class AtomPaymentService {
     }
   }
 
-  /// Step 3 — Poll backend for payment result after WebView closes.
   Future<AtomPaymentStatus?> pollPaymentStatus(
       String orderRef, {
         int maxAttempts = 8,
