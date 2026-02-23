@@ -1,30 +1,81 @@
 // lib/widgets/app_header.dart
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
 class AppHeader extends StatelessWidget {
-  final String userName;
-  final double walletBalance;
+  final String  userName;
+  final double  walletBalance;
+  final String? profileImageUrl;       // data URI or HTTPS URL — null = show logo
   final VoidCallback? onNotificationTap;
   final VoidCallback? onMenuTap;
-  final VoidCallback? onWalletTap; // ← now used to open recharge screen
+  final VoidCallback? onWalletTap;     // opens recharge screen
 
   const AppHeader({
     super.key,
     required this.userName,
     required this.walletBalance,
+    this.profileImageUrl,
     this.onNotificationTap,
     this.onMenuTap,
     this.onWalletTap,
   });
 
+  // ── Avatar builder ────────────────────────────────────────────────────────
+
+  Widget _buildAvatar() {
+    Widget content;
+
+    final url = profileImageUrl;
+    if (url != null && url.isNotEmpty) {
+      if (url.startsWith('data:')) {
+        // base64 data URI  →  decode the part after the comma
+        final base64Part = url.contains(',') ? url.split(',').last : url;
+        try {
+          content = Image.memory(
+            base64Decode(base64Part),
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+          );
+        } catch (_) {
+          content = _fallbackIcon();
+        }
+      } else {
+        // Regular HTTPS URL
+        content = Image.network(
+          url,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _fallbackIcon(),
+        );
+      }
+    } else {
+      content = _fallbackIcon();
+    }
+
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: const BoxDecoration(
+        color: Colors.black,
+        shape: BoxShape.circle,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: content,
+    );
+  }
+
+  Widget _fallbackIcon() =>
+      const Icon(Icons.tv, color: AppColors.primary, size: 22);
+
+  // ── Build ─────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 8,
-        left: 16,
-        right: 16,
+        top:    MediaQuery.of(context).padding.top + 8,
+        left:   16,
+        right:  16,
         bottom: 16,
       ),
       decoration: const BoxDecoration(
@@ -36,22 +87,14 @@ class AppHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // ── Hamburger / logo ───────────────────────────────────────────
+          // ── Avatar / hamburger ─────────────────────────────────────────
           GestureDetector(
             onTap: onMenuTap,
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: const BoxDecoration(
-                color: Colors.black,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.tv, color: AppColors.primary, size: 22),
-            ),
+            child: _buildAvatar(),
           ),
           const SizedBox(width: 12),
 
-          // ── User name ──────────────────────────────────────────────────
+          // ── Greeting ───────────────────────────────────────────────────
           Expanded(
             child: Text(
               userName.isNotEmpty ? 'Hi, $userName 👋' : 'Welcome',
@@ -64,7 +107,7 @@ class AppHeader extends StatelessWidget {
             ),
           ),
 
-          // ── Wallet balance chip (tappable → recharge) ──────────────────
+          // ── Wallet balance chip ────────────────────────────────────────
           GestureDetector(
             onTap: onWalletTap,
             child: Container(
@@ -101,7 +144,7 @@ class AppHeader extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // "+" icon to hint it's tappable
+                  // "+" hint
                   Container(
                     width:  20,
                     height: 20,

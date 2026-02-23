@@ -1,3 +1,4 @@
+// lib/viewmodels/home_viewmodel.dart
 import 'package:flutter/foundation.dart';
 import '../services/user_service.dart';
 import '../services/kyc_service.dart';
@@ -26,8 +27,9 @@ class HomeViewModel extends ChangeNotifier {
   // Legacy compat
   bool get isKycUnderReview => _kycStatus?.isPending ?? false;
 
-  String get userName      => _profile?.name          ?? '';
-  double get walletBalance => _profile?.walletBalance ?? 0.0;
+  String  get userName        => _profile?.name          ?? '';
+  double  get walletBalance   => _profile?.walletBalance ?? 0.0;
+  String? get profileImageUrl => _profile?.profileImageUrl; // NEW — avatar in header/drawer
 
   // ── Load ──────────────────────────────────────────────────────────────────
 

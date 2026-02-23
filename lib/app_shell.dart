@@ -1,7 +1,8 @@
 // lib/app_shell.dart
 import 'package:flutter/material.dart';
+import 'package:speedonet/views/payment/payments_screen.dart';
 import 'views/home/home_screen.dart';
-import 'views/payments/payments_screen.dart';
+import 'views/payment/payments_screen.dart';
 import 'views/help/help_screen.dart';
 import 'views/pay/pay_screen.dart';
 import 'views/profile/profile_screen.dart';
@@ -36,6 +37,21 @@ class _AppShellState extends State<AppShell> {
       _homeVM.loadProfile();
       _payVM.loadBalance();
     });
+
+    // ── Sync HomeViewModel when profile image is uploaded ─────────────────
+    // ProfileViewModel.loadProfile() is called internally after a successful
+    // image upload, but HomeViewModel holds its own separate _profile copy.
+    // We listen here and refresh HomeViewModel so AppHeader + AppDrawer
+    // update immediately without navigating away and back.
+    _profileVM.addListener(_onProfileVMChanged);
+  }
+
+  /// Called every time ProfileViewModel notifies. We only act when the image
+  /// upload finishes (imageUploading flips false AND no error).
+  void _onProfileVMChanged() {
+    if (!_profileVM.imageUploading && _profileVM.imageError == null) {
+      _homeVM.loadProfile();
+    }
   }
 
   // ── Navigation helpers ────────────────────────────────────────────────────
@@ -52,9 +68,8 @@ class _AppShellState extends State<AppShell> {
       context,
       MaterialPageRoute(
         builder: (_) => WalletRechargeScreen(
-          initialBalance:   _homeVM.walletBalance,
+          initialBalance:    _homeVM.walletBalance,
           onRechargeSuccess: (double newBalance) {
-            // Reload profile so the header balance updates immediately
             _homeVM.loadProfile();
             _payVM.loadBalance();
           },
@@ -69,10 +84,10 @@ class _AppShellState extends State<AppShell> {
     switch (_currentIndex) {
       case 0:
         return HomeScreen(
-          viewModel:          _homeVM,
+          viewModel:           _homeVM,
           onNavigateToProfile: _navigateToProfile,
           onNavigateToPay:     _navigateToPay,
-          onWalletTap:         _openWalletRecharge, // ← wired here
+          onWalletTap:         _openWalletRecharge,
         );
       case 1:
         return const PaymentsScreen();
@@ -82,7 +97,7 @@ class _AppShellState extends State<AppShell> {
         return HelpScreen(viewModel: _helpVM);
       case 4:
         return ProfileScreen(
-          viewModel:       _profileVM,
+          viewModel:        _profileVM,
           onNavigateToHome: _navigateToHome,
         );
       default:
@@ -96,7 +111,7 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: true,
-      body:              _buildBody(),
+      body:               _buildBody(),
       bottomNavigationBar: _BottomNav(
         currentIndex: _currentIndex,
         onTap:        _onTabTapped,
@@ -106,6 +121,7 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
+    _profileVM.removeListener(_onProfileVMChanged);
     _homeVM.dispose();
     _paymentsVM.dispose();
     _helpVM.dispose();
@@ -116,7 +132,7 @@ class _AppShellState extends State<AppShell> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BOTTOM NAV  (unchanged from your original)
+// BOTTOM NAV  (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _BottomNav extends StatelessWidget {
@@ -233,8 +249,8 @@ class _BottomNav extends StatelessWidget {
                 width:  _btnSize,
                 height: _btnSize,
                 decoration: BoxDecoration(
-                  color:         AppColors.primary,
-                  borderRadius:  BorderRadius.circular(_btnRadius),
+                  color:        AppColors.primary,
+                  borderRadius: BorderRadius.circular(_btnRadius),
                   boxShadow: [
                     BoxShadow(
                       color:      AppColors.primary.withOpacity(0.40),

@@ -1,4 +1,7 @@
+// lib/views/profile/profile_screen.dart
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../theme/app_theme.dart';
 import '../../viewmodels/profile_viewmodel.dart';
 
@@ -39,6 +42,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await widget.viewModel.loadProfile();
       _populateControllers();
     });
+
+    // Listen for image upload errors and show them as snackbars
+    widget.viewModel.addListener(_onViewModelChange);
+  }
+
+  void _onViewModelChange() {
+    if (widget.viewModel.imageError != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(widget.viewModel.imageError!),
+          backgroundColor: AppColors.primary,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      widget.viewModel.clearImageError();
+    }
   }
 
   void _populateControllers() {
@@ -53,6 +72,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   void dispose() {
+    widget.viewModel.removeListener(_onViewModelChange);
     _nameController.dispose();
     _emailController.dispose();
     _houseNoController.dispose();
@@ -60,6 +80,207 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _pinCodeController.dispose();
     super.dispose();
   }
+
+  // ── Image source picker bottom sheet ──────────────────────────────────────
+
+  void _showImageSourcePicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle bar
+              Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.borderColor,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Change Profile Photo',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textDark,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Divider(),
+              ListTile(
+                leading: Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.photo_library_outlined,
+                      color: AppColors.primary),
+                ),
+                title: const Text('Choose from Gallery',
+                    style: TextStyle(fontWeight: FontWeight.w500)),
+                subtitle: const Text('Pick an existing photo'),
+                onTap: () {
+                  Navigator.pop(context);
+                  widget.viewModel.pickAndUploadImage(ImageSource.gallery);
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.camera_alt_outlined,
+                      color: AppColors.primary),
+                ),
+                title: const Text('Take a Photo',
+                    style: TextStyle(fontWeight: FontWeight.w500)),
+                subtitle: const Text('Use your camera'),
+                onTap: () {
+                  Navigator.pop(context);
+                  widget.viewModel.pickAndUploadImage(ImageSource.camera);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Avatar builder ────────────────────────────────────────────────────────
+
+  Widget _buildAvatar(ProfileViewModel vm) {
+    Widget image;
+
+    if (vm.imageUploading) {
+      // Show spinner while uploading
+      image = Container(
+        color: Colors.black,
+        child: const Center(
+          child: CircularProgressIndicator(
+            color: AppColors.primary,
+            strokeWidth: 2,
+          ),
+        ),
+      );
+    } else if (vm.localImageBase64 != null) {
+      // Freshly picked image — fastest feedback, no network round-trip
+      image = Image.memory(
+        base64Decode(vm.localImageBase64!),
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+      );
+    } else {
+      final imgUrl = vm.profileImageUrl;
+      if (imgUrl != null && imgUrl.isNotEmpty) {
+        if (imgUrl.startsWith('data:')) {
+          // Server returned a base64 data URI
+          final base64Part = imgUrl.contains(',') ? imgUrl.split(',').last : imgUrl;
+          image = Image.memory(
+            base64Decode(base64Part),
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+          );
+        } else {
+          // Regular HTTPS URL
+          image = Image.network(
+            imgUrl,
+            fit: BoxFit.cover,
+            loadingBuilder: (_, child, progress) => progress == null
+                ? child
+                : const Center(child: CircularProgressIndicator(
+                color: AppColors.primary, strokeWidth: 2)),
+            errorBuilder: (_, __, ___) => _defaultAvatarContent(vm),
+          );
+        }
+      } else {
+        image = _defaultAvatarContent(vm);
+      }
+    }
+
+    return Stack(
+      children: [
+        // Avatar circle
+        Container(
+          width: 100,
+          height: 100,
+          decoration: const BoxDecoration(
+            color: Colors.black,
+            shape: BoxShape.circle,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: image,
+        ),
+
+        // Camera icon badge
+        Positioned(
+          bottom: 0,
+          right: 0,
+          child: GestureDetector(
+            onTap: vm.imageUploading ? null : _showImageSourcePicker,
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: vm.imageUploading
+                    ? AppColors.primary.withOpacity(0.5)
+                    : AppColors.primary,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.4),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.camera_alt, size: 15, color: Colors.white),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _defaultAvatarContent(ProfileViewModel vm) {
+    // Show initials if name is available, else fallback icon
+    final initials = vm.name.trim().isNotEmpty
+        ? vm.name.trim().split(' ').map((w) => w.isNotEmpty ? w[0] : '').take(2).join().toUpperCase()
+        : '';
+
+    if (initials.isNotEmpty) {
+      return Container(
+        color: Colors.black,
+        child: Center(
+          child: Text(
+            initials,
+            style: const TextStyle(
+              color: AppColors.primary,
+              fontSize: 32,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return const Icon(Icons.person, color: AppColors.primary, size: 42);
+  }
+
+  // ── Save ──────────────────────────────────────────────────────────────────
 
   Future<void> _update() async {
     widget.viewModel.updateName(_nameController.text);
@@ -75,6 +296,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SnackBar(
           content: Text('Profile updated successfully!'),
           backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
         ),
       );
       widget.viewModel.resetUpdateState();
@@ -83,10 +305,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         SnackBar(
           content: Text(widget.viewModel.updateError!),
           backgroundColor: AppColors.primary,
+          behavior: SnackBarBehavior.floating,
         ),
       );
     }
   }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -94,7 +319,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.primary,
-        title: const Text('Edit Profile'),
+        title: const Text(
+          'Edit Profile',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        ),
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
@@ -127,18 +355,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.error_outline, color: AppColors.primary, size: 48),
+                    const Icon(Icons.error_outline,
+                        color: AppColors.primary, size: 48),
                     const SizedBox(height: 16),
-                    Text(vm.loadError!, textAlign: TextAlign.center,
-                        style: const TextStyle(color: AppColors.textGrey)),
+                    Text(
+                      vm.loadError!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: AppColors.textGrey),
+                    ),
                     const SizedBox(height: 24),
                     ElevatedButton(
                       onPressed: () async {
                         await vm.loadProfile();
                         _populateControllers();
                       },
-                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-                      child: const Text('Retry', style: TextStyle(color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary),
+                      child: const Text('Retry',
+                          style: TextStyle(color: Colors.white)),
                     ),
                   ],
                 ),
@@ -146,60 +380,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
             );
           }
 
-          // Populate controllers once after load (guards against rebuild overwrite)
+          // Populate controllers once after load
           if (!_controllersInitialized && vm.profile != null) {
             _populateControllers();
           }
 
           return Column(
             children: [
+              // ── Scrollable content ───────────────────────────────────
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Avatar
+
+                      // ── Avatar ───────────────────────────────────────
+                      Center(child: _buildAvatar(vm)),
+
+                      // Upload hint text
+                      const SizedBox(height: 10),
                       Center(
-                        child: Stack(
-                          children: [
-                            Container(
-                              width: 90,
-                              height: 90,
-                              decoration: const BoxDecoration(
-                                color: Colors.black,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.tv, color: AppColors.primary, size: 40),
-                            ),
-                            Positioned(
-                              bottom: 0,
-                              right: 0,
-                              child: GestureDetector(
-                                onTap: () {},
-                                child: Container(
-                                  width: 32,
-                                  height: 32,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.15),
-                                        blurRadius: 6,
-                                      ),
-                                    ],
-                                  ),
-                                  child: const Icon(Icons.edit, size: 16, color: AppColors.textDark),
-                                ),
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          vm.imageUploading
+                              ? 'Uploading photo…'
+                              : 'Tap the camera icon to change photo',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textGrey,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 28),
 
-                      // Mobile No (read-only)
+                      // ── Mobile No (read-only) ────────────────────────
                       _ProfileField(
                         label: 'Mobile No.',
                         controller: TextEditingController(text: vm.phone),
@@ -207,7 +422,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 20),
 
-                      // Email
+                      // ── Email ────────────────────────────────────────
                       _ProfileField(
                         label: 'Email Address',
                         controller: _emailController,
@@ -215,14 +430,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 20),
 
-                      // Full Name
+                      // ── Full Name ────────────────────────────────────
                       _ProfileField(
                         label: 'Full Name',
                         controller: _nameController,
                       ),
                       const SizedBox(height: 24),
 
-                      // Primary Address section
+                      // ── Primary Address section ──────────────────────
                       const Text(
                         'Primary Address',
                         style: TextStyle(
@@ -279,7 +494,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
 
-              // Update button
+              // ── Update button ────────────────────────────────────────
               Container(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
                 decoration: BoxDecoration(
@@ -298,6 +513,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onPressed: vm.isUpdating ? null : _update,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
+                      disabledBackgroundColor:
+                      AppColors.primary.withOpacity(0.6),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -312,7 +529,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           color: Colors.white, strokeWidth: 2),
                     )
                         : const Text(
-                      'Update',
+                      'Update Profile',
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
@@ -376,7 +593,7 @@ class _ProfileField extends StatelessWidget {
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: AppColors.cardBg,
+            color: readOnly ? AppColors.background : AppColors.cardBg,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppColors.borderColor),
           ),
@@ -384,9 +601,9 @@ class _ProfileField extends StatelessWidget {
             controller: controller,
             readOnly: readOnly,
             keyboardType: keyboardType,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 15,
-              color: AppColors.textDark,
+              color: readOnly ? AppColors.textGrey : AppColors.textDark,
               fontWeight: FontWeight.w500,
             ),
             decoration: const InputDecoration(
@@ -414,7 +631,6 @@ class _DropdownField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // If the current value isn't in the list, fall back to first item
     final effectiveValue = items.contains(value) ? value : items.first;
 
     return Container(
@@ -428,7 +644,8 @@ class _DropdownField extends StatelessWidget {
         child: DropdownButton<String>(
           value: effectiveValue,
           isExpanded: true,
-          icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textGrey),
+          icon: const Icon(Icons.keyboard_arrow_down,
+              color: AppColors.textGrey),
           items: items
               .map((item) => DropdownMenuItem(
             value: item,
