@@ -34,6 +34,7 @@ class _AppShellState extends State<AppShell> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _homeVM.loadProfile();
+      _payVM.loadBalance();
     });
   }
 
@@ -55,6 +56,7 @@ class _AppShellState extends State<AppShell> {
           onRechargeSuccess: (double newBalance) {
             // Reload profile so the header balance updates immediately
             _homeVM.loadProfile();
+            _payVM.loadBalance();
           },
         ),
       ),

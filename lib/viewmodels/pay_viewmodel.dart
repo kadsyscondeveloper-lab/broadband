@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../services/wallet_service.dart';
 
 class PayViewModel extends ChangeNotifier {
   double _currentBalance = 0.00;
@@ -6,6 +7,14 @@ class PayViewModel extends ChangeNotifier {
 
   double get currentBalance => _currentBalance;
   bool get isLoading => _isLoading;
+  final _walletService = WalletService();
+
+  Future<void> loadBalance() async {
+    try {
+      _currentBalance = await _walletService.getBalance();
+      notifyListeners();
+    } catch (_) {}
+  }
 
   final List<Map<String, dynamic>> rechargeServices = [
     {'icon': 'mobile', 'label': 'Mobile\nRecharge'},

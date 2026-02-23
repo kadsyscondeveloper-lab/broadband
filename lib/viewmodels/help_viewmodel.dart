@@ -1,37 +1,51 @@
+// lib/viewmodels/help_viewmodel.dart
+
 import 'package:flutter/foundation.dart';
-import '../models/help_ticket_model.dart';
+import '../services/ticket_service.dart';
 
 class HelpViewModel extends ChangeNotifier {
-  List<HelpTicketModel> _tickets = [];
-  bool _isLoading = false;
-  bool _isSubmitting = false;
+  final _service = TicketService();
+
+  // ── Ticket list ───────────────────────────────────────────────────────────
+  List<SupportTicket> _tickets  = [];
+  bool    _isLoading            = false;
+  String? _listError;
+
+  List<SupportTicket> get tickets   => _tickets;
+  bool                get isLoading => _isLoading;
+  String?             get listError => _listError;
+
+  // ── Create form ───────────────────────────────────────────────────────────
+  bool    _isSubmitting        = false;
   String? _submitError;
-  bool _submitSuccess = false;
+  bool    _submitSuccess       = false;
+  String? _createdTicketNumber;
 
-  // Form fields
+  bool    get isSubmitting        => _isSubmitting;
+  String? get submitError         => _submitError;
+  bool    get submitSuccess       => _submitSuccess;
+  String? get createdTicketNumber => _createdTicketNumber;
+
+  // ── Form fields ───────────────────────────────────────────────────────────
   String? _selectedCategory;
-  String _subject = '';
-  String _description = '';
-  String? _attachmentPath;
+  String  _subject     = '';
+  String  _description = '';
 
-  List<HelpTicketModel> get tickets => _tickets;
-  bool get isLoading => _isLoading;
-  bool get isSubmitting => _isSubmitting;
-  String? get submitError => _submitError;
-  bool get submitSuccess => _submitSuccess;
-  String? get selectedCategory => _selectedCategory;
-  String get subject => _subject;
-  String get description => _description;
-  String? get attachmentPath => _attachmentPath;
+  // Attachment — stored as base64 + mime type
+  String? _attachmentBase64;
+  String? _attachmentMime;
+  String? _attachmentFileName; // display only
 
-  final List<String> categories = [
-    'Billing',
-    'Technical Issue',
-    'New Connection',
-    'Plan Change',
-    'KYC',
-    'Other',
-  ];
+  String? get selectedCategory   => _selectedCategory;
+  String  get subject            => _subject;
+  String  get description        => _description;
+  String? get attachmentFileName => _attachmentFileName;
+  bool    get hasAttachment      => _attachmentBase64 != null;
+
+  // Keep compatible with existing create screen which uses attachmentPath for display
+  String? get attachmentPath => _attachmentFileName;
+
+  final List<String> categories = TicketService.categories;
 
   void setCategory(String? value) {
     _selectedCategory = value;
@@ -48,64 +62,106 @@ class HelpViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setAttachment(String? path) {
-    _attachmentPath = path;
+  void setAttachment({
+    required String base64,
+    required String mime,
+    required String fileName,
+  }) {
+    _attachmentBase64    = base64;
+    _attachmentMime      = mime;
+    _attachmentFileName  = fileName;
     notifyListeners();
   }
 
+  void clearAttachment() {
+    _attachmentBase64   = null;
+    _attachmentMime     = null;
+    _attachmentFileName = null;
+    notifyListeners();
+  }
+
+  // ── Detail ────────────────────────────────────────────────────────────────
+  SupportTicket? _selectedTicket;
+  bool           _loadingDetail = false;
+
+  SupportTicket? get selectedTicket => _selectedTicket;
+  bool           get loadingDetail  => _loadingDetail;
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+
   Future<void> loadTickets() async {
     _isLoading = true;
+    _listError = null;
     notifyListeners();
+    try {
+      _tickets = await _service.getTickets();
+    } catch (e) {
+      _listError = e.toString();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 
-    await Future.delayed(const Duration(milliseconds: 800));
-    _tickets = []; // No tickets for this user
-    _isLoading = false;
+  Future<void> loadTicketDetail(int id) async {
+    _loadingDetail  = true;
+    _selectedTicket = null;
+    notifyListeners();
+    _selectedTicket = await _service.getTicket(id);
+    _loadingDetail  = false;
     notifyListeners();
   }
 
   Future<void> submitTicket() async {
-    if (_selectedCategory == null || _subject.isEmpty || _description.isEmpty) {
+    if (_selectedCategory == null ||
+        _subject.trim().isEmpty ||
+        _description.trim().isEmpty) {
       _submitError = 'Please fill all required fields';
       notifyListeners();
       return;
     }
 
-    _isSubmitting = true;
-    _submitError = null;
+    _isSubmitting  = true;
+    _submitError   = null;
     _submitSuccess = false;
     notifyListeners();
 
-    try {
-      await Future.delayed(const Duration(seconds: 1));
-      final ticket = HelpTicketModel(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        category: _selectedCategory!,
-        subject: _subject,
-        description: _description,
-        attachmentPath: _attachmentPath,
-        createdAt: DateTime.now(),
-      );
-      _tickets.add(ticket);
-      _submitSuccess = true;
+    final result = await _service.createTicket(
+      category:       _selectedCategory!,
+      subject:        _subject.trim(),
+      description:    _description.trim(),
+      attachmentData: _attachmentBase64,
+      attachmentMime: _attachmentMime,
+    );
+
+    _isSubmitting = false;
+
+    if (result.success) {
+      _submitSuccess       = true;
+      _createdTicketNumber = result.ticket?.ticketNumber;
+      if (result.ticket != null) {
+        _tickets = [result.ticket!, ..._tickets];
+      }
       _resetForm();
-    } catch (e) {
-      _submitError = e.toString();
-    } finally {
-      _isSubmitting = false;
-      notifyListeners();
+    } else {
+      _submitError = result.error;
     }
+    notifyListeners();
   }
 
   void _resetForm() {
-    _selectedCategory = null;
-    _subject = '';
-    _description = '';
-    _attachmentPath = null;
+    _selectedCategory   = null;
+    _subject            = '';
+    _description        = '';
+    _attachmentBase64   = null;
+    _attachmentMime     = null;
+    _attachmentFileName = null;
   }
 
   void resetSubmitState() {
-    _submitSuccess = false;
-    _submitError = null;
+    _submitSuccess       = false;
+    _submitError         = null;
+    _createdTicketNumber = null;
     notifyListeners();
   }
 }
