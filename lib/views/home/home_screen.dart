@@ -80,7 +80,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   walletBalance: vm.walletBalance,
                   onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
                   onNotificationTap: () {},
-                  onWalletTap:       widget.onWalletTap,
+                  onWalletTap: widget.onWalletTap,
+                  topPadding: MediaQuery.of(context).padding.top,
                 ),
               ),
 
@@ -108,7 +109,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         services: vm.services,
                         onNavigateToPay: widget.onNavigateToPay,
                         onKycTap: _openKyc,
-                        homeViewModel: vm, // ← ADDED
+                        homeViewModel: vm,
                       ),
                       const SizedBox(height: 16),
 
@@ -152,29 +153,38 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
   final VoidCallback onMenuTap;
   final VoidCallback onNotificationTap;
   final VoidCallback? onWalletTap;
+  final double topPadding;
 
   const _StickyHeaderDelegate({
     required this.userName,
     required this.walletBalance,
     required this.onMenuTap,
     required this.onNotificationTap,
+    required this.topPadding,
     this.onWalletTap,
   });
 
-  @override
-  double get minExtent => 112;
+  static const double _headerHeight = 112.0;
 
   @override
-  double get maxExtent => 112;
+  double get minExtent => _headerHeight + topPadding;
+
+  @override
+  double get maxExtent => _headerHeight + topPadding;
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return AppHeader(
-      userName: userName,
-      walletBalance: walletBalance,
-      onMenuTap: onMenuTap,
-      onNotificationTap: onNotificationTap,
-      onWalletTap:       onWalletTap,
+    // Wrap with top padding so the header content sits below the status bar.
+    // This ensures paintExtent == layoutExtent and avoids the SliverGeometry error.
+    return Padding(
+      padding: EdgeInsets.only(top: topPadding),
+      child: AppHeader(
+        userName: userName,
+        walletBalance: walletBalance,
+        onMenuTap: onMenuTap,
+        onNotificationTap: onNotificationTap,
+        onWalletTap: onWalletTap,
+      ),
     );
   }
 
@@ -182,6 +192,7 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
   bool shouldRebuild(_StickyHeaderDelegate old) =>
       old.userName      != userName      ||
           old.walletBalance != walletBalance ||
+          old.topPadding    != topPadding    ||
           old.onWalletTap   != onWalletTap;
 }
 
@@ -287,13 +298,13 @@ class _ManageServicesCard extends StatelessWidget {
   final List<Map<String, String>> services;
   final VoidCallback? onNavigateToPay;
   final VoidCallback? onKycTap;
-  final HomeViewModel? homeViewModel; // ← ADDED
+  final HomeViewModel? homeViewModel;
 
   const _ManageServicesCard({
     required this.services,
     this.onNavigateToPay,
     this.onKycTap,
-    this.homeViewModel, // ← ADDED
+    this.homeViewModel,
   });
 
   IconData _getIcon(String iconKey) {
@@ -328,7 +339,7 @@ class _ManageServicesCard extends StatelessWidget {
             screenContext: context,
             onNavigateToPay: onNavigateToPay,
             onKycTap: onKycTap,
-            homeViewModel: homeViewModel, // ← ADDED
+            homeViewModel: homeViewModel,
           )).toList(),
         ),
         if (services.length > 4) ...[
@@ -342,7 +353,7 @@ class _ManageServicesCard extends StatelessWidget {
                 screenContext: context,
                 onNavigateToPay: onNavigateToPay,
                 onKycTap: onKycTap,
-                homeViewModel: homeViewModel, // ← ADDED
+                homeViewModel: homeViewModel,
               ),
             )).toList(),
           ),
@@ -358,7 +369,7 @@ class _ServiceItem extends StatelessWidget {
   final BuildContext screenContext;
   final VoidCallback? onNavigateToPay;
   final VoidCallback? onKycTap;
-  final HomeViewModel? homeViewModel; // ← ADDED
+  final HomeViewModel? homeViewModel;
 
   const _ServiceItem({
     required this.icon,
@@ -366,7 +377,7 @@ class _ServiceItem extends StatelessWidget {
     required this.screenContext,
     this.onNavigateToPay,
     this.onKycTap,
-    this.homeViewModel, // ← ADDED
+    this.homeViewModel,
   });
 
   void _onTap() {
@@ -385,9 +396,9 @@ class _ServiceItem extends StatelessWidget {
         break;
       case 'New Plan':
         Navigator.push(
-          screenContext, // ← CHANGED FROM context
+          screenContext,
           MaterialPageRoute(
-            builder: (_) => WifiPlansScreen(homeViewModel: homeViewModel), // ← CHANGED
+            builder: (_) => WifiPlansScreen(homeViewModel: homeViewModel),
           ),
         );
         break;
