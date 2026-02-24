@@ -1,5 +1,7 @@
 // lib/viewmodels/home_viewmodel.dart
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../services/user_service.dart';
 import '../services/kyc_service.dart';
 import '../widgets/dashboard_section.dart'; // DashboardData lives here
@@ -92,6 +94,28 @@ class HomeViewModel extends ChangeNotifier {
   void dismissKycBanner() {
     _kycStatus = KycStatus.notSubmitted();
     notifyListeners();
+  }
+
+  // ── Carousels ─────────────────────────────────────────────────────────────
+
+  Future<List<dynamic>> getCarousels() async {
+    try {
+      // Replace with your actual API URL
+      final response = await http.get(
+        Uri.parse('http://192.168.0.104:3000/api/v1/carousels'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['data']['carousels'] ?? [];
+      } else {
+        print('Failed to load carousels: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      print('Error loading carousels: $e');
+      return [];
+    }
   }
 
   // ── Static data ───────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 // lib/views/payments/payments_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../models/plan_model.dart';
 import '../../services/plan_service.dart';
 import '../../theme/app_theme.dart';
@@ -81,7 +82,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
             else if (_error != null)
               SliverFillRemaining(
                 child: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  const Icon(Icons.error_outline, size: 48, color: AppColors.textLight),
+                  PhosphorIcon(PhosphorIcons.warningCircle(), size: 48, color: AppColors.textLight),
                   const SizedBox(height: 12),
                   Text(_error!, style: const TextStyle(color: AppColors.textGrey),
                       textAlign: TextAlign.center),
@@ -131,11 +132,11 @@ class _TransactionCard extends StatelessWidget {
     }
   }
 
-  IconData get _typeIcon {
+  dynamic get _typeIcon {
     switch (tx.type) {
-      case 'credit': return Icons.add_circle_outline;
-      case 'refund': return Icons.refresh_outlined;
-      default:       return Icons.remove_circle_outline;
+      case 'credit': return PhosphorIcons.plusCircle();
+      case 'refund': return PhosphorIcons.arrowCounterClockwise();
+      default:       return PhosphorIcons.minusCircle();
     }
   }
 
@@ -165,7 +166,7 @@ class _TransactionCard extends StatelessWidget {
                   color: _statusColor.withOpacity(0.10),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(_typeIcon, color: _statusColor, size: 22),
+                child: PhosphorIcon(_typeIcon, color: _statusColor, size: 22),
               ),
               const SizedBox(width: 12),
 
@@ -273,7 +274,7 @@ class _EmptyState extends StatelessWidget {
           Container(
             width: 100, height: 100,
             decoration: BoxDecoration(color: Colors.grey.shade100, shape: BoxShape.circle),
-            child: Icon(Icons.receipt_long_outlined, size: 48, color: Colors.grey.shade300),
+            child: PhosphorIcon(PhosphorIcons.receipt(), size: 48, color: Colors.grey.shade300),
           ),
           const SizedBox(height: 24),
           const Text("No transactions yet",

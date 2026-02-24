@@ -1,14 +1,20 @@
 // lib/views/home/home_screen.dart
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../services/kyc_service.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/app_icons.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/app_icon.dart';
 import '../kyc/kyc_screen.dart';
 import '../recharge/wifi_plans_screen.dart';
 import '../refer/refer_earn_screen.dart';
 import '../bills/bills_screens.dart';
+
 
 class HomeScreen extends StatefulWidget {
   final HomeViewModel viewModel;
@@ -137,6 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       _PromoBanner(
                         currentIndex: vm.promoBannerIndex,
                         onPageChanged: vm.onPromoBannerPageChanged,
+                        viewModel: vm,
                       ),
                       const SizedBox(height: 16),
 
@@ -196,7 +203,8 @@ class _PendingBanner extends StatelessWidget {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        const Icon(Icons.info, color: Color(0xFF8B6914), size: 22),
+        const AppIcon(AppIcons.info,
+            color: Color(0xFF8B6914), size: 10),
         const SizedBox(width: 12),
         const Expanded(
           child: Column(
@@ -250,7 +258,7 @@ class _RejectedBanner extends StatelessWidget {
       border:       Border.all(color: Colors.red.shade200),
     ),
     child: Row(children: [
-      Icon(Icons.cancel_rounded,
+      AppIcon(AppIcons.cancelCircle,
           color: Colors.red.shade600, size: 26),
       const SizedBox(width: 12),
       Expanded(
@@ -308,14 +316,14 @@ class _ManageServicesCard extends StatelessWidget {
     this.homeViewModel,
   });
 
-  IconData _getIcon(String iconKey) {
+  dynamic _getIcon(String iconKey) {
     switch (iconKey) {
-      case 'pay_bills':   return Icons.receipt_long_outlined;
-      case 'new_plan':    return Icons.wifi_outlined;
-      case 'kyc':         return Icons.badge_outlined;
-      case 'outstanding': return Icons.access_time_outlined;
-      case 'my_bills':    return Icons.description_outlined;
-      default:            return Icons.circle_outlined;
+      case 'pay_bills':   return PhosphorIcons.creditCard();
+      case 'new_plan':    return PhosphorIcons.wifiHigh();
+      case 'kyc':         return PhosphorIcons.identificationCard();
+      case 'outstanding': return PhosphorIcons.clockClockwise();
+      case 'my_bills':    return PhosphorIcons.clipboardText();
+      default:            return PhosphorIcons.plus();
     }
   }
 
@@ -380,7 +388,7 @@ class _ManageServicesCard extends StatelessWidget {
 }
 
 class _ServiceItem extends StatelessWidget {
-  final IconData  icon;
+  final dynamic icon;
   final String    label;
   final BuildContext screenContext;
   final VoidCallback?  onNavigateToPay;
@@ -431,15 +439,15 @@ class _ServiceItem extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(
-          width:  58,
-          height: 58,
+          width:  44,
+          height: 44,
           decoration: BoxDecoration(
-            color:  AppColors.background,
+            color:  Colors.white,
             shape:  BoxShape.circle,
             border: Border.all(
                 color: AppColors.borderColor, width: 1.5),
           ),
-          child: Icon(icon, color: AppColors.textDark, size: 24),
+          child: PhosphorIcon(icon, color: AppColors.textDark, size: 20),
         ),
         const SizedBox(height: 8),
         SizedBox(
@@ -501,7 +509,8 @@ class _SpeedoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      constraints: const BoxConstraints(minHeight: 180),
       decoration: BoxDecoration(
         color:        AppColors.cardBg,
         borderRadius: BorderRadius.circular(16),
@@ -512,62 +521,123 @@ class _SpeedoCard extends StatelessWidget {
               offset:     const Offset(0, 2))
         ],
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        RichText(
-          text: TextSpan(children: [
-            TextSpan(
-                text:  title,
-                style: const TextStyle(
-                    fontSize:   16,
-                    fontWeight: FontWeight.w900,
-                    color:      Colors.black,
-                    letterSpacing: 1)),
-            if (isTv)
-              const WidgetSpan(
-                  child: Padding(
-                    padding: EdgeInsets.only(left: 2),
-                    child: Icon(Icons.tv, size: 16, color: Colors.black),
-                  ))
-            else
-              TextSpan(
-                  text:  titleSuffix,
-                  style: const TextStyle(
-                      fontSize:   13,
-                      fontWeight: FontWeight.w700,
-                      color:      AppColors.primary)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Image.asset(
+            isTv ? 'assets/images/speedo_tv.png' : 'assets/images/speedo_prime.png',
+            width: 140,
+            height: 50,
+            fit: BoxFit.contain,
+          ),
+          const SizedBox(height: 8),
+          Text(subtitle,
+              maxLines: 2,
+              style: const TextStyle(
+                  fontSize: 13, color: AppColors.textGrey, height: 1.4)),
+          const SizedBox(height: 8),
+          Row(children: [
+            const Text('Watch Now',
+                style: TextStyle(
+                    color:      AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize:   13)),
+            const SizedBox(width: 4),
+            AppIcon(AppIcons.arrowRight, size: 14, color: AppColors.primary),
           ]),
-        ),
-        const SizedBox(height: 8),
-        Text(subtitle,
-            style: const TextStyle(
-                fontSize: 12, color: AppColors.textGrey)),
-        const SizedBox(height: 12),
-        const Row(children: [
-          Text('Watch Now',
-              style: TextStyle(
-                  color:      AppColors.primary,
-                  fontWeight: FontWeight.w700,
-                  fontSize:   13)),
-          SizedBox(width: 4),
-          Icon(Icons.arrow_forward, size: 14, color: AppColors.primary),
-        ]),
-      ]),
+        ],
+      ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROMO BANNER
+// PROMO BANNER (Auto-Scrolling Carousel from Backend)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _PromoBanner extends StatelessWidget {
+class _PromoBanner extends StatefulWidget {
   final int currentIndex;
   final Function(int) onPageChanged;
-  const _PromoBanner(
-      {required this.currentIndex, required this.onPageChanged});
+  final HomeViewModel? viewModel;
+
+  const _PromoBanner({
+    required this.currentIndex,
+    required this.onPageChanged,
+    this.viewModel,
+  });
+
+  @override
+  State<_PromoBanner> createState() => _PromoBannerState();
+}
+
+class _PromoBannerState extends State<_PromoBanner> {
+  List<dynamic> carousels = [];
+  bool isLoading = true;
+  late PageController _pageController;
+  int _currentIndex = 0;
+  late Timer _autoScrollTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+
+    // Delay fetch until after build phase
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchCarousels();
+      _startAutoScroll();
+    });
+  }
+
+  Future<void> _fetchCarousels() async {
+    if (widget.viewModel == null) {
+      setState(() => isLoading = false);
+      return;
+    }
+
+    try {
+      final response = await widget.viewModel!.getCarousels();
+      if (mounted) {
+        setState(() {
+          carousels = response;
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error fetching carousels: $e');
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
+    }
+  }
+
+  void _startAutoScroll() {
+    _autoScrollTimer = Timer.periodic(Duration(seconds: 4), (_) {
+      if (carousels.isNotEmpty && mounted) {
+        final nextIndex = (_currentIndex + 1) % carousels.length;
+        _pageController.animateToPage(
+          nextIndex,
+          duration: Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoScrollTimer.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading || carousels.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Container(
       decoration: BoxDecoration(
         color:        AppColors.cardBg,
@@ -582,49 +652,53 @@ class _PromoBanner extends StatelessWidget {
       child: Column(children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(16),
-          child: Container(
+          child: SizedBox(
             height: 160,
-            width:  double.infinity,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                  colors: [Color(0xFF1A0A2E), Color(0xFF2D1060)]),
+            child: PageView.builder(
+              controller: _pageController,
+              onPageChanged: (index) {
+                setState(() => _currentIndex = index);
+                widget.onPageChanged(index);
+              },
+              itemCount: carousels.length,
+              itemBuilder: (context, index) {
+                final carousel = carousels[index];
+                final imageUrl = carousel['image_url'] ?? '';
+
+                // Handle base64 data URLs
+                if (imageUrl.startsWith('data:')) {
+                  try {
+                    final parts = imageUrl.split(',');
+                    if (parts.length == 2) {
+                      return Image.memory(
+                        base64Decode(parts[1]),
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: Colors.grey.shade300,
+                          child: const Center(
+                            child: Icon(Icons.broken_image, color: Colors.grey),
+                          ),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    print('Error decoding base64: $e');
+                  }
+                }
+
+                // Handle regular network URLs
+                return Image.network(
+                  imageUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    color: Colors.grey.shade300,
+                    child: const Center(
+                      child: Icon(Icons.broken_image, color: Colors.grey),
+                    ),
+                  ),
+                );
+              },
             ),
-            child: Stack(alignment: Alignment.center, children: [
-              Positioned(
-                left: 16,
-                child: Column(
-                  mainAxisAlignment:  MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 20),
-                    Text('SPEEDO PRIME PRESENTS',
-                        style: TextStyle(
-                            color:         Colors.amber.shade300,
-                            fontSize:      10,
-                            fontWeight:    FontWeight.w600,
-                            letterSpacing: 1.5)),
-                    const SizedBox(height: 6),
-                    const Text('MOVIE\nFESTIVAL',
-                        style: TextStyle(
-                            color:      Colors.white,
-                            fontSize:   28,
-                            fontWeight: FontWeight.w900,
-                            height:     1.1)),
-                    const SizedBox(height: 8),
-                    const Text('MARCH 30, THURSDAY',
-                        style: TextStyle(
-                            color:      Colors.amber,
-                            fontSize:   11,
-                            fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              ),
-              Positioned(
-                right: 10,
-                child: Icon(Icons.local_movies,
-                    size: 80, color: Colors.amber.withOpacity(0.6)),
-              ),
-            ]),
           ),
         ),
         Padding(
@@ -632,13 +706,13 @@ class _PromoBanner extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(
-              2,
+              carousels.length,
                   (i) => Container(
                 margin: const EdgeInsets.symmetric(horizontal: 3),
-                width:  i == currentIndex - 1 ? 20 : 8,
+                width:  i == _currentIndex ? 20 : 8,
                 height: 8,
                 decoration: BoxDecoration(
-                  color: i == currentIndex - 1
+                  color: i == _currentIndex
                       ? AppColors.primary
                       : Colors.grey.shade300,
                   borderRadius: BorderRadius.circular(4),
@@ -721,7 +795,7 @@ class _FeaturesSection extends StatelessWidget {
                       padding: const EdgeInsets.all(6),
                       decoration: const BoxDecoration(
                           color: AppColors.primary, shape: BoxShape.circle),
-                      child: const Icon(Icons.more_horiz,
+                      child: AppIcon(AppIcons.more,
                           color: Colors.white, size: 16),
                     ),
                   ),
