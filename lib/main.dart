@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ntt_atom_flutter/ntt_atom_flutter.dart';
 import 'app_shell.dart';
 import 'theme/app_theme.dart';
 import 'views/auth/login_screen.dart';
@@ -9,7 +10,6 @@ import 'services/auth_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ── Init storage BEFORE runApp so tokens are available immediately ─────────
   await StorageService().init();
 
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
@@ -32,23 +32,16 @@ class SpeedonetApp extends StatelessWidget {
       title:                  'Speedonet',
       debugShowCheckedModeBanner: false,
       theme:                  AppTheme.theme,
+      // Required by ntt_atom_flutter — allows the SDK to push/pop its own
+      // payment screen onto the navigator stack
+      navigatorObservers:     [AtomSDK.navigatorObserver],
       home:                   const _AuthGate(),
     );
   }
 }
 
-/// _AuthGate — decides Login vs AppShell.
-///
-/// Flow on cold start:
-///   1. Show a splash/loading indicator (brief)
-///   2. Check if a stored access token exists
-///   3. If yes → silently call /auth/me to validate it
-///      • Valid   → go to AppShell
-///      • Invalid → clear storage, show LoginScreen
-///   4. If no token → show LoginScreen immediately
 class _AuthGate extends StatefulWidget {
   const _AuthGate();
-
   @override
   State<_AuthGate> createState() => _AuthGateState();
 }
@@ -68,31 +61,17 @@ class _AuthGateState extends State<_AuthGate> {
 
   Future<void> _checkSession() async {
     if (_storage.hasToken) {
-      // Validate token is still alive on the server
       final user = await _auth.getMe();
-      if (mounted) {
-        setState(() {
-          _isLoggedIn = user != null;
-          _isChecking = false;
-        });
-      }
+      if (mounted) setState(() { _isLoggedIn = user != null; _isChecking = false; });
     } else {
-      if (mounted) {
-        setState(() {
-          _isLoggedIn = false;
-          _isChecking = false;
-        });
-      }
+      if (mounted) setState(() { _isLoggedIn = false; _isChecking = false; });
     }
   }
 
-  void _onLoginSuccess() {
-    setState(() => _isLoggedIn = true);
-  }
+  void _onLoginSuccess() => setState(() => _isLoggedIn = true);
 
   @override
   Widget build(BuildContext context) {
-    // ── Splash while checking token ───────────────────────────────────────
     if (_isChecking) {
       return Scaffold(
         backgroundColor: AppColors.primary,
@@ -100,29 +79,18 @@ class _AuthGateState extends State<_AuthGate> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Replace with your actual logo
               Icon(Icons.wifi, color: Colors.white, size: 64),
               SizedBox(height: 24),
-              Text(
-                'Speedonet',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1,
-                ),
-              ),
+              Text('Speedonet',
+                  style: TextStyle(color: Colors.white, fontSize: 28,
+                      fontWeight: FontWeight.w900, letterSpacing: 1)),
               SizedBox(height: 40),
-              CircularProgressIndicator(
-                color:       Colors.white,
-                strokeWidth: 2,
-              ),
+              CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
             ],
           ),
         ),
       );
     }
-
     return _isLoggedIn
         ? const AppShell()
         : LoginScreen(onLoginSuccess: _onLoginSuccess);

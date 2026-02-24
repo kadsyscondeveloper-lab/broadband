@@ -1,106 +1,122 @@
 // lib/services/atom_payment_service.dart
-import 'package:dio/dio.dart';
 import '../core/api_client.dart';
+import '../core/app_config.dart';
+
+// ── Initiate response model ───────────────────────────────────────────────────
 
 class AtomInitiateResult {
-  final bool success;
-  final String? atomUrl;
-  final String? encData;
   final String? orderRef;
   final String? amount;
-  final String? error;
-  final String? authToken; // ← NEW
+  final String? custEmail;
+  final String? custMobile;
+  final String? custFirstName;
+  final String? custLastName;
+  // authToken kept for backwards compat (no longer used by SDK flow)
+  final String? authToken;
 
   const AtomInitiateResult({
-    required this.success,
-    this.atomUrl,
-    this.encData,
     this.orderRef,
     this.amount,
-    this.error,
+    this.custEmail,
+    this.custMobile,
+    this.custFirstName,
+    this.custLastName,
     this.authToken,
   });
+
+  factory AtomInitiateResult.fromJson(Map<String, dynamic> json) {
+    return AtomInitiateResult(
+      orderRef:      json['orderRef']      as String?,
+      amount:        json['amount']        as String?,
+      custEmail:     json['custEmail']     as String?,
+      custMobile:    json['custMobile']    as String?,
+      custFirstName: json['custFirstName'] as String?,
+      custLastName:  json['custLastName']  as String?,
+      authToken:     json['authToken']     as String?,
+    );
+  }
 }
+
+// ── Payment status model ──────────────────────────────────────────────────────
 
 class AtomPaymentStatus {
   final String orderRef;
-  final String status;
+  final String paymentStatus;
   final String totalAmount;
   final String? gatewayTxnId;
+  final String? gatewayOrderId;
 
   const AtomPaymentStatus({
     required this.orderRef,
-    required this.status,
+    required this.paymentStatus,
     required this.totalAmount,
     this.gatewayTxnId,
+    this.gatewayOrderId,
   });
 
-  bool get isSuccess => status == 'success';
-  bool get isPending => status == 'pending';
-  bool get isFailed  => status == 'failed';
+  bool get isSuccess => paymentStatus == 'success';
+  bool get isPending => paymentStatus == 'pending';
 
-  factory AtomPaymentStatus.fromJson(Map<String, dynamic> j) =>
-      AtomPaymentStatus(
-        orderRef:     j['order_ref']      as String,
-        status:       j['payment_status'] as String,
-        totalAmount:  j['total_amount']   as String,
-        gatewayTxnId: j['gateway_txn_id'] as String?,
-      );
+  factory AtomPaymentStatus.fromJson(Map<String, dynamic> json) {
+    final o = json['order'] as Map<String, dynamic>? ?? json;
+    return AtomPaymentStatus(
+      orderRef:       (o['order_ref']        ?? '').toString(),
+      paymentStatus:  (o['payment_status']   ?? '').toString(),
+      totalAmount:    (o['total_amount']      ?? '0').toString(),
+      gatewayTxnId:   o['gateway_txn_id']?.toString(),
+      gatewayOrderId: o['gateway_order_id']?.toString(),
+    );
+  }
 }
 
-class AtomPaymentService {
-  static final AtomPaymentService _i = AtomPaymentService._();
-  factory AtomPaymentService() => _i;
-  AtomPaymentService._();
+// ── Service ───────────────────────────────────────────────────────────────────
 
+class AtomPaymentService {
   final _api = ApiClient();
 
-  Future<AtomInitiateResult> initiateWalletRecharge(double amount) async {
+  /// POST /api/v1/payments/atom/initiate
+  Future<AtomInitiateResult?> initiateRecharge(double amount) async {
     try {
-      final res = await _api.post(
-        '/payments/atom/initiate',
-        data: {'amount': amount},
+      final response = await _api.post(
+        '${AppConfig.baseUrl}/api/v1/payments/atom/initiate',
+        data: { 'amount': amount },
       );
 
-      final data = res.data['data'] as Map<String, dynamic>;
-
-      return AtomInitiateResult(
-        success:   true,
-        atomUrl:   data['atomUrl']  as String?,
-        encData:   data['encData']  as String?,
-        orderRef:  data['orderRef'] as String?,
-        amount:    data['amount']   as String?,
-        authToken: _api.token,      // ← grab token from ApiClient
-      );
-    } on DioException catch (e) {
-      return AtomInitiateResult(
-        success: false,
-        error: e.response?.data?['message'] as String? ??
-            'Failed to initiate payment',
-      );
+      if (response.data['success'] == true) {
+        final data = response.data['data'] as Map<String, dynamic>;
+        return AtomInitiateResult.fromJson(data);
+      }
+      return null;
     } catch (e) {
-      return AtomInitiateResult(success: false, error: e.toString());
+      return null;
     }
   }
 
+  /// GET /api/v1/payments/atom/status/:orderRef
+  /// Polls until status is no longer 'pending', up to [maxAttempts] times.
   Future<AtomPaymentStatus?> pollPaymentStatus(
       String orderRef, {
-        int maxAttempts = 8,
+        int maxAttempts = 10,
         Duration delay = const Duration(seconds: 2),
       }) async {
     for (int i = 0; i < maxAttempts; i++) {
       try {
-        final res   = await _api.get('/payments/atom/status/$orderRef');
-        final order = res.data['data']['order'] as Map<String, dynamic>;
-        final status = AtomPaymentStatus.fromJson(order);
+        final response = await _api.get(
+          '${AppConfig.baseUrl}/api/v1/payments/atom/status/$orderRef',
+        );
 
-        if (status.isSuccess || status.isFailed) return status;
+        if (response.data['success'] == true) {
+          final status = AtomPaymentStatus.fromJson(
+            response.data['data'] as Map<String, dynamic>,
+          );
+          if (!status.isPending) return status;
+        }
+      } catch (_) {}
 
-        await Future.delayed(delay);
-      } catch (_) {
+      if (i < maxAttempts - 1) {
         await Future.delayed(delay);
       }
     }
-    return null;
+    return null; // still pending after all attempts
   }
 }

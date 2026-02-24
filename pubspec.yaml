@@ -9,22 +9,18 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # HTTP client with interceptors
+  # HTTP client
   dio: ^5.4.3
 
   # Local token storage
   shared_preferences: ^2.2.3
 
-  # web view
-  webview_flutter: ^4.8.0
+  # Atom Pay official Flutter SDK (handles WebView, encryption, callbacks internally)
+  ntt_atom_flutter: ^1.0.5
+
   url_launcher: ^6.3.0
-
-  # Pick images from camera or gallery
   image_picker: ^1.0.7
-
-  # Pick PDF and other document files
   file_picker: ^8.1.2
-
   cupertino_icons: ^1.0.6
 
 dev_dependencies:

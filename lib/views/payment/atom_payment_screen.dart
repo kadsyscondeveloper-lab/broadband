@@ -1,6 +1,25 @@
 // lib/views/payment/atom_payment_screen.dart
+//
+// Uses the official ntt_atom_flutter SDK.
+// The SDK handles:
+//   - All encryption (AES + hash)
+//   - Opening its own InAppWebView payment screen
+//   - Detecting transaction completion
+//   - Returning TransactionStatus + raw response data
+//
+// Our backend:
+//   - POST /api/v1/payments/atom/initiate  → creates DB order, returns txnid
+//   - POST /api/v1/payments/atom/callback  → Atom webhooks here (credits wallet)
+//   - GET  /api/v1/payments/atom/status/:orderRef → Flutter polls this
+//
+// NOTE: We do NOT pass a returnUrl to the SDK. Per the SDK docs, passing a
+// custom returnUrl disables automatic transaction detection. Instead we rely
+// on the backend callback (webhook) to credit the wallet, and poll /status
+// once the SDK's onClose fires to get the authoritative result.
+
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
+import 'package:ntt_atom_flutter/ntt_atom_flutter.dart';
 import '../../services/atom_payment_service.dart';
 import '../../theme/app_theme.dart';
 
@@ -13,89 +32,118 @@ class AtomPaymentScreen extends StatefulWidget {
 }
 
 class _AtomPaymentScreenState extends State<AtomPaymentScreen> {
-  late final WebViewController _controller;
   final _service = AtomPaymentService();
 
-  bool _isLoading = true;
-  bool _isPolling = false;
+  bool    _isLaunching = false;
+  bool    _isPolling   = false;
   String? _statusMsg;
+
+  // ── Atom credentials from your KAD_syscon_NTT_Details.xlsx ───────────────
+  // These are passed directly to the SDK — no server round-trip needed for
+  // the checkout itself (the SDK calls Atom's API directly).
+  static const _login      = '792811';         // MerchId
+  static const _password   = 'fb1489ed';       // Transaction Password
+  static const _prodid     = 'SYSCON';         // Product ID
+  static const _reqHashKey = '2a63f76ede75f9a022';          // HashRequest Key
+  static const _resHashKey = 'e0e6459946dff4c378';          // HashResponse Key
+  static const _reqEncKey  = '1CFAC0C7097BD6FAA950892F87B45960'; // AES Req Salt
+  static const _resDecKey  = 'D32C2C50D8AC0FD983D7A710C64FB2BD'; // AES Res Salt
 
   @override
   void initState() {
     super.initState();
-    _initWebView();
+    // Launch payment on the next frame so the loading UI renders first
+    WidgetsBinding.instance.addPostFrameCallback((_) => _launchPayment());
   }
 
-  void _initWebView() {
+  Future<void> _launchPayment() async {
     final r = widget.initiateResult;
-
     if (r.orderRef == null) {
-      Navigator.pop(context, AtomPaymentResult.failed(''));
+      _finishWith(AtomPaymentResult.failed(''));
       return;
     }
 
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setUserAgent(
-        'Mozilla/5.0 (Linux; Android 13; Pixel 7) '
-            'AppleWebKit/537.36 (KHTML, like Gecko) '
-            'Chrome/120.0.0.0 Mobile Safari/537.36',
-      )
-      ..setBackgroundColor(Colors.white)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageStarted: (url) {
-            debugPrint('>>> Page started: $url');
-            setState(() => _isLoading = true);
-          },
-          onPageFinished: (url) {
-            debugPrint('>>> Page finished: $url');
-            setState(() => _isLoading = false);
-          },
-          onWebResourceError: (error) {
-            debugPrint('>>> WebView error: ${error.description} (${error.errorCode})');
-          },
-          onNavigationRequest: (req) {
-            debugPrint('>>> Navigating to: ${req.url}');
-            if (req.url.contains('/payments/atom/callback')) {
-              _pollAndClose(r.orderRef!);
-              return NavigationDecision.prevent;
-            }
-            return NavigationDecision.navigate;
-          },
-        ),
-      )
-      ..loadRequest(
-        Uri.parse('http://192.168.0.102:3000/api/v1/payments/atom/redirect/${r.orderRef}'),
-        headers: {
-          'Authorization': 'Bearer ${r.authToken ?? ''}',
-        },
-      );
+    if (mounted) setState(() => _isLaunching = true);
+
+    final sdk = AtomSDK();
+
+    // checkOut() pushes the SDK's own payment screen onto the navigator.
+    // onClose fires when the user completes or cancels payment.
+    await sdk.checkOut(
+      sdkOptions: AtomPaymentOptions(
+        login:                _login,
+        password:             _password,
+        prodid:               _prodid,
+        requestHashKey:       _reqHashKey,
+        responseHashKey:      _resHashKey,
+        requestEncryptionKey: _reqEncKey,
+        responseDecryptionKey:_resDecKey,
+        txncurr:              'INR',
+        amount:               r.amount ?? '0.00',
+        txnid:                r.orderRef!,
+        clientcode:           r.orderRef!,   // unique per txn
+        custFirstName:        r.custFirstName ?? '',
+        custLastName:         r.custLastName  ?? '',
+        email:                r.custEmail     ?? '',
+        mobile:               r.custMobile    ?? '',
+        address:              '',
+        custacc:              '0',           // '0' for non-broker merchants
+        mode:                 AtomPaymentMode.live,
+        // DO NOT set returnUrl — disables SDK's auto transaction detection
+      ),
+      onClose: (TransactionStatus status, dynamic data) {
+        debugPrint('[Atom] onClose status=${status.name} data=$data');
+        _handleSdkResult(status, r.orderRef!);
+      },
+    );
+
+    if (mounted) setState(() => _isLaunching = false);
   }
 
-  Future<void> _pollAndClose(String orderRef) async {
-    if (_isPolling) return;
-    setState(() {
-      _isPolling = true;
-      _statusMsg = 'Verifying payment…';
-    });
+  void _handleSdkResult(TransactionStatus status, String orderRef) {
+    if (status == TransactionStatus.success) {
+      // SDK says success — poll backend for authoritative confirmation
+      _pollAndFinish(orderRef);
+    } else if (status == TransactionStatus.failed) {
+      _pollAndFinish(orderRef); // still poll — backend callback may have arrived
+    } else {
+      // cancelled / unknown — go back immediately
+      _finishWith(AtomPaymentResult.cancelled());
+    }
+  }
 
-    final status = await _service.pollPaymentStatus(orderRef);
+  Future<void> _pollAndFinish(String orderRef) async {
+    if (!mounted) return;
+    setState(() { _isPolling = true; _statusMsg = 'Verifying payment…'; });
+
+    final result = await _service.pollPaymentStatus(
+      orderRef,
+      maxAttempts: 10,
+      delay: const Duration(seconds: 2),
+    );
 
     if (!mounted) return;
 
-    if (status == null) {
-      Navigator.pop(context, AtomPaymentResult.pending(orderRef));
-    } else if (status.isSuccess) {
-      Navigator.pop(context, AtomPaymentResult.success(
+    if (result == null) {
+      _finishWith(AtomPaymentResult.pending(orderRef));
+    } else if (result.isSuccess) {
+      _finishWith(AtomPaymentResult.success(
         orderRef:     orderRef,
-        amount:       double.tryParse(status.totalAmount) ?? 0,
-        gatewayTxnId: status.gatewayTxnId,
+        amount:       double.tryParse(result.totalAmount) ?? 0,
+        gatewayTxnId: result.gatewayTxnId,
       ));
     } else {
-      Navigator.pop(context, AtomPaymentResult.failed(orderRef));
+      _finishWith(AtomPaymentResult.failed(orderRef));
     }
   }
+
+  void _finishWith(AtomPaymentResult result) {
+    if (mounted) Navigator.pop(context, result);
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
+  // This screen just shows a loading/verifying state. The actual payment UI
+  // is rendered by the SDK on top of it.
 
   @override
   Widget build(BuildContext context) {
@@ -103,82 +151,57 @@ class _AtomPaymentScreenState extends State<AtomPaymentScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.primary,
-        title: const Text(
-          'Secure Payment',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-        ),
+        title: const Text('Secure Payment',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
         centerTitle: true,
-        leading: IconButton(
+        leading: _isPolling
+            ? const SizedBox.shrink()
+            : IconButton(
           icon: const Icon(Icons.close, color: Colors.white),
-          onPressed: () {
-            showDialog(
-              context: context,
-              builder: (_) => AlertDialog(
-                title:   const Text('Cancel Payment?'),
-                content: const Text('Are you sure you want to cancel this payment?'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('No'),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      Navigator.pop(context, AtomPaymentResult.cancelled());
-                    },
-                    child: const Text(
-                      'Yes, Cancel',
-                      style: TextStyle(color: AppColors.primary),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
+          onPressed: () => _finishWith(AtomPaymentResult.cancelled()),
         ),
-      ),
-      body: Stack(
-        children: [
-          WebViewWidget(controller: _controller),
-
-          if (_isLoading && !_isPolling)
-            const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
-            ),
-
-          if (_isPolling)
-            Container(
-              color: Colors.black.withOpacity(0.6),
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.all(28),
-                  decoration: BoxDecoration(
-                    color:        Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const CircularProgressIndicator(color: AppColors.primary),
-                      const SizedBox(height: 16),
-                      Text(
-                        _statusMsg ?? 'Verifying payment…',
-                        style: const TextStyle(
-                          fontSize:   15,
-                          fontWeight: FontWeight.w600,
-                          color:      AppColors.textDark,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 14),
+            child: Row(children: [
+              Icon(Icons.lock_outline,
+                  color: Colors.white.withOpacity(0.8), size: 16),
+              const SizedBox(width: 4),
+              Text('SSL',
+                  style: TextStyle(
+                      color: Colors.white.withOpacity(0.8),
+                      fontSize: 11, fontWeight: FontWeight.w600)),
+            ]),
+          ),
         ],
+      ),
+      body: Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const CircularProgressIndicator(color: AppColors.primary),
+          const SizedBox(height: 20),
+          Text(
+            _isPolling
+                ? (_statusMsg ?? 'Verifying payment…')
+                : 'Opening payment gateway…',
+            style: const TextStyle(
+                fontSize: 15, fontWeight: FontWeight.w600,
+                color: AppColors.textDark),
+            textAlign: TextAlign.center,
+          ),
+          if (_isPolling) ...[
+            const SizedBox(height: 8),
+            const Text('Please do not close this screen.',
+                style: TextStyle(fontSize: 12, color: AppColors.textGrey)),
+          ],
+        ]),
       ),
     );
   }
 }
+
+// =============================================================================
+// Result types (unchanged — zero changes needed in callers)
+// =============================================================================
 
 enum AtomPaymentResultType { success, failed, cancelled, pending }
 
@@ -189,22 +212,14 @@ class AtomPaymentResult {
   final String? gatewayTxnId;
 
   const AtomPaymentResult._({
-    required this.type,
-    this.orderRef,
-    this.amount,
-    this.gatewayTxnId,
+    required this.type, this.orderRef, this.amount, this.gatewayTxnId,
   });
 
   factory AtomPaymentResult.success({
-    required String orderRef,
-    required double amount,
-    String? gatewayTxnId,
+    required String orderRef, required double amount, String? gatewayTxnId,
   }) => AtomPaymentResult._(
-    type:         AtomPaymentResultType.success,
-    orderRef:     orderRef,
-    amount:       amount,
-    gatewayTxnId: gatewayTxnId,
-  );
+      type: AtomPaymentResultType.success,
+      orderRef: orderRef, amount: amount, gatewayTxnId: gatewayTxnId);
 
   factory AtomPaymentResult.failed(String orderRef) =>
       AtomPaymentResult._(type: AtomPaymentResultType.failed, orderRef: orderRef);

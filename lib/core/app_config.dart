@@ -12,7 +12,7 @@ class AppConfig {
   AppConfig._();
 
   // ── Change only this line ──────────────────────────────────────────────────
-  static const String baseUrl = 'http://192.168.0.102:3000/api/v1';
+  static const String baseUrl = 'http://192.168.0.104:3000/api/v1';
   // ──────────────────────────────────────────────────────────────────────────
 
   static const Duration connectTimeout = Duration(seconds: 15);
