@@ -41,8 +41,8 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> {
     final raw    = _amountController.text.trim();
     final amount = double.tryParse(raw);
 
-    if (amount == null || amount < 10) {
-      setState(() => _error = 'Minimum recharge amount is ₹10');
+    if (amount == null || amount < 1) {
+      setState(() => _error = 'Minimum recharge amount is ₹1');
       return;
     }
     if (amount > 50000) {
@@ -52,13 +52,17 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> {
 
     setState(() { _isLoading = true; _error = null; });
 
-    // Step 1 — Get atomTokenId from backend
+    // Step 1 — Get order details from backend
+    // initiateWalletRecharge returns AtomInitiateResult? — null means failure
     final initResult = await _atomService.initiateWalletRecharge(amount);
 
     if (!mounted) return;
 
-    if (!initResult.success) {
-      setState(() { _isLoading = false; _error = initResult.error; });
+    if (initResult == null) {
+      setState(() {
+        _isLoading = false;
+        _error = 'Unable to initiate payment. Please try again.';
+      });
       return;
     }
 

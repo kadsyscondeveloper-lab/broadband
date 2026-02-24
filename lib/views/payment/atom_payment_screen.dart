@@ -5,7 +5,7 @@
 //   - All encryption (AES + hash)
 //   - Opening its own InAppWebView payment screen
 //   - Detecting transaction completion
-//   - Returning TransactionStatus + raw response data
+//   - Returning transactionStatus + raw response data via onClose callback
 //
 // Our backend:
 //   - POST /api/v1/payments/atom/initiate  → creates DB order, returns txnid
@@ -17,7 +17,6 @@
 // on the backend callback (webhook) to credit the wallet, and poll /status
 // once the SDK's onClose fires to get the authoritative result.
 
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:ntt_atom_flutter/ntt_atom_flutter.dart';
 import '../../services/atom_payment_service.dart';
@@ -34,20 +33,21 @@ class AtomPaymentScreen extends StatefulWidget {
 class _AtomPaymentScreenState extends State<AtomPaymentScreen> {
   final _service = AtomPaymentService();
 
-  bool    _isLaunching = false;
-  bool    _isPolling   = false;
+  bool    _isPolling = false;
   String? _statusMsg;
 
   // ── Atom credentials from your KAD_syscon_NTT_Details.xlsx ───────────────
-  // These are passed directly to the SDK — no server round-trip needed for
-  // the checkout itself (the SDK calls Atom's API directly).
-  static const _login      = '792811';         // MerchId
-  static const _password   = 'fb1489ed';       // Transaction Password
-  static const _prodid     = 'SYSCON';         // Product ID
-  static const _reqHashKey = '2a63f76ede75f9a022';          // HashRequest Key
-  static const _resHashKey = 'e0e6459946dff4c378';          // HashResponse Key
-  static const _reqEncKey  = '1CFAC0C7097BD6FAA950892F87B45960'; // AES Req Salt
-  static const _resDecKey  = 'D32C2C50D8AC0FD983D7A710C64FB2BD'; // AES Res Salt
+  static const _login      = '792811';
+  static const _password   = 'fb1489ed';
+  static const _prodid     = 'SYSCON';
+  static const _reqHashKey = '2a63f76ede75f9a022';
+  static const _resHashKey = 'e0e6459946dff4c378';
+  static const _reqEncKey  = '1CFAC0C7097BD6FAA950892F87B45960';
+  static const _resDecKey  = 'D32C2C50D8AC0FD983D7A710C64FB2BD';
+
+  // MCC 4814 = Telecommunication Services / ISP
+  static const _mccCode   = '4814';
+  static const _merchType = 'R';
 
   @override
   void initState() {
@@ -56,20 +56,18 @@ class _AtomPaymentScreenState extends State<AtomPaymentScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _launchPayment());
   }
 
-  Future<void> _launchPayment() async {
+  void _launchPayment() {
     final r = widget.initiateResult;
     if (r.orderRef == null) {
       _finishWith(AtomPaymentResult.failed(''));
       return;
     }
 
-    if (mounted) setState(() => _isLaunching = true);
-
     final sdk = AtomSDK();
 
-    // checkOut() pushes the SDK's own payment screen onto the navigator.
-    // onClose fires when the user completes or cancels payment.
-    await sdk.checkOut(
+    // checkOut() is NOT async — it pushes the SDK's own payment screen onto
+    // the navigator. onClose fires when the user completes or cancels payment.
+    sdk.checkOut(
       sdkOptions: AtomPaymentOptions(
         login:                _login,
         password:             _password,
@@ -81,31 +79,32 @@ class _AtomPaymentScreenState extends State<AtomPaymentScreen> {
         txncurr:              'INR',
         amount:               r.amount ?? '0.00',
         txnid:                r.orderRef!,
-        clientcode:           r.orderRef!,   // unique per txn
+        clientcode:           r.orderRef!,
         custFirstName:        r.custFirstName ?? '',
         custLastName:         r.custLastName  ?? '',
         email:                r.custEmail     ?? '',
         mobile:               r.custMobile    ?? '',
         address:              '',
-        custacc:              '0',           // '0' for non-broker merchants
+        custacc:              '0',
+        mccCode:              _mccCode,
+        merchType:            _merchType,
         mode:                 AtomPaymentMode.live,
         // DO NOT set returnUrl — disables SDK's auto transaction detection
       ),
-      onClose: (TransactionStatus status, dynamic data) {
-        debugPrint('[Atom] onClose status=${status.name} data=$data');
-        _handleSdkResult(status, r.orderRef!);
+      onClose: (transactionStatus, data) {
+        debugPrint('[Atom] onClose status=${transactionStatus.name} data=$data');
+        _handleSdkResult(transactionStatus.name, r.orderRef!);
       },
     );
-
-    if (mounted) setState(() => _isLaunching = false);
   }
 
-  void _handleSdkResult(TransactionStatus status, String orderRef) {
-    if (status == TransactionStatus.success) {
+  void _handleSdkResult(String statusName, String orderRef) {
+    if (statusName == 'success') {
       // SDK says success — poll backend for authoritative confirmation
       _pollAndFinish(orderRef);
-    } else if (status == TransactionStatus.failed) {
-      _pollAndFinish(orderRef); // still poll — backend callback may have arrived
+    } else if (statusName == 'failed') {
+      // Still poll — backend webhook callback may have already arrived
+      _pollAndFinish(orderRef);
     } else {
       // cancelled / unknown — go back immediately
       _finishWith(AtomPaymentResult.cancelled());
@@ -142,8 +141,6 @@ class _AtomPaymentScreenState extends State<AtomPaymentScreen> {
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
-  // This screen just shows a loading/verifying state. The actual payment UI
-  // is rendered by the SDK on top of it.
 
   @override
   Widget build(BuildContext context) {
@@ -200,7 +197,7 @@ class _AtomPaymentScreenState extends State<AtomPaymentScreen> {
 }
 
 // =============================================================================
-// Result types (unchanged — zero changes needed in callers)
+// Result types
 // =============================================================================
 
 enum AtomPaymentResultType { success, failed, cancelled, pending }

@@ -11,7 +11,6 @@ class AtomInitiateResult {
   final String? custMobile;
   final String? custFirstName;
   final String? custLastName;
-  // authToken kept for backwards compat (no longer used by SDK flow)
   final String? authToken;
 
   const AtomInitiateResult({
@@ -75,11 +74,23 @@ class AtomPaymentService {
   final _api = ApiClient();
 
   /// POST /api/v1/payments/atom/initiate
+  /// Used for plan purchases (recharge screen).
   Future<AtomInitiateResult?> initiateRecharge(double amount) async {
+    return _initiate(amount);
+  }
+
+  /// POST /api/v1/payments/atom/initiate
+  /// Used for wallet top-ups (wallet recharge screen).
+  /// Alias for [initiateRecharge] — both hit the same endpoint.
+  Future<AtomInitiateResult?> initiateWalletRecharge(double amount) async {
+    return _initiate(amount);
+  }
+
+  Future<AtomInitiateResult?> _initiate(double amount) async {
     try {
       final response = await _api.post(
-        '${AppConfig.baseUrl}/api/v1/payments/atom/initiate',
-        data: { 'amount': amount },
+        '${AppConfig.baseUrl}/payments/atom/initiate',
+        data: {'amount': amount},
       );
 
       if (response.data['success'] == true) {
@@ -102,7 +113,7 @@ class AtomPaymentService {
     for (int i = 0; i < maxAttempts; i++) {
       try {
         final response = await _api.get(
-          '${AppConfig.baseUrl}/api/v1/payments/atom/status/$orderRef',
+          '${AppConfig.baseUrl}/payments/atom/status/$orderRef',
         );
 
         if (response.data['success'] == true) {
