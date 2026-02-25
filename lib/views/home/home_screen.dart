@@ -15,6 +15,7 @@ import '../kyc/kyc_screen.dart';
 import '../recharge/wifi_plans_screen.dart';
 import '../refer/refer_earn_screen.dart';
 import '../bills/my_bills_screen.dart';
+import '../notifications/notifications_screen.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -146,10 +147,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 flexibleSpace: AppHeader(
                   userName:        vm.userName,
                   walletBalance:   vm.walletBalance,
-                  profileImageUrl: vm.profileImageUrl,   // ← avatar in header
+                  profileImageUrl: vm.profileImageUrl,
+                  unreadNotifications:   vm.unreadNotifications,
                   onMenuTap: () =>
                       _scaffoldKey.currentState?.openDrawer(),
-                  onNotificationTap: () {},
+                  onNotificationTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                    );
+                    // Refresh unread count when coming back
+                    vm.refreshUnreadCount();
+                  },
                   onWalletTap: widget.onWalletTap,
                 ),
               ),

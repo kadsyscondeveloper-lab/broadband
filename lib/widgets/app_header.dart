@@ -9,7 +9,8 @@ class AppHeader extends StatelessWidget {
   final String? profileImageUrl;       // data URI or HTTPS URL — null = show logo
   final VoidCallback? onNotificationTap;
   final VoidCallback? onMenuTap;
-  final VoidCallback? onWalletTap;     // opens recharge screen
+  final VoidCallback? onWalletTap;
+  final int unreadNotifications;// opens recharge screen
 
   const AppHeader({
     super.key,
@@ -19,6 +20,7 @@ class AppHeader extends StatelessWidget {
     this.onNotificationTap,
     this.onMenuTap,
     this.onWalletTap,
+    required this.unreadNotifications,
   });
 
   // ── Avatar builder ────────────────────────────────────────────────────────
@@ -168,10 +170,45 @@ class AppHeader extends StatelessWidget {
           // ── Notifications ──────────────────────────────────────────────
           GestureDetector(
             onTap: onNotificationTap,
-            child: const Icon(
-              Icons.notifications_outlined,
-              color: AppColors.white,
-              size:  26,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(
+                  Icons.notifications_outlined,
+                  color: AppColors.white,
+                  size: 26,
+                ),
+
+                if (unreadNotifications > 0)
+                  Positioned(
+                    right: -4,
+                    top: -4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.primary, width: 1.5),
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
+                      child: Text(
+                        unreadNotifications > 99
+                            ? '99+'
+                            : unreadNotifications.toString(),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ],
