@@ -69,18 +69,58 @@ class _HomeScreenState extends State<HomeScreen> {
               case 'Profile':
                 widget.onNavigateToProfile?.call();
                 break;
+              case 'New Plans':
+                widget.onNavigateToNewPlans?.call();
+                break;
+              case 'Pays':
+                widget.onNavigateToPay?.call();
+                break;
+              case 'Refer & Earn':
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ReferEarnScreen()));
+                break;
               case 'KYC':
                 _openKyc();
                 break;
-              case 'Refer & Earn':
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const ReferEarnScreen()),
+              case 'Transaction History':
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const MyBillsScreen()));
+                break;
+              case 'Support/Chat':
+              // TODO: Navigator.push to your chat/support screen
+                break;
+              case 'About Speedonet':
+                showAboutDialog(
+                  context: context,
+                  applicationName: 'Speedonet',
+                  applicationVersion: '1.0.0',
                 );
                 break;
-              case 'New Plans':
-                widget.onNavigateToNewPlans?.call();
+              case 'Change Password':
+              // TODO: Navigator.push to your change password screen
+                break;
+              case 'Logout':
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Logout'),
+                    content: const Text('Are you sure you want to logout?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          // TODO: clear session and navigate to login
+                        },
+                        child: const Text('Logout',
+                            style: TextStyle(color: AppColors.primary)),
+                      ),
+                    ],
+                  ),
+                );
                 break;
             }
           },
@@ -92,6 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
           return CustomScrollView(
             slivers: [
 
+              // ── Sticky header ──────────────────────────────────────────
               // ── Sticky header ──────────────────────────────────────────
               SliverAppBar(
                 pinned:                    true,
