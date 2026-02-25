@@ -12,6 +12,7 @@ class PlansViewModel extends ChangeNotifier {
   // ── State ────────────────────────────────────────────────────────────────────
   List<Plan> _plans = [];
   ActiveSubscription? _activeSub;
+  ActiveSubscription? _queuedSub;
   bool _isLoading = false;
   String? _error;
 
@@ -22,6 +23,7 @@ class PlansViewModel extends ChangeNotifier {
   // ── Getters ──────────────────────────────────────────────────────────────────
   List<Plan> get plans        => _plans;
   ActiveSubscription? get activeSub => _activeSub;
+  ActiveSubscription? get queuedSub => _queuedSub;
   bool get isLoading          => _isLoading;
   String? get error           => _error;
 
@@ -65,8 +67,33 @@ class PlansViewModel extends ChangeNotifier {
     try {
       _purchaseResult = await _service.purchasePlan(planId, paymentMode: paymentMode);
       _purchaseState  = PlanPurchaseState.success;
-      // Refresh active subscription after purchase
+
+      // Refresh active subscription (only returns currently running plan now)
       _activeSub = await _service.getActiveSubscription();
+
+      // Check if the purchased plan is queued (starts in the future)
+      final startDate = _purchaseResult?['start_date'] != null
+          ? DateTime.tryParse(_purchaseResult!['start_date'].toString())
+          : null;
+
+      if (startDate != null && startDate.isAfter(DateTime.now())) {
+        final planData = _purchaseResult!['plan'] as Map<String, dynamic>;
+        _queuedSub = ActiveSubscription(
+          id:           0,
+          orderRef:     _purchaseResult!['order_ref'] as String,
+          status:       'active',
+          amountPaid:   (_purchaseResult!['amount_paid'] as num).toDouble(),
+          startsAt:     startDate,
+          expiresAt:    DateTime.tryParse(_purchaseResult!['expires_at'].toString()),
+          planId:       int.tryParse(planData['id'].toString()) ?? 0,
+          planName:     planData['name'] as String,
+          speedMbps:    (planData['speed_mbps'] as num?)?.toInt() ?? 0,
+          dataLimit:    planData['data_limit']?.toString() ?? 'Unlimited',
+          validityDays: (planData['validity_days'] as num?)?.toInt() ?? 0,
+        );
+      } else {
+        _queuedSub = null;
+      }
     } catch (e) {
       _purchaseState = PlanPurchaseState.error;
       _purchaseError = e.toString();

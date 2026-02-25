@@ -118,6 +118,10 @@ class _PlansScreenState extends State<PlansScreen>
 
                       // Active subscription banner
                       if (_vm.activeSub != null) _ActiveSubBanner(sub: _vm.activeSub!),
+                      if (_vm.queuedSub != null) ...[
+                        const SizedBox(height: 8),
+                        _QueuedSubBanner(sub: _vm.queuedSub!),
+                      ],
                     ],
                   ),
                 ),
@@ -266,7 +270,8 @@ class _PlanList extends StatelessWidget {
       separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (_, i) {
         final plan = plans[i];
-        final isCurrent = activeSub?.planId == plan.id;
+        final isCurrent = activeSub?.planId == plan.id &&
+            !(activeSub?.startsAt?.isAfter(DateTime.now()) ?? false);
         return _PlanCard(plan: plan, isCurrent: isCurrent, onSelect: () => onSelect(plan));
       },
     );
@@ -579,10 +584,15 @@ class _SuccessDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final planName  = (result['plan'] as Map<String, dynamic>?)?['name'] ?? 'Plan';
+    final planName = (result['plan'] as Map<String, dynamic>?)?['name'] ??
+        'Plan';
+    final startDate = result['start_date'] != null
+        ? DateTime.tryParse(result['start_date'] as String)
+        : null;
     final expiresAt = result['expires_at'] != null
         ? DateTime.tryParse(result['expires_at'] as String)
         : null;
+    final isQueued = startDate != null && startDate.isAfter(DateTime.now());
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -591,22 +601,40 @@ class _SuccessDialog extends StatelessWidget {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
             width: 72, height: 72,
-            decoration: const BoxDecoration(color: Color(0xFFE8F5E9), shape: BoxShape.circle),
-            child: const Icon(Icons.check_circle_rounded, color: Colors.green, size: 44),
+            decoration: BoxDecoration(
+              color: isQueued ? const Color(0xFFFFF8E1) : const Color(
+                  0xFFE8F5E9),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isQueued ? Icons.schedule_rounded : Icons.check_circle_rounded,
+              color: isQueued ? Colors.orange : Colors.green,
+              size: 44,
+            ),
           ),
           const SizedBox(height: 16),
-          const Text('Plan Activated!',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textDark)),
+          Text(
+            isQueued ? 'Plan Queued! 🕐' : 'Plan Activated! 🎉',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800,
+                color: AppColors.textDark),
+          ),
           const SizedBox(height: 8),
           Text(planName,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.primary)),
-          if (expiresAt != null) ...[
-            const SizedBox(height: 4),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600,
+                  color: AppColors.primary)),
+          const SizedBox(height: 4),
+          if (isQueued && startDate != null)
             Text(
-              'Valid until ${expiresAt.day}/${expiresAt.month}/${expiresAt.year}',
+              'Starts on ${startDate.day}/${startDate.month}/${startDate.year}',
               style: const TextStyle(color: AppColors.textGrey, fontSize: 13),
-            ),
-          ],
+            )
+          else
+            if (expiresAt != null)
+              Text(
+                'Valid until ${expiresAt.day}/${expiresAt.month}/${expiresAt
+                    .year}',
+                style: const TextStyle(color: AppColors.textGrey, fontSize: 13),
+              ),
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
@@ -615,13 +643,53 @@ class _SuccessDialog extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('Done', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              child: const Text('Done',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w700)),
             ),
           ),
         ]),
       ),
+    );
+  }
+}
+
+
+class _QueuedSubBanner extends StatelessWidget {
+  final ActiveSubscription sub;
+  const _QueuedSubBanner({required this.sub});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withOpacity(0.20)),
+      ),
+      child: Row(children: [
+        const Icon(Icons.schedule_rounded, color: Colors.white70, size: 24),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(sub.planName,
+              style: const TextStyle(color: Colors.white70,
+                  fontWeight: FontWeight.w700, fontSize: 13)),
+          const SizedBox(height: 2),
+          Text(
+            sub.startsAt != null
+                ? 'Queued · Starts ${sub.startsAt!.day}/${sub.startsAt!.month}/${sub.startsAt!.year}'
+                : 'Queued · Starts after current plan',
+            style: const TextStyle(color: Colors.white54, fontSize: 11),
+          ),
+        ])),
+        Text('${sub.speedMbps} Mbps',
+            style: const TextStyle(color: Colors.white60,
+                fontWeight: FontWeight.w700, fontSize: 13)),
+      ]),
     );
   }
 }

@@ -10,10 +10,11 @@ import '../../viewmodels/home_viewmodel.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/app_icon.dart';
+import '../bills/bills_screens.dart' hide MyBillsScreen;
 import '../kyc/kyc_screen.dart';
 import '../recharge/wifi_plans_screen.dart';
 import '../refer/refer_earn_screen.dart';
-import '../bills/bills_screens.dart';
+import '../bills/my_bills_screen.dart';
 
 
 class HomeScreen extends StatefulWidget {
