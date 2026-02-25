@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../theme/app_theme.dart';
 
 class ReferEarnScreen extends StatelessWidget {
@@ -10,9 +11,9 @@ class ReferEarnScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final howItWorks = [
-      {'icon': Icons.share_outlined, 'text': 'Invite your friends to experience any Speedonet Service.'},
-      {'icon': Icons.shopping_cart_outlined, 'text': 'Friend buys a new service using your referral link.'},
-      {'icon': Icons.local_offer_outlined, 'text': 'You both get discount coupons on Speedonet.'},
+      {'icon': PhosphorIcons.shareNetwork(), 'text': 'Invite your friends to experience any Speedonet Service.'},
+      {'icon': PhosphorIcons.shoppingCart(), 'text': 'Friend buys a new service using your referral link.'},
+      {'icon': PhosphorIcons.tag(), 'text': 'You both get discount coupons on Speedonet.'},
     ];
 
     return Scaffold(
@@ -32,55 +33,112 @@ class ReferEarnScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Hero banner
+            // Hero banner
+            // Hero banner
+            // Hero banner
             Container(
               width: double.infinity,
               height: 190,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
                 gradient: const LinearGradient(
-                  colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53), Color(0xFFFFC94A)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+                  colors: [Colors.white, Colors.white, Color(0xFFFF6B6B), Color(0xFFFFA726)],
+                  stops: [0.0, 0.4, 0.7, 1.0],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
                 ),
               ),
-              child: Stack(
-                children: [
-                  Positioned(
-                    left: 20, top: 20, bottom: 20,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text('Refer & Earn', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900, fontSize: 22)),
-                        const Text('with Every Connection!', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 16)),
-                        const SizedBox(height: 8),
-                        const SizedBox(
-                          width: 200,
-                          child: Text(
-                            'Invite friends to join our broadband\nand get exciting rewards for every\nsuccessful referral.',
-                            style: TextStyle(fontSize: 11, color: Colors.black54, height: 1.5),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Positioned(
-                    right: 0, top: 0, bottom: 0,
-                    child: ClipRRect(
-                      borderRadius: const BorderRadius.only(topRight: Radius.circular(16), bottomRight: Radius.circular(16)),
-                      child: Container(
-                        width: 140,
-                        color: Colors.white.withOpacity(0.1),
-                        child: const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.people_outline, size: 80, color: Colors.white54),
-                          ],
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // ── People image takes the full right 60% ─────────────
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: SizedBox(
+                        width: MediaQuery.of(context).size.width * 0.62,
+                        height: 190,
+                        child: Image.asset(
+                          'assets/images/refer_banner.png',
+                          fit: BoxFit.cover,
+                          alignment: Alignment.topCenter,
                         ),
                       ),
                     ),
-                  ),
-                ],
+
+                    //white fade
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.white,
+                              Colors.white.withValues(alpha: 0.95),
+                              Colors.white.withValues(alpha: 0.0),
+                            ],
+                            stops: const [0.0, 0.28, 0.48],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // ── Text on the left ───────────────────────────────────
+                    Positioned(
+                      left: 20, top: 0, bottom: 0,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ShaderMask(
+                            shaderCallback: (bounds) => const LinearGradient(
+                              colors: [Color(0xFFFF3B3B), Color(0xFFFF8E53), Color(0xFFFFA726)],
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                            ).createShader(bounds),
+                            child: const Text(
+                              'Refer & Earn',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 22,
+                              ),
+                            ),
+                          ),
+                          ShaderMask(
+                            shaderCallback: (bounds) => const LinearGradient(
+                              colors: [Color(0xFFFF3B3B), Color(0xFFFF8E53), Color(0xFFFFA726)],
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                            ).createShader(bounds),
+                            child: const Text(
+                              'with Every Connection!',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const SizedBox(
+                            width: 165,
+                            child: Text(
+                              'Invite friends to join our broadband and get exciting rewards for every successful referral.',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.black54,
+                                height: 1.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -153,8 +211,13 @@ class ReferEarnScreen extends StatelessWidget {
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     leading: Container(
                       width: 44, height: 44,
-                      decoration: BoxDecoration(color: AppColors.background, shape: BoxShape.circle),
-                      child: Icon(item['icon'] as IconData, color: AppColors.textDark, size: 22),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.borderColor, width: 1.5),
+                      ),
+                      child: Center(
+                        child: PhosphorIcon(item['icon'] as PhosphorIconData, color: AppColors.textDark, size: 22),
+                      ),
                     ),
                     title: Text(item['text'] as String, style: const TextStyle(fontSize: 13, color: AppColors.textGrey, height: 1.4)),
                   );
@@ -169,10 +232,16 @@ class ReferEarnScreen extends StatelessWidget {
               child: Column(
                 children: [
                   ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14), // ← was 8
                     leading: Container(
                       width: 44, height: 44,
-                      decoration: const BoxDecoration(color: AppColors.background, shape: BoxShape.circle),
-                      child: const Icon(Icons.help_outline, color: AppColors.textDark, size: 22),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.borderColor, width: 1.5),
+                      ),
+                      child: Center(
+                        child: PhosphorIcon(PhosphorIcons.question(), color: AppColors.textDark, size: 22),
+                      ),
                     ),
                     title: const Text('Frequently Asked Questions', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                     trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textLight),
@@ -180,10 +249,16 @@ class ReferEarnScreen extends StatelessWidget {
                   ),
                   Divider(height: 1, color: AppColors.borderColor, indent: 72),
                   ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14), // ← was 8
                     leading: Container(
                       width: 44, height: 44,
-                      decoration: const BoxDecoration(color: AppColors.background, shape: BoxShape.circle),
-                      child: const Icon(Icons.article_outlined, color: AppColors.textDark, size: 22),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.borderColor, width: 1.5),
+                      ),
+                      child: Center(
+                        child: PhosphorIcon(PhosphorIcons.article(), color: AppColors.textDark, size: 22),
+                      ),
                     ),
                     title: const Text('Terms and Conditions', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                     trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textLight),

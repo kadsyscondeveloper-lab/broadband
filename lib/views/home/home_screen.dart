@@ -121,10 +121,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
 
-                      // 1. KYC status banner
-                      _KycStatusBanner(
-                          kycStatus: vm.kycStatus, onTap: _openKyc),
-                      const SizedBox(height: 16),
+                      // 1. KYC status banner — only adds spacing when visible
+                      if (vm.kycStatus != null && !vm.kycStatus!.isNotSubmitted && !vm.kycStatus!.isApproved) ...[
+                        _KycStatusBanner(kycStatus: vm.kycStatus, onTap: _openKyc),
+                        const SizedBox(height: 8),
+                      ],
 
                       // 2. Manage Services
                       _ManageServicesCard(
@@ -730,11 +731,31 @@ class _PromoBannerState extends State<_PromoBanner> {
 // FEATURES SECTION
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _FeaturesSection extends StatelessWidget {
+class _FeaturesSection extends StatefulWidget {
   final int currentIndex;
   final Function(int) onPageChanged;
   const _FeaturesSection(
       {required this.currentIndex, required this.onPageChanged});
+
+  @override
+  State<_FeaturesSection> createState() => _FeaturesSectionState();
+}
+
+class _FeaturesSectionState extends State<_FeaturesSection> {
+  late final PageController _pageController;
+  int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -758,81 +779,114 @@ class _FeaturesSection extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                   color:      AppColors.textDark)),
           Row(
-              children: List.generate(
-                2,
-                    (i) => Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                  width:  i == 0 ? 20 : 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: i == 0 ? AppColors.primary : Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-              )),
-        ]),
-        const SizedBox(height: 24),
-        Center(
-            child: Column(children: [
-              Container(
-                width:  130,
-                height: 130,
-                decoration: BoxDecoration(
-                  color:        const Color(0xFFF5DEB3),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Stack(alignment: Alignment.center, children: [
-                  const Text('REFER\nFRIEND',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize:   16,
-                          color:      Colors.black87)),
-                  Positioned(
-                    right: 8,
-                    top:   8,
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: const BoxDecoration(
-                          color: AppColors.primary, shape: BoxShape.circle),
-                      child: AppIcon(AppIcons.more,
-                          color: Colors.white, size: 16),
-                    ),
-                  ),
-                ]),
+            children: List.generate(2, (i) => Container(
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              width:  i == _currentIndex ? 20 : 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: i == _currentIndex
+                    ? AppColors.primary
+                    : Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(4),
               ),
-              const SizedBox(height: 16),
-              const Text('More Refer More Rewards',
-                  style: TextStyle(
-                      fontSize:   16,
-                      fontWeight: FontWeight.w800,
-                      color:      AppColors.textDark)),
-              const SizedBox(height: 6),
-              const Text('Refer your friend and win exiting prizes!',
-                  style:
-                  TextStyle(fontSize: 13, color: AppColors.textGrey)),
-              const SizedBox(height: 20),
-              SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {},
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text('Refer Now',
-                        style: TextStyle(
-                            color:      AppColors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize:   15)),
-                  )),
-            ])),
+            )),
+          ),
+        ]),
+        const SizedBox(height: 16),
+
+        SizedBox(
+          height: 340,
+          child: PageView(
+            controller: _pageController,
+            onPageChanged: (index) {
+              setState(() => _currentIndex = index);
+              widget.onPageChanged(index);
+            },
+            children: [
+              _FeatureSlide(
+                imagePath:   'assets/images/refer_friend.png',
+                title:       'More Refer More Rewards',
+                subtitle:    'Refer your friend and win exciting prizes!',
+                buttonLabel: 'Refer Now',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ReferEarnScreen()),
+                ),
+              ),
+              _FeatureSlide(
+                imagePath:   'assets/images/support.png',
+                title:       'Do You Have a Question?',
+                subtitle:    'Get 24x7 resolutions to your queries',
+                buttonLabel: 'Chat Now',
+                onTap: () {
+                  // TODO: navigate to support / chat screen
+                },
+              ),
+            ],
+          ),
+        ),
       ]),
     );
   }
 }
+
+class _FeatureSlide extends StatelessWidget {
+  final String       imagePath;
+  final String       title;
+  final String       subtitle;
+  final String       buttonLabel;
+  final VoidCallback onTap;
+
+  const _FeatureSlide({
+    required this.imagePath,
+    required this.title,
+    required this.subtitle,
+    required this.buttonLabel,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Image.asset(
+          imagePath,
+          height: 170,
+          fit: BoxFit.contain,
+        ),
+        const SizedBox(height: 16),
+        Text(title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontSize:   16,
+                fontWeight: FontWeight.w800,
+                color:      AppColors.textDark)),
+        const SizedBox(height: 6),
+        Text(subtitle,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontSize: 13, color: AppColors.textGrey)),
+        const SizedBox(height: 20),
+        ElevatedButton(
+          onPressed: onTap,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 40),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
+          ),
+          child: Text(buttonLabel,
+              style: const TextStyle(
+                  color:      AppColors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize:   15)),
+        ),
+      ],
+    );
+  }
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FOOTER

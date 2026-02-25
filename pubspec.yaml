@@ -39,4 +39,6 @@ flutter:
   assets:
     - assets/images/speedo_prime.png
     - assets/images/speedo_tv.png
-    - assets/images/refer_a_friend.png
+    - assets/images/refer_friend.png
+    - assets/images/support.png
+    - assets/images/refer_banner.png

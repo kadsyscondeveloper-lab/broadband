@@ -23,6 +23,8 @@ class AppTheme {
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.primary,
       primary: AppColors.primary,
+      surface: AppColors.white,        // ← add this
+      surfaceTint: Colors.transparent,
     ),
     appBarTheme: const AppBarTheme(
       backgroundColor: AppColors.primary,

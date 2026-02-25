@@ -1,6 +1,7 @@
 // lib/widgets/app_drawer.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../theme/app_theme.dart';
 
 class AppDrawer extends StatelessWidget {
@@ -67,16 +68,16 @@ class AppDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final menuItems = [
-      {'icon': Icons.person_outline,     'label': 'Profile'},
-      {'icon': Icons.wifi_outlined,       'label': 'New Plans'},
-      {'icon': Icons.receipt_outlined,    'label': 'Pays'},
-      {'icon': Icons.people_outline,      'label': 'Refer & Earn'},
-      {'icon': Icons.badge_outlined,      'label': 'KYC'},
-      {'icon': Icons.history_outlined,    'label': 'Transaction History'},
-      {'icon': Icons.chat_bubble_outline, 'label': 'Support/Chat'},
-      {'icon': Icons.info_outline,        'label': 'About Speedonet'},
-      {'icon': Icons.lock_outline,        'label': 'Change Password'},
-      {'icon': Icons.logout,              'label': 'Logout'},
+      {'icon': PhosphorIcons.user(),              'label': 'Profile'},
+      {'icon': PhosphorIcons.wifiHigh(),          'label': 'New Plans'},
+      {'icon': PhosphorIcons.receipt(),           'label': 'Pays'},
+      {'icon': PhosphorIcons.usersThree(),        'label': 'Refer & Earn'},
+      {'icon': PhosphorIcons.identificationCard(),'label': 'KYC'},
+      {'icon': PhosphorIcons.clockCounterClockwise(), 'label': 'Transaction History'},
+      {'icon': PhosphorIcons.chatCircle(),        'label': 'Support/Chat'},
+      {'icon': PhosphorIcons.info(),              'label': 'About Speedonet'},
+      {'icon': PhosphorIcons.lockKey(),           'label': 'Change Password'},
+      {'icon': PhosphorIcons.signOut(),           'label': 'Logout'},
     ];
 
     return Drawer(
@@ -177,15 +178,18 @@ class AppDrawer extends StatelessWidget {
                     width:  38,
                     height: 38,
                     decoration: BoxDecoration(
-                      color: isLogout
-                          ? AppColors.primary.withOpacity(0.08)
-                          : AppColors.background,
                       shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isLogout ? AppColors.primary.withValues(alpha: 0.3) : AppColors.borderColor,
+                        width: 1.5,
+                      ),
                     ),
-                    child: Icon(
-                      item['icon'] as IconData,
-                      size:  20,
-                      color: isLogout ? AppColors.primary : AppColors.textDark,
+                    child: Center(
+                      child: PhosphorIcon(
+                        item['icon'] as PhosphorIconData,
+                        size:  20,
+                        color: isLogout ? AppColors.primary : AppColors.textDark,
+                      ),
                     ),
                   ),
                   title: Text(
@@ -197,8 +201,7 @@ class AppDrawer extends StatelessWidget {
                     ),
                   ),
                   onTap: () => onMenuItemTap(item['label'] as String),
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 2),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                 );
               },
             ),
