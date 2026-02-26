@@ -12,10 +12,14 @@ import 'viewmodels/payments_viewmodel.dart';
 import 'viewmodels/help_viewmodel.dart';
 import 'viewmodels/pay_viewmodel.dart';
 import 'viewmodels/profile_viewmodel.dart';
+import 'services/auth_service.dart';
 import 'theme/app_theme.dart';
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  /// Called after logout is complete — _AuthGate will flip to LoginScreen.
+  final VoidCallback onLogout;
+
+  const AppShell({super.key, required this.onLogout});
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -29,6 +33,7 @@ class _AppShellState extends State<AppShell> {
   final _helpVM     = HelpViewModel();
   final _payVM      = PayViewModel();
   final _profileVM  = ProfileViewModel();
+  final _auth       = AuthService();
 
   @override
   void initState() {
@@ -38,20 +43,57 @@ class _AppShellState extends State<AppShell> {
       _payVM.loadBalance();
     });
 
-    // ── Sync HomeViewModel when profile image is uploaded ─────────────────
-    // ProfileViewModel.loadProfile() is called internally after a successful
-    // image upload, but HomeViewModel holds its own separate _profile copy.
-    // We listen here and refresh HomeViewModel so AppHeader + AppDrawer
-    // update immediately without navigating away and back.
     _profileVM.addListener(_onProfileVMChanged);
   }
 
-  /// Called every time ProfileViewModel notifies. We only act when the image
-  /// upload finishes (imageUploading flips false AND no error).
   void _onProfileVMChanged() {
     if (!_profileVM.imageUploading && _profileVM.imageError == null) {
       _homeVM.loadProfile();
     }
+  }
+
+  // ── Logout ────────────────────────────────────────────────────────────────
+
+  Future<void> _handleLogout() async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Logout',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.textGrey),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text(
+              'Logout',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Clear tokens and notify _AuthGate
+    await _auth.logout();
+    widget.onLogout();
   }
 
   // ── Navigation helpers ────────────────────────────────────────────────────
@@ -61,8 +103,6 @@ class _AppShellState extends State<AppShell> {
   void _navigateToProfile()     => setState(() => _currentIndex = 4);
   void _navigateToPay()         => setState(() => _currentIndex = 2);
 
-  /// Opens the wallet recharge screen as a full push route.
-  /// On success, refreshes the home header balance via [HomeViewModel.loadProfile].
   void _openWalletRecharge() {
     Navigator.push(
       context,
@@ -78,6 +118,27 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  // ── Drawer menu handler ───────────────────────────────────────────────────
+  /*
+  /// Called by HomeScreen's AppDrawer for every menu item.
+  void _onDrawerMenuTap(String label) {
+    Navigator.pop(context); // close drawer first
+
+    switch (label) {
+      case 'Logout':
+        _handleLogout();
+        break;
+      case 'Profile':
+        setState(() => _currentIndex = 4);
+        break;
+    // Add other cases as needed
+      default:
+        break;
+    }
+  }
+
+  */
+
   // ── Body builder ──────────────────────────────────────────────────────────
 
   Widget _buildBody() {
@@ -88,6 +149,7 @@ class _AppShellState extends State<AppShell> {
           onNavigateToProfile: _navigateToProfile,
           onNavigateToPay:     _navigateToPay,
           onWalletTap:         _openWalletRecharge,
+          onLogout: widget.onLogout,
         );
       case 1:
         return const PaymentsScreen();
@@ -132,7 +194,7 @@ class _AppShellState extends State<AppShell> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BOTTOM NAV  (unchanged)
+// BOTTOM NAV
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _BottomNav extends StatelessWidget {

@@ -1,8 +1,10 @@
 // lib/views/home/home_screen.dart
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import '../../services/auth_service.dart';
 import '../../services/kyc_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_icons.dart';
@@ -24,6 +26,7 @@ class HomeScreen extends StatefulWidget {
   final VoidCallback? onNavigateToNewPlans;
   final VoidCallback? onNavigateToPay;
   final VoidCallback? onWalletTap;
+  final VoidCallback? onLogout;
 
   const HomeScreen({
     super.key,
@@ -32,6 +35,7 @@ class HomeScreen extends StatefulWidget {
     this.onNavigateToNewPlans,
     this.onNavigateToPay,
     this.onWalletTap,
+    this.onLogout,
   });
 
   @override
@@ -63,7 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (context, _) => AppDrawer(
           userName:        vm.userName,
           walletBalance:   vm.walletBalance,
-          profileImageUrl: vm.profileImageUrl,   // ← avatar in drawer header
+          profileImageUrl: vm.profileImageUrl,
           onClose: () => _scaffoldKey.currentState?.closeDrawer(),
           onMenuItemTap: (item) {
             _scaffoldKey.currentState?.closeDrawer();
@@ -113,9 +117,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: const Text('Cancel'),
                       ),
                       TextButton(
-                        onPressed: () {
+                        onPressed: () async {
                           Navigator.pop(ctx);
-                          // TODO: clear session and navigate to login
+                          await AuthService().logout();
+                          widget.onLogout?.call();
                         },
                         child: const Text('Logout',
                             style: TextStyle(color: AppColors.primary)),
@@ -134,7 +139,6 @@ class _HomeScreenState extends State<HomeScreen> {
           return CustomScrollView(
             slivers: [
 
-              // ── Sticky header ──────────────────────────────────────────
               // ── Sticky header ──────────────────────────────────────────
               SliverAppBar(
                 pinned:                    true,
@@ -156,7 +160,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       context,
                       MaterialPageRoute(builder: (_) => const NotificationsScreen()),
                     );
-                    // Refresh unread count when coming back
                     vm.refreshUnreadCount();
                   },
                   onWalletTap: widget.onWalletTap,
@@ -172,8 +175,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
 
-                      // 1. KYC status banner — only adds spacing when visible
-                      if (vm.kycStatus != null && !vm.kycStatus!.isNotSubmitted && !vm.kycStatus!.isApproved) ...[
+                      // 1. KYC status banner
+                      if (vm.kycStatus != null && !vm.kycStatus!.isApproved) ...[
                         _KycStatusBanner(kycStatus: vm.kycStatus, onTap: _openKyc),
                         const SizedBox(height: 8),
                       ],
@@ -191,7 +194,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       _SpeedoCards(),
                       const SizedBox(height: 16),
 
-                      // 4. Promo Banner
+                      // 4. Promo Banner (carousel from backend)
                       _PromoBanner(
                         currentIndex: vm.promoBannerIndex,
                         onPageChanged: vm.onPromoBannerPageChanged,
@@ -230,11 +233,10 @@ class _KycStatusBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = kycStatus;
-    if (s == null || s.isNotSubmitted || s.isApproved) {
-      return const SizedBox.shrink();
-    }
-    if (s.isPending)  return _PendingBanner(onCheckStatus: onTap);
-    if (s.isRejected) return _RejectedBanner(onFix: onTap);
+    if (s == null || s.isApproved) return const SizedBox.shrink();
+    if (s.isNotSubmitted) return _NotSubmittedBanner(onTap: onTap);
+    if (s.isPending)      return _PendingBanner(onCheckStatus: onTap);
+    if (s.isRejected)     return _RejectedBanner(onFix: onTap);
     return const SizedBox.shrink();
   }
 }
@@ -476,8 +478,7 @@ class _ServiceItem extends StatelessWidget {
         Navigator.push(
           screenContext,
           MaterialPageRoute(
-            builder: (_) =>
-                WifiPlansScreen(homeViewModel: homeViewModel),
+            builder: (_) => WifiPlansScreen(homeViewModel: homeViewModel),
           ),
         );
         break;
@@ -606,6 +607,11 @@ class _SpeedoCard extends StatelessWidget {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PROMO BANNER (Auto-Scrolling Carousel from Backend)
+// Fixes:
+//   - Backend Buffer → base64 conversion (done in carousels.js)
+//   - Pre-decodes base64 → Uint8List once so PageView never stalls
+//   - Shows shimmer while loading instead of disappearing
+//   - Auto-scroll timer only starts after images are ready
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PromoBanner extends StatefulWidget {
@@ -624,72 +630,114 @@ class _PromoBanner extends StatefulWidget {
 }
 
 class _PromoBannerState extends State<_PromoBanner> {
-  List<dynamic> carousels = [];
-  bool isLoading = true;
-  late PageController _pageController;
+  /// Each entry holds pre-decoded image bytes + metadata
+  List<Map<String, dynamic>> _items = [];
+  bool _loading = true;
+  late final PageController _pageController;
   int _currentIndex = 0;
-  late Timer _autoScrollTimer;
+  Timer? _autoScrollTimer;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
-
-    // Delay fetch until after build phase
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fetchCarousels();
-      _startAutoScroll();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _fetchAndDecode());
   }
 
-  Future<void> _fetchCarousels() async {
+  Future<void> _fetchAndDecode() async {
     if (widget.viewModel == null) {
-      setState(() => isLoading = false);
+      if (mounted) setState(() => _loading = false);
       return;
     }
 
     try {
-      final response = await widget.viewModel!.getCarousels();
+      final raw = await widget.viewModel!.getCarousels();
+
+      // Decode base64 → Uint8List up front so Image.memory never stalls
+      final items = <Map<String, dynamic>>[];
+      for (final c in raw) {
+        final url = (c['image_url'] as String?) ?? '';
+        Uint8List? bytes;
+        if (url.startsWith('data:')) {
+          try {
+            final comma = url.indexOf(',');
+            if (comma != -1) {
+              bytes = base64Decode(url.substring(comma + 1));
+            }
+          } catch (_) {
+            // corrupt data — skip this banner
+          }
+        }
+        if (bytes != null) {
+          items.add({
+            'title':    c['title']    ?? '',
+            'subtitle': c['subtitle'] ?? '',
+            'bytes':    bytes,
+          });
+        }
+      }
+
       if (mounted) {
         setState(() {
-          carousels = response;
-          isLoading = false;
+          _items   = items;
+          _loading = false;
         });
+        // Only start auto-scroll once we have more than one image
+        if (_items.length > 1) _startAutoScroll();
       }
     } catch (e) {
-      print('Error fetching carousels: $e');
-      if (mounted) {
-        setState(() => isLoading = false);
-      }
+      debugPrint('PromoBanner fetch error: $e');
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   void _startAutoScroll() {
-    _autoScrollTimer = Timer.periodic(Duration(seconds: 4), (_) {
-      if (carousels.isNotEmpty && mounted) {
-        final nextIndex = (_currentIndex + 1) % carousels.length;
-        _pageController.animateToPage(
-          nextIndex,
-          duration: Duration(milliseconds: 500),
-          curve: Curves.easeInOut,
-        );
-      }
+    _autoScrollTimer?.cancel();
+    _autoScrollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted || _items.isEmpty) return;
+      final next = (_currentIndex + 1) % _items.length;
+      _pageController.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
     });
   }
 
   @override
   void dispose() {
-    _autoScrollTimer.cancel();
+    _autoScrollTimer?.cancel();
     _pageController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading || carousels.isEmpty) {
-      return const SizedBox.shrink();
+    // ── Shimmer placeholder while fetching ───────────────────────────────
+    if (_loading) {
+      return Container(
+        height: 176,
+        decoration: BoxDecoration(
+          color:        AppColors.cardBg,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+                color:      Colors.black.withOpacity(0.05),
+                blurRadius: 8,
+                offset:     const Offset(0, 2)),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: const _BannerShimmer(),
+        ),
+      );
     }
 
+    // ── No banners returned / all images corrupt ──────────────────────────
+    if (_items.isEmpty) return const SizedBox.shrink();
+
+    // ── Carousel ─────────────────────────────────────────────────────────
     return Container(
       decoration: BoxDecoration(
         color:        AppColors.cardBg,
@@ -698,54 +746,32 @@ class _PromoBannerState extends State<_PromoBanner> {
           BoxShadow(
               color:      Colors.black.withOpacity(0.05),
               blurRadius: 8,
-              offset:     const Offset(0, 2))
+              offset:     const Offset(0, 2)),
         ],
       ),
       child: Column(children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
           child: SizedBox(
             height: 160,
             child: PageView.builder(
               controller: _pageController,
-              onPageChanged: (index) {
-                setState(() => _currentIndex = index);
-                widget.onPageChanged(index);
+              itemCount:  _items.length,
+              onPageChanged: (i) {
+                setState(() => _currentIndex = i);
+                widget.onPageChanged(i);
               },
-              itemCount: carousels.length,
-              itemBuilder: (context, index) {
-                final carousel = carousels[index];
-                final imageUrl = carousel['image_url'] ?? '';
-
-                // Handle base64 data URLs
-                if (imageUrl.startsWith('data:')) {
-                  try {
-                    final parts = imageUrl.split(',');
-                    if (parts.length == 2) {
-                      return Image.memory(
-                        base64Decode(parts[1]),
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          color: Colors.grey.shade300,
-                          child: const Center(
-                            child: Icon(Icons.broken_image, color: Colors.grey),
-                          ),
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    print('Error decoding base64: $e');
-                  }
-                }
-
-                // Handle regular network URLs
-                return Image.network(
-                  imageUrl,
-                  fit: BoxFit.cover,
+              itemBuilder: (_, i) {
+                final bytes = _items[i]['bytes'] as Uint8List;
+                return Image.memory(
+                  bytes,
+                  fit:   BoxFit.cover,
+                  width: double.infinity,
                   errorBuilder: (_, __, ___) => Container(
-                    color: Colors.grey.shade300,
+                    color: Colors.grey.shade200,
                     child: const Center(
-                      child: Icon(Icons.broken_image, color: Colors.grey),
+                      child: Icon(Icons.broken_image,
+                          color: Colors.grey, size: 32),
                     ),
                   ),
                 );
@@ -753,27 +779,83 @@ class _PromoBannerState extends State<_PromoBanner> {
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(
-              carousels.length,
-                  (i) => Container(
-                margin: const EdgeInsets.symmetric(horizontal: 3),
-                width:  i == _currentIndex ? 20 : 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: i == _currentIndex
-                      ? AppColors.primary
-                      : Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
+
+        // Dot indicators — only shown when more than one banner
+        if (_items.length > 1)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(_items.length, (i) {
+                final active = i == _currentIndex;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width:  active ? 20 : 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: active
+                        ? AppColors.primary
+                        : Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                );
+              }),
             ),
           ),
-        ),
       ]),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shimmer placeholder for the banner while images load
+// ─────────────────────────────────────────────────────────────────────────────
+class _BannerShimmer extends StatefulWidget {
+  const _BannerShimmer();
+  @override
+  State<_BannerShimmer> createState() => _BannerShimmerState();
+}
+
+class _BannerShimmerState extends State<_BannerShimmer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double>   _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1200))
+      ..repeat();
+    _anim = Tween<double>(begin: -1.5, end: 1.5).animate(
+        CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, __) => Container(
+        height: 176,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment(_anim.value - 1, 0),
+            end:   Alignment(_anim.value,      0),
+            colors: [
+              Colors.grey.shade200,
+              Colors.grey.shade100,
+              Colors.grey.shade200,
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -938,7 +1020,6 @@ class _FeatureSlide extends StatelessWidget {
   }
 }
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 // FOOTER
 // ─────────────────────────────────────────────────────────────────────────────
@@ -959,4 +1040,52 @@ class _FooterText extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KYC NOT SUBMITTED BANNER
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _NotSubmittedBanner extends StatelessWidget {
+  final VoidCallback onTap;
+  const _NotSubmittedBanner({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.blue.shade50,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: Colors.blue.shade200),
+    ),
+    child: Row(children: [
+      Icon(Icons.verified_user_outlined, color: Colors.blue.shade600, size: 26),
+      const SizedBox(width: 12),
+      const Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Complete Your KYC',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+          SizedBox(height: 4),
+          Text('Verify your identity to unlock all features.',
+              style: TextStyle(fontSize: 12, color: AppColors.textGrey)),
+        ]),
+      ),
+      const SizedBox(width: 12),
+      GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade600,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Text('Start KYC',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12)),
+        ),
+      ),
+    ]),
+  );
 }

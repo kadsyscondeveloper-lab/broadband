@@ -117,7 +117,7 @@ class HomeViewModel extends ChangeNotifier {
     try {
       // Replace with your actual API URL
       final response = await http.get(
-        Uri.parse('http://192.168.0.104:3000/api/v1/carousels'),
+        Uri.parse('http://103.88.81.7:3000/api/v1/carousels'),
       );
 
       if (response.statusCode == 200) {

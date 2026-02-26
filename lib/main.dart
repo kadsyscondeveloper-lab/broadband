@@ -32,8 +32,6 @@ class SpeedonetApp extends StatelessWidget {
       title:                  'Speedonet',
       debugShowCheckedModeBanner: false,
       theme:                  AppTheme.theme,
-      // Required by ntt_atom_flutter — allows the SDK to push/pop its own
-      // payment screen onto the navigator stack
       navigatorObservers:     [AtomSDK.navigatorObserver],
       home:                   const _AuthGate(),
     );
@@ -70,6 +68,10 @@ class _AuthGateState extends State<_AuthGate> {
 
   void _onLoginSuccess() => setState(() => _isLoggedIn = true);
 
+  /// Called by AppShell when the user taps Logout.
+  /// AuthService.logout() has already cleared storage by this point.
+  void _onLogout() => setState(() => _isLoggedIn = false);
+
   @override
   Widget build(BuildContext context) {
     if (_isChecking) {
@@ -92,7 +94,7 @@ class _AuthGateState extends State<_AuthGate> {
       );
     }
     return _isLoggedIn
-        ? const AppShell()
+        ? AppShell(onLogout: _onLogout)
         : LoginScreen(onLoginSuccess: _onLoginSuccess);
   }
 }

@@ -165,7 +165,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     Widget image;
 
     if (vm.imageUploading) {
-      // Show spinner while uploading
       image = Container(
         color: Colors.black,
         child: const Center(
@@ -176,7 +175,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       );
     } else if (vm.localImageBase64 != null) {
-      // Freshly picked image — fastest feedback, no network round-trip
       image = Image.memory(
         base64Decode(vm.localImageBase64!),
         fit: BoxFit.cover,
@@ -186,7 +184,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final imgUrl = vm.profileImageUrl;
       if (imgUrl != null && imgUrl.isNotEmpty) {
         if (imgUrl.startsWith('data:')) {
-          // Server returned a base64 data URI
           final base64Part = imgUrl.contains(',') ? imgUrl.split(',').last : imgUrl;
           image = Image.memory(
             base64Decode(base64Part),
@@ -194,7 +191,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             gaplessPlayback: true,
           );
         } else {
-          // Regular HTTPS URL
           image = Image.network(
             imgUrl,
             fit: BoxFit.cover,
@@ -212,7 +208,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Stack(
       children: [
-        // Avatar circle
         Container(
           width: 100,
           height: 100,
@@ -223,8 +218,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           clipBehavior: Clip.antiAlias,
           child: image,
         ),
-
-        // Camera icon badge
         Positioned(
           bottom: 0,
           right: 0,
@@ -256,7 +249,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _defaultAvatarContent(ProfileViewModel vm) {
-    // Show initials if name is available, else fallback icon
     final initials = vm.name.trim().isNotEmpty
         ? vm.name.trim().split(' ').map((w) => w.isNotEmpty ? w[0] : '').take(2).join().toUpperCase()
         : '';
@@ -385,136 +377,113 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _populateControllers();
           }
 
-          return Column(
-            children: [
-              // ── Scrollable content ───────────────────────────────────
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+          // ── Single scrollable body with button at the bottom ─────────
+          return SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
 
-                      // ── Avatar ───────────────────────────────────────
-                      Center(child: _buildAvatar(vm)),
-
-                      // Upload hint text
-                      const SizedBox(height: 10),
-                      Center(
-                        child: Text(
-                          vm.imageUploading
-                              ? 'Uploading photo…'
-                              : 'Tap the camera icon to change photo',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textGrey,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 28),
-
-                      // ── Mobile No (read-only) ────────────────────────
-                      _ProfileField(
-                        label: 'Mobile No.',
-                        controller: TextEditingController(text: vm.phone),
-                        readOnly: true,
-                      ),
-                      const SizedBox(height: 20),
-
-                      // ── Email ────────────────────────────────────────
-                      _ProfileField(
-                        label: 'Email Address',
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                      ),
-                      const SizedBox(height: 20),
-
-                      // ── Full Name ────────────────────────────────────
-                      _ProfileField(
-                        label: 'Full Name',
-                        controller: _nameController,
-                      ),
-                      const SizedBox(height: 24),
-
-                      // ── Primary Address section ──────────────────────
-                      const Text(
-                        'Primary Address',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // State dropdown
-                      const _FieldLabel(text: 'State'),
-                      const SizedBox(height: 8),
-                      _DropdownField(
-                        value: vm.state,
-                        items: vm.states,
-                        onChanged: vm.updateState,
-                      ),
-                      const SizedBox(height: 16),
-
-                      // City dropdown
-                      const _FieldLabel(text: 'City'),
-                      const SizedBox(height: 8),
-                      _DropdownField(
-                        value: vm.city,
-                        items: vm.cities,
-                        onChanged: vm.updateCity,
-                      ),
-                      const SizedBox(height: 16),
-
-                      // House No
-                      _ProfileField(
-                        label: 'House/Flat No.',
-                        controller: _houseNoController,
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Address
-                      _ProfileField(
-                        label: 'Address',
-                        controller: _addressController,
-                      ),
-                      const SizedBox(height: 16),
-
-                      // PIN Code
-                      _ProfileField(
-                        label: 'PIN Code',
-                        controller: _pinCodeController,
-                        keyboardType: TextInputType.number,
-                      ),
-                      const SizedBox(height: 32),
-                    ],
+                // ── Avatar ─────────────────────────────────────────────
+                Center(child: _buildAvatar(vm)),
+                const SizedBox(height: 10),
+                Center(
+                  child: Text(
+                    vm.imageUploading
+                        ? 'Uploading photo…'
+                        : 'Tap the camera icon to change photo',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textGrey,
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(height: 28),
 
-              // ── Update button ────────────────────────────────────────
-              Container(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-                decoration: BoxDecoration(
-                  color: AppColors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.06),
-                      blurRadius: 10,
-                      offset: const Offset(0, -3),
-                    ),
-                  ],
+                // ── Mobile No (read-only) ───────────────────────────────
+                _ProfileField(
+                  label: 'Mobile No.',
+                  controller: TextEditingController(text: vm.phone),
+                  readOnly: true,
                 ),
-                child: SizedBox(
+                const SizedBox(height: 20),
+
+                // ── Email ───────────────────────────────────────────────
+                _ProfileField(
+                  label: 'Email Address',
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                const SizedBox(height: 20),
+
+                // ── Full Name ───────────────────────────────────────────
+                _ProfileField(
+                  label: 'Full Name',
+                  controller: _nameController,
+                ),
+                const SizedBox(height: 24),
+
+                // ── Primary Address section ─────────────────────────────
+                const Text(
+                  'Primary Address',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // State dropdown
+                const _FieldLabel(text: 'State'),
+                const SizedBox(height: 8),
+                _DropdownField(
+                  value: vm.state,
+                  items: vm.states,
+                  onChanged: vm.updateState,
+                ),
+                const SizedBox(height: 16),
+
+                // City dropdown
+                const _FieldLabel(text: 'City'),
+                const SizedBox(height: 8),
+                _DropdownField(
+                  value: vm.city,
+                  items: vm.cities,
+                  onChanged: vm.updateCity,
+                ),
+                const SizedBox(height: 16),
+
+                // House No
+                _ProfileField(
+                  label: 'House/Flat No.',
+                  controller: _houseNoController,
+                ),
+                const SizedBox(height: 16),
+
+                // Address
+                _ProfileField(
+                  label: 'Address',
+                  controller: _addressController,
+                ),
+                const SizedBox(height: 16),
+
+                // PIN Code
+                _ProfileField(
+                  label: 'PIN Code',
+                  controller: _pinCodeController,
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 32),
+
+                // ── Update Profile Button ───────────────────────────────
+                SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: vm.isUpdating ? null : _update,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
-                      disabledBackgroundColor:
-                      AppColors.primary.withOpacity(0.6),
+                      disabledBackgroundColor: AppColors.primary.withOpacity(0.6),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -538,8 +507,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                 ),
-              ),
-            ],
+
+                // Extra bottom padding so button clears the nav bar
+                SizedBox(height: MediaQuery.of(context).padding.bottom + 80),
+              ],
+            ),
           );
         },
       ),

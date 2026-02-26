@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:speedonet/views/auth/signup_screen.dart';
 import '../../theme/app_theme.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 
@@ -81,11 +82,16 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   void _showSignUp() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Sign up flow coming soon!'),
-        backgroundColor: AppColors.primary,
-        behavior: SnackBarBehavior.floating,
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SignupScreen(
+          onSignupSuccess: () {
+            widget.onLoginSuccess();
+            Navigator.of(context).popUntil((route) => route.isFirst);
+          },
+          onNavigateToLogin: () => Navigator.pop(context),
+        ),
       ),
     );
   }
@@ -273,7 +279,12 @@ class _HeroSection extends StatelessWidget {
                 const Spacer(),
 
                 // Illustration (person on rocket)
-                _RocketIllustration(),
+                Image.asset(
+                  'assets/images/login_rocket.png',
+                  width: 160,
+                  height: 180,
+                  fit: BoxFit.contain,
+                ),
               ],
             ),
           ),
@@ -301,113 +312,7 @@ class _CloudShape extends StatelessWidget {
   }
 }
 
-class _RocketIllustration extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 150,
-      height: 170,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Rocket body
-          Positioned(
-            bottom: 0,
-            child: Container(
-              width: 70,
-              height: 90,
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(35),
-                  topRight: Radius.circular(35),
-                  bottomLeft: Radius.circular(10),
-                  bottomRight: Radius.circular(10),
-                ),
-                border:
-                    Border.all(color: Colors.white.withOpacity(0.4), width: 2),
-              ),
-            ),
-          ),
-          // Flame
-          Positioned(
-            bottom: -10,
-            child: Container(
-              width: 30,
-              height: 28,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Colors.orange, Colors.yellow],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(14),
-                  bottomRight: Radius.circular(14),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.orange.withOpacity(0.5),
-                    blurRadius: 10,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Person silhouette
-          Positioned(
-            top: 10,
-            right: 10,
-            child: Column(
-              children: [
-                // Head
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFFD5B4),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                // Body
-                Container(
-                  width: 36,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.person,
-                    color: Colors.white70,
-                    size: 32,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Waving hand
-          Positioned(
-            top: 20,
-            right: 0,
-            child: Transform.rotate(
-              angle: -0.4,
-              child: Container(
-                width: 16,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFD5B4),
-                  borderRadius: BorderRadius.circular(5),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+
 
 // ── Password login form ───────────────────────────────────────────────────────
 
