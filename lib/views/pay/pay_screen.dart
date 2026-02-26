@@ -11,7 +11,8 @@ class PayScreen extends StatelessWidget {
   const PayScreen({super.key, required this.viewModel});
 
   static final Map<String, List<String>> _providerData = {
-    'Broadband\nPostpaid': ['ACT Fibernet', 'AirJaldi - Rural Broadband', 'Airtel Broadband', 'Alliance Broadband Services Pvt. Ltd.', 'Comway Broadband', 'Connect Broadband', 'DEN Broadband', 'Hathway Broadband', 'MTNL Broadband', 'YOU Broadband'],
+    // ← Speedonet first so it appears at the top of the list
+    'Broadband\nPostpaid': ['Speedonet', 'ACT Fibernet', 'AirJaldi - Rural Broadband', 'Airtel Broadband', 'Alliance Broadband Services Pvt. Ltd.', 'Comway Broadband', 'Connect Broadband', 'DEN Broadband', 'Hathway Broadband', 'MTNL Broadband', 'YOU Broadband'],
     'Fastag': ['Axis Bank FASTag', 'Bank of Baroda - Fastag', 'Equitas FASTag Recharge', 'Federal Bank - FASTag', 'HDFC  Bank - Fastag', 'ICICI Bank Fastag', 'IDFC FIRST Bank - FasTag', 'Indian Highways Management Company Ltd FASTag', 'IndusInd Bank FASTag'],
     'Cable TV': ['Airtel Digital TV', 'Dish TV', 'Reliance Digital TV', 'Sun Direct', 'Tata Sky', 'Videocon d2h'],
     'Education\nFees': ['5Th Centenary School', '7I World School Shivpuri Link Road Gwalior', 'A A M Childrens Academy', 'A B C Alma Mater', 'A B M Public School', 'A B S International School', 'A E S Public School', 'A I International School, Uppal Jagir, Nurmahal Nakodar Road'],
@@ -193,7 +194,6 @@ class _ServiceSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Each item gets 1/4 of screen width
     final itemWidth = (MediaQuery.of(context).size.width - 32 - 40) / 4;
 
     return Container(

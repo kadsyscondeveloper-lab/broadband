@@ -26,6 +26,101 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     {'id': 'UPI', 'title': 'UPI', 'subtitle': 'PhonePe, Gpay, Paytm, BHIM & more', 'icon': Icons.send_outlined},
   ];
 
+  // ── Coming Soon bottom sheet ───────────────────────────────────────────────
+  void _showComingSoon() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => Container(
+        padding: EdgeInsets.fromLTRB(
+          24, 20, 24,
+          MediaQuery.of(context).padding.bottom + 24,
+        ),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 28),
+
+            // Icon
+            Container(
+              width: 80, height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.rocket_launch_rounded,
+                color: AppColors.primary,
+                size: 38,
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Title
+            const Text(
+              'Coming Soon!',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textDark,
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Subtitle
+            Text(
+              'This feature is coming soon.\nWe\'re working hard to bring it to you!',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.textGrey,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 32),
+
+            // Dismiss button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Text(
+                  'Got it',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final double gst = 0;
@@ -194,7 +289,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
           ),
 
-          // Pay button
+          // ── Pay button ────────────────────────────────────────────────────
           Container(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
             decoration: BoxDecoration(
@@ -206,9 +301,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () => _showPaymentSuccess(context, total),
+                    // ← Now calls _showComingSoon instead of mock dialog
+                    onPressed: _showComingSoon,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey.shade400,
+                      backgroundColor: AppColors.primary,   // ← active red, not grey
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       elevation: 0,
@@ -237,26 +333,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ],
       ),
     );
-  }
-
-  void _showPaymentSuccess(BuildContext ctx, double total) {
-    showDialog(context: ctx, builder: (_) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.check_circle, color: Colors.green, size: 60),
-        const SizedBox(height: 16),
-        const Text('Payment Successful!', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
-        const SizedBox(height: 8),
-        Text('₹${total.toStringAsFixed(0)} paid to ${widget.providerName}',
-            textAlign: TextAlign.center, style: const TextStyle(color: AppColors.textGrey)),
-        const SizedBox(height: 20),
-        ElevatedButton(
-          onPressed: () { Navigator.popUntil(ctx, (r) => r.isFirst); },
-          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-          child: const Text('Go Home', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-        ),
-      ]),
-    ));
   }
 }
 

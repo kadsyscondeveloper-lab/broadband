@@ -4,12 +4,12 @@ import 'package:flutter/material.dart';
 import '../../models/plan_model.dart';
 import '../../theme/app_theme.dart';
 import '../../viewmodels/plans_viewmodel.dart';
-import '../../viewmodels/home_viewmodel.dart'; // ← ADD THIS
+import '../../viewmodels/home_viewmodel.dart';
 
 class PlansScreen extends StatefulWidget {
-  final HomeViewModel? homeViewModel; // ← ADD THIS
+  final HomeViewModel? homeViewModel;
 
-  const PlansScreen({super.key, this.homeViewModel}); // ← ADD THIS
+  const PlansScreen({super.key, this.homeViewModel});
 
   @override
   State<PlansScreen> createState() => _PlansScreenState();
@@ -48,7 +48,6 @@ class _PlansScreenState extends State<PlansScreen>
           await _vm.purchasePlan(plan.id, paymentMode: mode);
           if (!mounted) return;
           if (_vm.purchaseState == PlanPurchaseState.success) {
-            // ✅ KEY: Refresh wallet balance after successful purchase
             await widget.homeViewModel?.refreshWalletBalance();
             _showSuccessDialog(_vm.purchaseResult!);
           } else {
@@ -81,6 +80,9 @@ class _PlansScreenState extends State<PlansScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Show back button only when this screen was pushed on top of something
+    final canPop = Navigator.canPop(context);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: ListenableBuilder(
@@ -106,9 +108,18 @@ class _PlansScreenState extends State<PlansScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(children: [
-                        GestureDetector(
-                          child: const Icon(Icons.router, color: Colors.white),
-                        ),
+                        // ── Back button (shown when pushed) ──────────────
+                        if (canPop) ...[
+                          GestureDetector(
+                            onTap: () => Navigator.pop(context),
+                            child: const Padding(
+                              padding: EdgeInsets.only(right: 12),
+                              child: Icon(Icons.arrow_back_ios,
+                                  color: Colors.white, size: 20),
+                            ),
+                          ),
+                        ],
+                        const Icon(Icons.router, color: Colors.white),
                         const SizedBox(width: 12),
                         const Text('Choose a Plan',
                             style: TextStyle(color: Colors.white,
@@ -355,8 +366,7 @@ class _PlanCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 _Tag(icon: Icons.calendar_today_outlined, label: plan.validityLabel),
               ]),
-              // description removed — column does not exist in broadband_plans
-              if (plan.category != null) ...[               // ← show category badge instead
+              if (plan.category != null) ...[
                 const SizedBox(height: 4),
                 Text(plan.category!,
                     style: const TextStyle(fontSize: 11, color: AppColors.textGrey),
@@ -463,7 +473,6 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Handle
         Center(child: Container(
           width: 40, height: 4,
           decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
@@ -474,7 +483,6 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textDark)),
         const SizedBox(height: 16),
 
-        // Plan summary
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -495,7 +503,6 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
         ),
         const SizedBox(height: 20),
 
-        // Payment mode
         const Text('Pay via', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textDark)),
         const SizedBox(height: 10),
 
@@ -505,7 +512,6 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
 
         const SizedBox(height: 24),
 
-        // Confirm button
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
@@ -584,8 +590,7 @@ class _SuccessDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final planName = (result['plan'] as Map<String, dynamic>?)?['name'] ??
-        'Plan';
+    final planName = (result['plan'] as Map<String, dynamic>?)?['name'] ?? 'Plan';
     final startDate = result['start_date'] != null
         ? DateTime.tryParse(result['start_date'] as String)
         : null;
@@ -602,8 +607,7 @@ class _SuccessDialog extends StatelessWidget {
           Container(
             width: 72, height: 72,
             decoration: BoxDecoration(
-              color: isQueued ? const Color(0xFFFFF8E1) : const Color(
-                  0xFFE8F5E9),
+              color: isQueued ? const Color(0xFFFFF8E1) : const Color(0xFFE8F5E9),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -615,26 +619,22 @@ class _SuccessDialog extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             isQueued ? 'Plan Queued! 🕐' : 'Plan Activated! 🎉',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800,
-                color: AppColors.textDark),
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textDark),
           ),
           const SizedBox(height: 8),
           Text(planName,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600,
-                  color: AppColors.primary)),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.primary)),
           const SizedBox(height: 4),
           if (isQueued && startDate != null)
             Text(
               'Starts on ${startDate.day}/${startDate.month}/${startDate.year}',
               style: const TextStyle(color: AppColors.textGrey, fontSize: 13),
             )
-          else
-            if (expiresAt != null)
-              Text(
-                'Valid until ${expiresAt.day}/${expiresAt.month}/${expiresAt
-                    .year}',
-                style: const TextStyle(color: AppColors.textGrey, fontSize: 13),
-              ),
+          else if (expiresAt != null)
+            Text(
+              'Valid until ${expiresAt.day}/${expiresAt.month}/${expiresAt.year}',
+              style: const TextStyle(color: AppColors.textGrey, fontSize: 13),
+            ),
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
@@ -643,12 +643,10 @@ class _SuccessDialog extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               child: const Text('Done',
-                  style: TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w700)),
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
             ),
           ),
         ]),
@@ -656,7 +654,6 @@ class _SuccessDialog extends StatelessWidget {
     );
   }
 }
-
 
 class _QueuedSubBanner extends StatelessWidget {
   final ActiveSubscription sub;

@@ -1,5 +1,4 @@
 // lib/views/help/help_screen.dart
-// Keeps your existing UI — only replaces the dummy data with real API calls.
 
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
@@ -37,13 +36,24 @@ class _HelpScreenState extends State<HelpScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Show back button only when pushed on top of another route
+    final canPop = Navigator.canPop(context);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         title: const Text('Help'),
         centerTitle: true,
+        // Never auto-imply — we manage the leading widget ourselves
         automaticallyImplyLeading: false,
+        leading: canPop
+            ? IconButton(
+          icon: const Icon(Icons.arrow_back_ios,
+              color: Colors.white, size: 20),
+          onPressed: () => Navigator.pop(context),
+        )
+            : null,
         actions: [
           GestureDetector(
             onTap: _openCreateTicket,
@@ -116,7 +126,7 @@ class _HelpScreenState extends State<HelpScreen> {
                   MaterialPageRoute(
                     builder: (_) => TicketDetailScreen(
                       viewModel: vm,
-                      ticketId:  t.id,
+                      ticketId: t.id,
                     ),
                   ),
                 ),
@@ -202,7 +212,7 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-// ── Empty state (unchanged from your original) ────────────────────────────────
+// ── Empty state ───────────────────────────────────────────────────────────────
 
 class _EmptyTickets extends StatelessWidget {
   final VoidCallback onCreateTap;

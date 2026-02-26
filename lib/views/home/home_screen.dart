@@ -19,6 +19,9 @@ import '../refer/refer_earn_screen.dart';
 import '../bills/my_bills_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../profile/change_password_screen.dart';
+import '../help/help_screen.dart';
+import '../../viewmodels/help_viewmodel.dart';
+import '../plans/plans_screen.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -77,7 +80,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 widget.onNavigateToProfile?.call();
                 break;
               case 'New Plans':
-                widget.onNavigateToNewPlans?.call();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PlansScreen(homeViewModel: vm),
+                  ),
+                );
                 break;
               case 'Pays':
                 widget.onNavigateToPay?.call();
@@ -94,7 +102,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     MaterialPageRoute(builder: (_) => const MyBillsScreen()));
                 break;
               case 'Support/Chat':
-              // TODO: Navigator.push to your chat/support screen
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => HelpScreen(viewModel: HelpViewModel()),
+                  ),
+                );
                 break;
               case 'About Speedonet':
                 showAboutDialog(
@@ -480,7 +493,7 @@ class _ServiceItem extends StatelessWidget {
         Navigator.push(
           screenContext,
           MaterialPageRoute(
-            builder: (_) => WifiPlansScreen(homeViewModel: homeViewModel),
+            builder: (_) => PlansScreen(homeViewModel: homeViewModel),
           ),
         );
         break;
@@ -954,7 +967,12 @@ class _FeaturesSectionState extends State<_FeaturesSection> {
                 subtitle:    'Get 24x7 resolutions to your queries',
                 buttonLabel: 'Chat Now',
                 onTap: () {
-                  // TODO: navigate to support / chat screen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => HelpScreen(viewModel: HelpViewModel()),
+                    ),
+                  );
                 },
               ),
             ],
