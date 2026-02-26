@@ -18,6 +18,7 @@ import '../recharge/wifi_plans_screen.dart';
 import '../refer/refer_earn_screen.dart';
 import '../bills/my_bills_screen.dart';
 import '../notifications/notifications_screen.dart';
+import '../profile/change_password_screen.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -103,7 +104,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
                 break;
               case 'Change Password':
-              // TODO: Navigator.push to your change password screen
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ChangePasswordScreen()));
                 break;
               case 'Logout':
                 showDialog(
