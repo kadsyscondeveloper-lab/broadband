@@ -16,9 +16,7 @@ import 'services/auth_service.dart';
 import 'theme/app_theme.dart';
 
 class AppShell extends StatefulWidget {
-  /// Called after logout is complete — _AuthGate will flip to LoginScreen.
   final VoidCallback onLogout;
-
   const AppShell({super.key, required this.onLogout});
 
   @override
@@ -42,7 +40,6 @@ class _AppShellState extends State<AppShell> {
       _homeVM.loadProfile();
       _payVM.loadBalance();
     });
-
     _profileVM.addListener(_onProfileVMChanged);
   }
 
@@ -52,51 +49,33 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  // ── Logout ────────────────────────────────────────────────────────────────
-
   Future<void> _handleLogout() async {
-    // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Logout',
-          style: TextStyle(fontWeight: FontWeight.w700),
-        ),
+        title: const Text('Logout', style: TextStyle(fontWeight: FontWeight.w700)),
         content: const Text('Are you sure you want to logout?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: AppColors.textGrey),
-            ),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textGrey)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            child: const Text(
-              'Logout',
-              style: TextStyle(color: Colors.white),
-            ),
+            child: const Text('Logout', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
-
     if (confirmed != true) return;
-
-    // Clear tokens and notify _AuthGate
     await _auth.logout();
     widget.onLogout();
   }
-
-  // ── Navigation helpers ────────────────────────────────────────────────────
 
   void _onTabTapped(int index)  => setState(() => _currentIndex = index);
   void _navigateToHome()        => setState(() => _currentIndex = 0);
@@ -118,29 +97,6 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  // ── Drawer menu handler ───────────────────────────────────────────────────
-  /*
-  /// Called by HomeScreen's AppDrawer for every menu item.
-  void _onDrawerMenuTap(String label) {
-    Navigator.pop(context); // close drawer first
-
-    switch (label) {
-      case 'Logout':
-        _handleLogout();
-        break;
-      case 'Profile':
-        setState(() => _currentIndex = 4);
-        break;
-    // Add other cases as needed
-      default:
-        break;
-    }
-  }
-
-  */
-
-  // ── Body builder ──────────────────────────────────────────────────────────
-
   Widget _buildBody() {
     switch (_currentIndex) {
       case 0:
@@ -149,7 +105,7 @@ class _AppShellState extends State<AppShell> {
           onNavigateToProfile: _navigateToProfile,
           onNavigateToPay:     _navigateToPay,
           onWalletTap:         _openWalletRecharge,
-          onLogout: widget.onLogout,
+          onLogout:            widget.onLogout,
         );
       case 1:
         return const PaymentsScreen();
@@ -167,13 +123,11 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: true,
-      body:               _buildBody(),
+      body:                _buildBody(),
       bottomNavigationBar: _BottomNav(
         currentIndex: _currentIndex,
         onTap:        _onTabTapped,
@@ -218,7 +172,7 @@ class _BottomNav extends StatelessWidget {
         alignment:    Alignment.bottomCenter,
         children: [
 
-          // ── Bar ──────────────────────────────────────────────────────
+          // ── Bar ──────────────────────────────────────────────────────────
           Positioned(
             bottom: 0, left: 0, right: 0,
             child: Container(
@@ -244,19 +198,19 @@ class _BottomNav extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      _NavItem(
-                        icon:       Icons.home_outlined,
-                        activeIcon: Icons.home,
-                        label:      'Home',
-                        isActive:   currentIndex == 0,
-                        onTap:      () => onTap(0),
+                      _PngNavItem(
+                        pngOutline: 'assets/icons/bottom_navigation/house-blank.png',
+                        pngFilled:  'assets/icons/bottom_navigation/house-blank_filled.png',
+                        label:    'Home',
+                        isActive: currentIndex == 0,
+                        onTap:    () => onTap(0),
                       ),
-                      _NavItem(
-                        icon:       Icons.receipt_long_outlined,
-                        activeIcon: Icons.receipt_long,
-                        label:      'Payments',
-                        isActive:   currentIndex == 1,
-                        onTap:      () => onTap(1),
+                      _PngNavItem(
+                        pngOutline: 'assets/icons/bottom_navigation/receipt.png',
+                        pngFilled:  'assets/icons/bottom_navigation/receipt_filled.png',
+                        label:    'Payments',
+                        isActive: currentIndex == 1,
+                        onTap:    () => onTap(1),
                       ),
 
                       // Hollow centre — Pay label only
@@ -281,19 +235,19 @@ class _BottomNav extends StatelessWidget {
                         ),
                       ),
 
-                      _NavItem(
-                        icon:       Icons.headset_mic_outlined,
-                        activeIcon: Icons.headset_mic,
-                        label:      'Help',
-                        isActive:   currentIndex == 3,
-                        onTap:      () => onTap(3),
+                      _PngNavItem(
+                        pngOutline: 'assets/icons/bottom_navigation/support.png',
+                        pngFilled:  'assets/icons/bottom_navigation/support_filled.png',
+                        label:    'Help',
+                        isActive: currentIndex == 3,
+                        onTap:    () => onTap(3),
                       ),
-                      _NavItem(
-                        icon:       Icons.person_outline,
-                        activeIcon: Icons.person,
-                        label:      'Profile',
-                        isActive:   currentIndex == 4,
-                        onTap:      () => onTap(4),
+                      _PngNavItem(
+                        pngOutline: 'assets/icons/bottom_navigation/user.png',
+                        pngFilled:  'assets/icons/bottom_navigation/user_filled.png',
+                        label:    'Profile',
+                        isActive: currentIndex == 4,
+                        onTap:    () => onTap(4),
                       ),
                     ],
                   ),
@@ -302,7 +256,7 @@ class _BottomNav extends StatelessWidget {
             ),
           ),
 
-          // ── Floating Pay button ───────────────────────────────────────
+          // ── Floating Pay button ───────────────────────────────────────────
           Positioned(
             bottom: _barHeight + bottomPad - _btnSize / 2 - _liftAbove + 18,
             child: GestureDetector(
@@ -360,19 +314,19 @@ class _BottomNav extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NAV ITEM
+// PNG NAV ITEM
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _NavItem extends StatelessWidget {
-  final IconData icon;
-  final IconData activeIcon;
-  final String   label;
-  final bool     isActive;
+class _PngNavItem extends StatelessWidget {
+  final String pngOutline;
+  final String pngFilled;
+  final String label;
+  final bool   isActive;
   final VoidCallback onTap;
 
-  const _NavItem({
-    required this.icon,
-    required this.activeIcon,
+  const _PngNavItem({
+    required this.pngOutline,
+    required this.pngFilled,
     required this.label,
     required this.isActive,
     required this.onTap,
@@ -382,15 +336,17 @@ class _NavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: GestureDetector(
-        onTap:     onTap,
-        behavior:  HitTestBehavior.opaque,
+        onTap:    onTap,
+        behavior: HitTestBehavior.opaque,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              isActive ? activeIcon : icon,
-              color: isActive ? AppColors.primary : AppColors.textLight,
-              size:  22,
+            Image.asset(
+              isActive ? pngFilled : pngOutline,
+              width:  22,
+              height: 22,
+              color:          isActive ? null : AppColors.textLight,
+              colorBlendMode: isActive ? null : BlendMode.srcIn,
             ),
             const SizedBox(height: 2),
             Text(
