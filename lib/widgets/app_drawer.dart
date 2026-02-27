@@ -59,27 +59,28 @@ class AppDrawer extends StatelessWidget {
     );
   }
 
-  Widget _fallback() => const Icon(Icons.tv, color: AppColors.primary, size: 26);
+  Widget _fallback() =>
+      const Icon(Icons.tv, color: AppColors.primary, size: 26);
 
   @override
   Widget build(BuildContext context) {
     final menuItems = [
-      {'icon': PhosphorIcons.user(),                   'label': 'Profile'},
-      {'icon': PhosphorIcons.wifiHigh(),               'label': 'New Plans'},
-      {'icon': PhosphorIcons.receipt(),                'label': 'Pays'},
-      {'icon': PhosphorIcons.usersThree(),             'label': 'Refer & Earn'},
-      {'icon': PhosphorIcons.identificationCard(),     'label': 'KYC'},
-      {'icon': PhosphorIcons.clockCounterClockwise(),  'label': 'Transaction History'},
-      {'icon': PhosphorIcons.chatCircle(),             'label': 'Support/Chat'},
-      {'icon': PhosphorIcons.info(),                   'label': 'About Speedonet'},
-      {'icon': PhosphorIcons.lockKey(),                'label': 'Change Password'},
-      {'icon': PhosphorIcons.signOut(),                'label': 'Logout'},
+      {'asset': 'assets/images/profile.png',                'label': 'Profile'},
+      {'asset': 'assets/images/new_plan.png',            'label': 'New Plans'},
+      {'asset': 'assets/images/pays.png',                'label': 'Pays'},
+      {'asset': 'assets/images/refer&earn.png',          'label': 'Refer & Earn'},
+      {'asset': 'assets/images/KYC_icon.png',            'label': 'KYC'},
+      {'asset': 'assets/images/transaction_history.png', 'label': 'Transaction History'},
+      {'asset': 'assets/images/supportandchat.png',      'label': 'Support/Chat'},
+      {'asset': 'assets/images/about.png',               'label': 'About Speedonet'},
+      {'asset': 'assets/images/change_password.png',     'label': 'Change Password'},
+      {'asset': 'assets/images/logout.png',              'label': 'Logout'},
     ];
 
     return Drawer(
       width: MediaQuery.of(context).size.width * 0.82,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-      backgroundColor: Colors.white, // ← no tint
+      backgroundColor: Colors.white,
       child: Column(
         children: [
           // ── Header ──────────────────────────────────────────────────────
@@ -100,36 +101,50 @@ class AppDrawer extends StatelessWidget {
                     _buildAvatar(),
                     const Spacer(),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: AppColors.walletBg,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(children: [
-                        const Text('₹', style: TextStyle(color: AppColors.white, fontWeight: FontWeight.bold)),
+                        const Text('₹',
+                            style: TextStyle(
+                                color:      AppColors.white,
+                                fontWeight: FontWeight.bold)),
                         Text(
                           ' ${walletBalance.toStringAsFixed(2)}',
-                          style: const TextStyle(color: AppColors.white, fontWeight: FontWeight.w700, fontSize: 15),
+                          style: const TextStyle(
+                              color:      AppColors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize:   15),
                         ),
                         const SizedBox(width: 6),
                         Container(
                           width: 20, height: 14,
-                          decoration: BoxDecoration(color: AppColors.white, borderRadius: BorderRadius.circular(3)),
-                          child: const Icon(Icons.credit_card, size: 11, color: AppColors.primary),
+                          decoration: BoxDecoration(
+                              color:        AppColors.white,
+                              borderRadius: BorderRadius.circular(3)),
+                          child: const Icon(Icons.credit_card,
+                              size: 11, color: AppColors.primary),
                         ),
                       ]),
                     ),
                     const SizedBox(width: 12),
                     GestureDetector(
                       onTap: onClose,
-                      child: const Icon(Icons.close, color: AppColors.white, size: 24),
+                      child: const Icon(Icons.close,
+                          color: AppColors.white, size: 24),
                     ),
                   ],
                 ),
                 const SizedBox(height: 14),
                 Text(
                   userName.isNotEmpty ? userName : 'Welcome',
-                  style: const TextStyle(color: AppColors.white, fontSize: 20, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                      color:      AppColors.white,
+                      fontSize:   20,
+                      fontWeight: FontWeight.w700),
                 ),
               ],
             ),
@@ -140,41 +155,36 @@ class AppDrawer extends StatelessWidget {
             child: ListView.separated(
               padding: EdgeInsets.zero,
               itemCount: menuItems.length,
-              separatorBuilder: (_, __) =>
-                  Divider(height: 1, color: AppColors.borderColor, indent: 60),
+              separatorBuilder: (_, __) => Divider(
+                  height: 1,
+                  color:  AppColors.borderColor,
+                  indent: 64),
               itemBuilder: (context, index) {
                 final item     = menuItems[index];
                 final isLogout = item['label'] == 'Logout';
+
                 return ListTile(
-                  leading: Container(
-                    width: 38, height: 38,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: isLogout
-                            ? AppColors.primary.withValues(alpha: 0.3)
-                            : AppColors.borderColor,
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Center(
-                      child: PhosphorIcon(
-                        item['icon'] as PhosphorIconData,
-                        size: 20,
-                        color: isLogout ? AppColors.primary : AppColors.textDark,
-                      ),
+                  leading: SizedBox(
+                    width:  38,
+                    height: 38,
+                    child: Image.asset(
+                      item['asset']!,
+                      fit: BoxFit.contain,
+                      // tint logout icon red, others use natural color
+                      color: isLogout ? AppColors.primary : null,
                     ),
                   ),
                   title: Text(
-                    item['label'] as String,
+                    item['label']!,
                     style: TextStyle(
-                      fontSize: 15,
+                      fontSize:   15,
                       fontWeight: FontWeight.w500,
                       color: isLogout ? AppColors.primary : AppColors.textDark,
                     ),
                   ),
-                  onTap: () => onMenuItemTap(item['label'] as String),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                  onTap: () => onMenuItemTap(item['label']!),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 2),
                 );
               },
             ),

@@ -372,6 +372,10 @@ class _RejectedBanner extends StatelessWidget {
 // MANAGE SERVICES
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MANAGE SERVICES  — replace the existing _ManageServicesCard & _ServiceItem
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _ManageServicesCard extends StatelessWidget {
   final List<Map<String, String>> services;
   final VoidCallback?  onNavigateToPay;
@@ -385,14 +389,14 @@ class _ManageServicesCard extends StatelessWidget {
     this.homeViewModel,
   });
 
-  dynamic _getIcon(String iconKey) {
+  String _getImageAsset(String iconKey) {
     switch (iconKey) {
-      case 'pay_bills':   return PhosphorIcons.creditCard();
-      case 'new_plan':    return PhosphorIcons.wifiHigh();
-      case 'kyc':         return PhosphorIcons.identificationCard();
-      case 'outstanding': return PhosphorIcons.clockClockwise();
-      case 'my_bills':    return PhosphorIcons.clipboardText();
-      default:            return PhosphorIcons.plus();
+      case 'pay_bills':   return 'assets/images/pay_bills.png';
+      case 'new_plan':    return 'assets/images/new_plan.png';
+      case 'kyc':         return 'assets/images/KYC_icon.png';
+      case 'outstanding': return 'assets/images/outstanding_icon.png';
+      case 'my_bills':    return 'assets/images/my_bills.png';
+      default:            return 'assets/images/pay_bills.png';
     }
   }
 
@@ -412,18 +416,20 @@ class _ManageServicesCard extends StatelessWidget {
         ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Manage Services',
-            style: TextStyle(
-                fontSize:   17,
-                fontWeight: FontWeight.w700,
-                color:      AppColors.textDark)),
+        const Text(
+          'Manage Services',
+          style: TextStyle(
+              fontSize:   17,
+              fontWeight: FontWeight.w700,
+              color:      AppColors.textDark),
+        ),
         const SizedBox(height: 20),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: services
               .take(4)
               .map((s) => _ServiceItem(
-            icon:            _getIcon(s['icon']!),
+            imageAsset:      _getImageAsset(s['icon']!),
             label:           s['label']!,
             screenContext:   context,
             onNavigateToPay: onNavigateToPay,
@@ -438,9 +444,9 @@ class _ManageServicesCard extends StatelessWidget {
             children: services
                 .skip(4)
                 .map((s) => Padding(
-              padding: const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.only(right: 24),
               child: _ServiceItem(
-                icon:            _getIcon(s['icon']!),
+                imageAsset:      _getImageAsset(s['icon']!),
                 label:           s['label']!,
                 screenContext:   context,
                 onNavigateToPay: onNavigateToPay,
@@ -456,16 +462,18 @@ class _ManageServicesCard extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _ServiceItem extends StatelessWidget {
-  final dynamic icon;
-  final String    label;
-  final BuildContext screenContext;
+  final String        imageAsset;
+  final String        label;
+  final BuildContext  screenContext;
   final VoidCallback?  onNavigateToPay;
   final VoidCallback?  onKycTap;
   final HomeViewModel? homeViewModel;
 
   const _ServiceItem({
-    required this.icon,
+    required this.imageAsset,
     required this.label,
     required this.screenContext,
     this.onNavigateToPay,
@@ -507,19 +515,20 @@ class _ServiceItem extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(
-          width:  44,
-          height: 44,
-          decoration: BoxDecoration(
-            color:  Colors.white,
-            shape:  BoxShape.circle,
-            border: Border.all(
-                color: AppColors.borderColor, width: 1.5),
+          width:  55,
+          height: 55,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
           ),
-          child: PhosphorIcon(icon, color: AppColors.textDark, size: 20),
+          padding: const EdgeInsets.all(4),
+          child: Image.asset(
+            imageAsset,
+            fit: BoxFit.contain,
+          ),
         ),
         const SizedBox(height: 8),
         SizedBox(
-          width: 64,
+          width: 72,
           child: Text(
             label,
             textAlign: TextAlign.center,
@@ -530,6 +539,7 @@ class _ServiceItem extends StatelessWidget {
               height:     1.3,
             ),
             maxLines: 2,
+            overflow: TextOverflow.visible,
           ),
         ),
       ]),

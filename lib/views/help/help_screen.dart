@@ -36,7 +36,6 @@ class _HelpScreenState extends State<HelpScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Show back button only when pushed on top of another route
     final canPop = Navigator.canPop(context);
 
     return Scaffold(
@@ -45,7 +44,6 @@ class _HelpScreenState extends State<HelpScreen> {
         backgroundColor: AppColors.primary,
         title: const Text('Help'),
         centerTitle: true,
-        // Never auto-imply — we manage the leading widget ourselves
         automaticallyImplyLeading: false,
         leading: canPop
             ? IconButton(
@@ -89,9 +87,13 @@ class _HelpScreenState extends State<HelpScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.error_outline_rounded,
-                        color: AppColors.textLight, size: 48),
-                    const SizedBox(height: 12),
+                    Image.asset(
+                      'assets/images/no_ticket.png',
+                      width: 160,
+                      height: 160,
+                      fit: BoxFit.contain,
+                    ),
+                    const SizedBox(height: 20),
                     Text(vm.listError!,
                         textAlign: TextAlign.center,
                         style: const TextStyle(color: AppColors.textLight)),
@@ -240,59 +242,29 @@ class _EmptyTickets extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 120, height: 120,
-                decoration: BoxDecoration(
-                    color: Colors.red.shade50, shape: BoxShape.circle),
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Container(
-                      width: 80, height: 80,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.red.shade200),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.close, color: Colors.red.shade300, size: 18),
-                          Icon(Icons.close, color: Colors.red.shade300, size: 18),
-                          const SizedBox(height: 4),
-                          Icon(Icons.sentiment_dissatisfied,
-                              color: Colors.red.shade300, size: 20),
-                        ],
-                      ),
-                    ),
-                    Positioned(
-                      top: 8, left: 10,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.red.shade200),
-                        ),
-                        child: Icon(Icons.close,
-                            size: 12, color: Colors.red.shade400),
-                      ),
-                    ),
-                  ],
-                ),
+              // ── Replaced vector art with PNG asset ──────────────────────
+              Image.asset(
+                'assets/images/no_ticket.png',
+                width:  160,
+                height: 160,
+                fit: BoxFit.contain,
               ),
               const SizedBox(height: 28),
-              const Text('No Help Tickets Available',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textDark)),
+              const Text(
+                'No Help Tickets Available',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize:   18,
+                    fontWeight: FontWeight.w700,
+                    color:      AppColors.textDark),
+              ),
               const SizedBox(height: 12),
-              const Text("You don't have any open support\nrequests right now.",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      fontSize: 13, color: AppColors.textGrey, height: 1.5)),
+              const Text(
+                "You don't have any open support\nrequests right now.",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 13, color: AppColors.textGrey, height: 1.5),
+              ),
               const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,
@@ -305,11 +277,13 @@ class _EmptyTickets extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12)),
                     elevation: 0,
                   ),
-                  child: const Text('Create Ticket',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15)),
+                  child: const Text(
+                    'Create Ticket',
+                    style: TextStyle(
+                        color:      Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize:   15),
+                  ),
                 ),
               ),
             ],

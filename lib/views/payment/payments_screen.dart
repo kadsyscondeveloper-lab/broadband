@@ -81,18 +81,31 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
               )
             else if (_error != null)
               SliverFillRemaining(
-                child: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  PhosphorIcon(PhosphorIcons.warningCircle(), size: 48, color: AppColors.textLight),
-                  const SizedBox(height: 12),
-                  Text(_error!, style: const TextStyle(color: AppColors.textGrey),
-                      textAlign: TextAlign.center),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: _load,
-                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-                    child: const Text('Retry', style: TextStyle(color: Colors.white)),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // ── no_transactions.png for error state ────────────
+                      Image.asset(
+                        'assets/images/no_transactions.png',
+                        width: 160, height: 160,
+                        fit: BoxFit.contain,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(_error!,
+                          style: const TextStyle(color: AppColors.textGrey),
+                          textAlign: TextAlign.center),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _load,
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary),
+                        child: const Text('Retry',
+                            style: TextStyle(color: Colors.white)),
+                      ),
+                    ],
                   ),
-                ])),
+                ),
               )
             else if (_transactions.isEmpty)
                 const SliverFillRemaining(child: _EmptyState())
@@ -125,7 +138,7 @@ class _TransactionCard extends StatelessWidget {
   const _TransactionCard({required this.tx});
 
   Color get _statusColor {
-    switch (tx.paymentStatus) {          // ← was tx.status
+    switch (tx.paymentStatus) {
       case 'success': return Colors.green;
       case 'failed':  return Colors.red;
       default:        return Colors.orange;
@@ -142,7 +155,7 @@ class _TransactionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final date = tx.createdAt;
+    final date    = tx.createdAt;
     final dateStr = '${date.day}/${date.month}/${date.year}';
     final timeStr = '${date.hour.toString().padLeft(2,'0')}:${date.minute.toString().padLeft(2,'0')}';
 
@@ -151,15 +164,16 @@ class _TransactionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top row: Icon + Details
           Row(
             children: [
-              // Icon
               Container(
                 width: 46, height: 46,
                 decoration: BoxDecoration(
@@ -169,14 +183,12 @@ class _TransactionCard extends StatelessWidget {
                 child: PhosphorIcon(_typeIcon, color: _statusColor, size: 22),
               ),
               const SizedBox(width: 12),
-
-              // Details (expanded to prevent overflow)
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      tx.planName ?? tx.description,   // ← was tx.planName ?? tx.note
+                      tx.planName ?? tx.description,
                       style: const TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 14,
@@ -188,15 +200,14 @@ class _TransactionCard extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       '$dateStr at $timeStr',
-                      style: const TextStyle(fontSize: 11, color: AppColors.textGrey),
+                      style: const TextStyle(
+                          fontSize: 11, color: AppColors.textGrey),
                     ),
                   ],
                 ),
               ),
             ],
           ),
-
-          // Amount (moved below, with proper spacing)
           Padding(
             padding: const EdgeInsets.only(top: 10, left: 58),
             child: Text(
@@ -208,8 +219,6 @@ class _TransactionCard extends StatelessWidget {
               ),
             ),
           ),
-
-          // Chips row (Status, Reference Type, Order Ref)
           Padding(
             padding: const EdgeInsets.only(top: 8, left: 58),
             child: Wrap(
@@ -233,7 +242,7 @@ class _TransactionCard extends StatelessWidget {
 
 class _Chip extends StatelessWidget {
   final String label;
-  final Color color;
+  final Color  color;
   const _Chip({required this.label, required this.color});
 
   @override
@@ -247,10 +256,7 @@ class _Chip extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          fontSize: 9,
-          color: color,
-          fontWeight: FontWeight.w600,
-        ),
+            fontSize: 9, color: color, fontWeight: FontWeight.w600),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
@@ -271,17 +277,27 @@ class _EmptyState extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 100, height: 100,
-            decoration: BoxDecoration(color: Colors.grey.shade100, shape: BoxShape.circle),
-            child: PhosphorIcon(PhosphorIcons.receipt(), size: 48, color: Colors.grey.shade300),
+          // ── no_transactions.png for empty state ────────────────────────
+          Image.asset(
+            'assets/images/no_transactions.png',
+            width:  160,
+            height: 160,
+            fit: BoxFit.contain,
           ),
           const SizedBox(height: 24),
-          const Text("No transactions yet",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textDark)),
+          const Text(
+            'No transactions yet',
+            style: TextStyle(
+                fontSize:   18,
+                fontWeight: FontWeight.w700,
+                color:      AppColors.textDark),
+          ),
           const SizedBox(height: 8),
-          const Text("Your plan purchases will appear here",
-              style: TextStyle(fontSize: 13, color: AppColors.textGrey), textAlign: TextAlign.center),
+          const Text(
+            'Your plan purchases will appear here',
+            style: TextStyle(fontSize: 13, color: AppColors.textGrey),
+            textAlign: TextAlign.center,
+          ),
         ]),
       ),
     );
