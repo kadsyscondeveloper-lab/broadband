@@ -38,7 +38,6 @@ class _SpeedonetAppState extends State<SpeedonetApp> {
     super.initState();
     _checkInitial();
 
-    // Continuously watch for connectivity changes
     Connectivity().onConnectivityChanged.listen((results) {
       final connected = results.any((r) => r != ConnectivityResult.none);
       if (mounted && connected != _hasInternet) {
@@ -61,14 +60,10 @@ class _SpeedonetAppState extends State<SpeedonetApp> {
       theme:                      AppTheme.theme,
       navigatorObservers:         [AtomSDK.navigatorObserver],
 
-      // ── builder wraps EVERY screen including dialogs, overlays, etc ──
       builder: (context, child) {
         return Stack(
           children: [
-            // Normal app underneath
             child ?? const SizedBox.shrink(),
-
-            // No-internet overlay on top of everything
             if (!_hasInternet)
               Positioned.fill(
                 child: _NoInternetOverlay(
@@ -97,7 +92,7 @@ class _SpeedonetAppState extends State<SpeedonetApp> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NO INTERNET OVERLAY — covers everything mid-app too
+// NO INTERNET OVERLAY
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _NoInternetOverlay extends StatelessWidget {
@@ -234,29 +229,14 @@ class _AuthGateState extends State<_AuthGate> {
 
   @override
   Widget build(BuildContext context) {
-    // ── Splash ───────────────────────────────────────────────────────────
+    // ── Splash — GIF fullscreen ───────────────────────────────────────────
     if (_isChecking) {
       return Scaffold(
-        backgroundColor: AppColors.primary,
-        body: const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.wifi, color: Colors.white, size: 64),
-              SizedBox(height: 24),
-              Text(
-                'Speedonet',
-                style: TextStyle(
-                  color:         Colors.white,
-                  fontSize:      28,
-                  fontWeight:    FontWeight.w900,
-                  letterSpacing: 1,
-                ),
-              ),
-              SizedBox(height: 40),
-              CircularProgressIndicator(
-                  color: Colors.white, strokeWidth: 2),
-            ],
+        backgroundColor: const Color(0xFFE31E24),
+        body: SizedBox.expand(
+          child: Image.asset(
+            'assets/images/loading_screen.gif',
+            fit: BoxFit.cover,
           ),
         ),
       );
