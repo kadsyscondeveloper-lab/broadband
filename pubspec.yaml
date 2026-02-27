@@ -26,6 +26,10 @@ dependencies:
   #no internet
   connectivity_plus: ^6.0.3
 
+
+  #svg
+  flutter_svg: ^2.0.10
+
   # Atom Pay official Flutter SDK (handles WebView, encryption, callbacks internally)
   ntt_atom_flutter: ^1.0.5
 

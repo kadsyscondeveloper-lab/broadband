@@ -31,19 +31,16 @@ class HelpViewModel extends ChangeNotifier {
   String  _subject     = '';
   String  _description = '';
 
-  // Attachment — stored as base64 + mime type
   String? _attachmentBase64;
   String? _attachmentMime;
-  String? _attachmentFileName; // display only
+  String? _attachmentFileName;
 
   String? get selectedCategory   => _selectedCategory;
   String  get subject            => _subject;
   String  get description        => _description;
   String? get attachmentFileName => _attachmentFileName;
   bool    get hasAttachment      => _attachmentBase64 != null;
-
-  // Keep compatible with existing create screen which uses attachmentPath for display
-  String? get attachmentPath => _attachmentFileName;
+  String? get attachmentPath     => _attachmentFileName;
 
   final List<String> categories = TicketService.categories;
 
@@ -67,9 +64,9 @@ class HelpViewModel extends ChangeNotifier {
     required String mime,
     required String fileName,
   }) {
-    _attachmentBase64    = base64;
-    _attachmentMime      = mime;
-    _attachmentFileName  = fileName;
+    _attachmentBase64   = base64;
+    _attachmentMime     = mime;
+    _attachmentFileName = fileName;
     notifyListeners();
   }
 
@@ -84,8 +81,11 @@ class HelpViewModel extends ChangeNotifier {
   SupportTicket? _selectedTicket;
   bool           _loadingDetail = false;
 
-  SupportTicket? get selectedTicket => _selectedTicket;
-  bool           get loadingDetail  => _loadingDetail;
+  SupportTicket? get selectedTicket  => _selectedTicket;
+  bool           get loadingDetail   => _loadingDetail;
+  // Alias so both spellings work (TicketDetailScreen uses loadingDetail,
+  // older code may use isLoadingDetail)
+  bool           get isLoadingDetail => _loadingDetail;
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
@@ -103,12 +103,28 @@ class HelpViewModel extends ChangeNotifier {
     }
   }
 
+  /// Loads the full ticket detail from the API and — crucially — syncs the
+  /// fresh status back into the list so the list card shows the correct value.
   Future<void> loadTicketDetail(int id) async {
     _loadingDetail  = true;
     _selectedTicket = null;
     notifyListeners();
+
     _selectedTicket = await _service.getTicket(id);
-    _loadingDetail  = false;
+
+    // ── FIX: sync updated status back into the list ───────────────────────
+    // The list was loaded earlier and may be stale (e.g. shows "Open" while
+    // the server has since changed it to "Closed"). Replace the matching
+    // entry so the chip is correct when the user navigates back.
+    if (_selectedTicket != null) {
+      final idx = _tickets.indexWhere((t) => t.id == id);
+      if (idx != -1) {
+        _tickets[idx] = _selectedTicket!;
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
+    _loadingDetail = false;
     notifyListeners();
   }
 

@@ -22,7 +22,7 @@ class TicketReply {
     required this.createdAt,
   });
 
-  bool get isAdmin => senderType == 'admin';
+  bool get isAdmin => senderType == 'admin' || senderType == 'agent';
 
   factory TicketReply.fromJson(Map<String, dynamic> j) => TicketReply(
     id:            int.tryParse(j['id'].toString()) ?? 0,
@@ -30,7 +30,7 @@ class TicketReply {
     senderType:    j['sender_type']    as String? ?? 'user',
     message:       j['message']        as String? ?? '',
     attachmentUrl: j['attachment_url'] as String?,
-    createdAt:     DateTime.tryParse(j['created_at'].toString()) ?? DateTime.now(),
+    createdAt:     DateTime.tryParse(j['created_at'].toString())?.toLocal() ?? DateTime.now(),
   );
 }
 
@@ -79,9 +79,11 @@ class SupportTicket {
         .toList(),
   );
 
-  bool get isOpen       => status == 'open';
-  bool get isInProgress => status == 'in_progress';
-  bool get isResolved   => status == 'resolved' || status == 'closed';
+  bool get isOpen       => status == 'open' || status == 'Open';
+  bool get isInProgress => status == 'in_progress' || status == 'In Progress';
+  bool get isResolved   =>
+      status == 'resolved' || status == 'closed' ||
+          status == 'Resolved'  || status == 'Closed';
 }
 
 class TicketResult {
@@ -89,6 +91,67 @@ class TicketResult {
   final String?        error;
   final SupportTicket? ticket;
   const TicketResult({required this.success, this.error, this.ticket});
+}
+
+// ── Chat models ───────────────────────────────────────────────────────────────
+
+class TicketMessage {
+  final int     id;
+  final int     senderId;
+  final String  senderType; // 'user' | 'agent'
+  final String  message;
+  final String? attachmentUrl;
+  final DateTime createdAt;
+
+  const TicketMessage({
+    required this.id,
+    required this.senderId,
+    required this.senderType,
+    required this.message,
+    this.attachmentUrl,
+    required this.createdAt,
+  });
+
+  bool get isFromUser  => senderType == 'user';
+  bool get isFromAgent => senderType == 'agent' || senderType == 'admin';
+
+  factory TicketMessage.fromJson(Map<String, dynamic> j) => TicketMessage(
+    id:            int.tryParse(j['id'].toString()) ?? 0,
+    senderId:      int.tryParse(j['sender_id'].toString()) ?? 0,
+    senderType:    j['sender_type']    as String? ?? 'user',
+    message:       j['message']        as String? ?? '',
+    attachmentUrl: j['attachment_url'] as String?,
+    createdAt:     DateTime.tryParse(j['created_at'].toString())?.toLocal() ?? DateTime.now(),
+  );
+}
+
+class TicketChatState {
+  final int    ticketId;
+  final String ticketNumber;
+  final String subject;
+  final String status;
+  final bool   isActive; // false when Resolved/Closed → disables input
+  final List<TicketMessage> messages;
+
+  const TicketChatState({
+    required this.ticketId,
+    required this.ticketNumber,
+    required this.subject,
+    required this.status,
+    required this.isActive,
+    required this.messages,
+  });
+
+  factory TicketChatState.fromJson(Map<String, dynamic> j) => TicketChatState(
+    ticketId:     int.tryParse(j['ticket_id'].toString()) ?? 0,
+    ticketNumber: j['ticket_number'] as String? ?? '',
+    subject:      j['subject']       as String? ?? '',
+    status:       j['status']        as String? ?? '',
+    isActive:     j['is_active']     as bool? ?? true,
+    messages: (j['messages'] as List<dynamic>? ?? [])
+        .map((m) => TicketMessage.fromJson(m as Map<String, dynamic>))
+        .toList(),
+  );
 }
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -100,7 +163,7 @@ class TicketService {
 
   final _api = ApiClient();
 
-  // ── Must stay in sync with backend VALID_CATEGORIES ──────────────────────
+  // Must stay in sync with backend VALID_CATEGORIES
   static const List<String> categories = [
     'Billing',
     'Technical Issue',
@@ -113,14 +176,15 @@ class TicketService {
     'Other',
   ];
 
-  // POST /tickets
+  // ── POST /tickets ─────────────────────────────────────────────────────────
+
   Future<TicketResult> createTicket({
     required String category,
     required String subject,
     required String description,
-    String  priority           = 'medium',
-    String? attachmentData,    // base64 string
-    String? attachmentMime,    // e.g. 'image/jpeg'
+    String  priority       = 'medium',
+    String? attachmentData,
+    String? attachmentMime,
   }) async {
     try {
       final res = await _api.post('/tickets', data: {
@@ -142,7 +206,8 @@ class TicketService {
     }
   }
 
-  // GET /tickets
+  // ── GET /tickets ──────────────────────────────────────────────────────────
+
   Future<List<SupportTicket>> getTickets({int page = 1, int limit = 10}) async {
     final res  = await _api.get('/tickets', params: {'page': page, 'limit': limit});
     final list = res.data['data']['tickets'] as List<dynamic>;
@@ -151,7 +216,8 @@ class TicketService {
         .toList();
   }
 
-  // GET /tickets/:id
+  // ── GET /tickets/:id ──────────────────────────────────────────────────────
+
   Future<SupportTicket?> getTicket(int id) async {
     try {
       final res = await _api.get('/tickets/$id');
@@ -160,5 +226,44 @@ class TicketService {
     } catch (_) {
       return null;
     }
+  }
+
+  // ── GET /tickets/:id/messages?after=<id>  (chat polling) ─────────────────
+  // Pass [afterId] to fetch only new messages since the last poll.
+
+  Future<TicketChatState?> getMessages(int ticketId, {int? afterId}) async {
+    try {
+      final params = <String, dynamic>{};
+      if (afterId != null) params['after'] = afterId;
+
+      final res = await _api.get(
+        '/tickets/$ticketId/messages',
+        params: params.isNotEmpty ? params : null,
+      );
+      return TicketChatState.fromJson(
+          res.data['data'] as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  // ── POST /tickets/:id/replies  (send a chat message) ─────────────────────
+
+  Future<TicketMessage> sendMessage(int ticketId, String message) async {
+    final res = await _api.post('/tickets/$ticketId/replies', data: {
+      'message': message,
+    });
+    final reply = res.data['data']['reply'] as Map<String, dynamic>;
+    return TicketMessage(
+      id: int.tryParse(reply['id'].toString()) ??
+          DateTime.now().millisecondsSinceEpoch,
+      senderId:   0,
+      senderType: 'user',
+      message:    message,
+      createdAt:  reply['created_at'] != null
+          ? DateTime.tryParse(reply['created_at'].toString())?.toLocal() ??
+          DateTime.now()
+          : DateTime.now(),
+    );
   }
 }

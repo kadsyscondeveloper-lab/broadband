@@ -25,13 +25,14 @@ class _HelpScreenState extends State<HelpScreen> {
     });
   }
 
-  void _openCreateTicket() {
-    Navigator.push(
+  Future<void> _openCreateTicket() async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => CreateTicketScreen(viewModel: widget.viewModel),
       ),
     );
+    if (mounted) widget.viewModel.loadTickets();
   }
 
   @override
@@ -123,15 +124,18 @@ class _HelpScreenState extends State<HelpScreen> {
             itemBuilder: (context, index) {
               final t = vm.tickets[index];
               return GestureDetector(
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => TicketDetailScreen(
-                      viewModel: vm,
-                      ticketId: t.id,
+                onTap: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => TicketDetailScreen(
+                        viewModel: vm,
+                        ticketId: t.id,
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                  if (context.mounted) vm.loadTickets();
+                },
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(16),
@@ -190,8 +194,9 @@ class _StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     Color bg, fg;
     String label;
-    switch (status) {
+    switch (status.toLowerCase()) {
       case 'in_progress':
+      case 'in progress':
         bg = Colors.orange.shade50; fg = Colors.orange.shade700; label = 'In Progress';
         break;
       case 'resolved':
@@ -199,6 +204,10 @@ class _StatusChip extends StatelessWidget {
         break;
       case 'closed':
         bg = Colors.grey.shade100;  fg = Colors.grey.shade700;   label = 'Closed';
+        break;
+      case 'awaiting user':
+      case 'awaiting_user':
+        bg = Colors.purple.shade50; fg = Colors.purple.shade700; label = 'Awaiting You';
         break;
       default:
         bg = Colors.blue.shade50;   fg = Colors.blue.shade700;   label = 'Open';

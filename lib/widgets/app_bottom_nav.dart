@@ -32,19 +32,19 @@ class AppBottomNav extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _NavItem(
-                icon: Icons.home_outlined,
-                activeIcon: Icons.home,
-                label: 'Home',
+              _PngNavItem(
+                pngOutline: 'assets/icons/bottom_navigation/house-blank.png',
+                pngFilled:  'assets/icons/bottom_navigation/house-blank_filled.png',
+                label:    'Home',
                 isActive: currentIndex == 0,
-                onTap: () => onTap(0),
+                onTap:    () => onTap(0),
               ),
-              _NavItem(
-                icon: Icons.receipt_long_outlined,
-                activeIcon: Icons.receipt_long,
-                label: 'Payments',
+              _PngNavItem(
+                pngOutline: 'assets/icons/bottom_navigation/receipt.png',
+                pngFilled:  'assets/icons/bottom_navigation/receipt_filled.png',
+                label:    'Payments',
                 isActive: currentIndex == 1,
-                onTap: () => onTap(1),
+                onTap:    () => onTap(1),
               ),
 
               // ── Center Glassmorphism Pay Button ──────────────────────────
@@ -56,7 +56,6 @@ class AppBottomNav extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Outer glow halo
                       Container(
                         width: 48,
                         height: 48,
@@ -109,7 +108,6 @@ class AppBottomNav extends StatelessWidget {
                                 child: Stack(
                                   alignment: Alignment.center,
                                   children: [
-                                    // Frosted inner highlight arc
                                     Positioned(
                                       top: 3,
                                       left: 5,
@@ -156,19 +154,19 @@ class AppBottomNav extends StatelessWidget {
                 ),
               ),
 
-              _NavItem(
-                icon: Icons.headset_mic_outlined,
-                activeIcon: Icons.headset_mic,
-                label: 'Help',
+              _PngNavItem(
+                pngOutline: 'assets/icons/bottom_navigation/support.png',
+                pngFilled:  'assets/icons/bottom_navigation/support_filled.png',
+                label:    'Help',
                 isActive: currentIndex == 3,
-                onTap: () => onTap(3),
+                onTap:    () => onTap(3),
               ),
-              _NavItem(
-                icon: Icons.person_outline,
-                activeIcon: Icons.person,
-                label: 'Profile',
+              _PngNavItem(
+                pngOutline: 'assets/icons/bottom_navigation/user.png',
+                pngFilled:  'assets/icons/bottom_navigation/user_filled.png',
+                label:    'Profile',
                 isActive: currentIndex == 4,
-                onTap: () => onTap(4),
+                onTap:    () => onTap(4),
               ),
             ],
           ),
@@ -178,16 +176,18 @@ class AppBottomNav extends StatelessWidget {
   }
 }
 
-class _NavItem extends StatelessWidget {
-  final IconData icon;
-  final IconData activeIcon;
+// ── PNG Nav Item ──────────────────────────────────────────────────────────────
+
+class _PngNavItem extends StatelessWidget {
+  final String pngOutline;
+  final String pngFilled;
   final String label;
   final bool isActive;
   final VoidCallback onTap;
 
-  const _NavItem({
-    required this.icon,
-    required this.activeIcon,
+  const _PngNavItem({
+    required this.pngOutline,
+    required this.pngFilled,
     required this.label,
     required this.isActive,
     required this.onTap,
@@ -202,10 +202,13 @@ class _NavItem extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              isActive ? activeIcon : icon,
-              color: isActive ? AppColors.primary : AppColors.textLight,
-              size: 22,
+            Image.asset(
+              isActive ? pngFilled : pngOutline,
+              width: 22,
+              height: 22,
+              // Tint inactive icons grey, active ones use their natural color
+              color: isActive ? null : AppColors.textLight,
+              colorBlendMode: isActive ? null : BlendMode.srcIn,
             ),
             const SizedBox(height: 2),
             Text(
