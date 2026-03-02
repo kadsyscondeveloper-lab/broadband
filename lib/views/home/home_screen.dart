@@ -517,29 +517,28 @@ class _ServiceItem extends StatelessWidget {
         Container(
           width:  55,
           height: 55,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-          ),
+          decoration: const BoxDecoration(shape: BoxShape.circle),
           padding: const EdgeInsets.all(4),
-          child: Image.asset(
-            imageAsset,
-            fit: BoxFit.contain,
-          ),
+          child: Image.asset(imageAsset, fit: BoxFit.contain),
         ),
         const SizedBox(height: 8),
+        // FIX: FittedBox shrinks the text to fit in one line when it's too
+        // long (e.g. "Outstanding"), preventing mid-word line breaks.
         SizedBox(
           width: 72,
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize:   11,
-              color:      AppColors.textDark,
-              fontWeight: FontWeight.w500,
-              height:     1.3,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize:   12,
+                color:      AppColors.textDark,
+                fontWeight: FontWeight.w500,
+                height:     1.3,
+              ),
+              maxLines: 2,
             ),
-            maxLines: 2,
-            overflow: TextOverflow.visible,
           ),
         ),
       ]),

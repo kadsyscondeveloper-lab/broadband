@@ -64,17 +64,21 @@ class AppDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Bottom nav bar (64px) + device safe area + a little breathing room.
+    // This ensures Logout scrolls fully above the nav bar on every device.
+    final bottomPadding = 64.0 + MediaQuery.of(context).padding.bottom + 16.0;
+
     final menuItems = [
       {'asset': 'assets/images/profile.png',                'label': 'Profile'},
-      {'asset': 'assets/images/new_plan.png',            'label': 'New Plans'},
-      {'asset': 'assets/images/pays.png',                'label': 'Pays'},
-      {'asset': 'assets/images/refer&earn.png',          'label': 'Refer & Earn'},
-      {'asset': 'assets/images/KYC_icon.png',            'label': 'KYC'},
-      {'asset': 'assets/images/transaction_history.png', 'label': 'Transaction History'},
-      {'asset': 'assets/images/supportandchat.png',      'label': 'Support/Chat'},
-      {'asset': 'assets/images/about.png',               'label': 'About Speedonet'},
-      {'asset': 'assets/images/change_password.png',     'label': 'Change Password'},
-      {'asset': 'assets/images/logout.png',              'label': 'Logout'},
+      {'asset': 'assets/images/new_plan.png',               'label': 'New Plans'},
+      {'asset': 'assets/images/pays.png',                   'label': 'Pays'},
+      {'asset': 'assets/images/refer&earn.png',             'label': 'Refer & Earn'},
+      {'asset': 'assets/images/KYC_icon.png',               'label': 'KYC'},
+      {'asset': 'assets/images/transaction_history.png',    'label': 'Transaction History'},
+      {'asset': 'assets/images/supportandchat.png',         'label': 'Support/Chat'},
+      {'asset': 'assets/images/about.png',                  'label': 'About Speedonet'},
+      {'asset': 'assets/images/change_password.png',        'label': 'Change Password'},
+      {'asset': 'assets/images/logout.png',                 'label': 'Logout'},
     ];
 
     return Drawer(
@@ -153,7 +157,11 @@ class AppDrawer extends StatelessWidget {
           // ── Menu items ───────────────────────────────────────────────────
           Expanded(
             child: ListView.separated(
-              padding: EdgeInsets.zero,
+              // ✅ FIX: bottom padding = nav bar height + safe area inset.
+              // The list content now ends well above the bottom nav so
+              // Logout is always fully visible and tappable when scrolled.
+              padding: EdgeInsets.only(bottom: bottomPadding),
+              physics: const BouncingScrollPhysics(),
               itemCount: menuItems.length,
               separatorBuilder: (_, __) => Divider(
                   height: 1,
@@ -170,7 +178,6 @@ class AppDrawer extends StatelessWidget {
                     child: Image.asset(
                       item['asset']!,
                       fit: BoxFit.contain,
-                      // tint logout icon red, others use natural color
                       color: isLogout ? AppColors.primary : null,
                     ),
                   ),

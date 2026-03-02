@@ -38,7 +38,6 @@ class _AppShellState extends State<AppShell> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _homeVM.loadProfile();
-      _payVM.loadBalance();
     });
     _profileVM.addListener(_onProfileVMChanged);
   }
@@ -90,7 +89,7 @@ class _AppShellState extends State<AppShell> {
           initialBalance:    _homeVM.walletBalance,
           onRechargeSuccess: (double newBalance) {
             _homeVM.loadProfile();
-            _payVM.loadBalance();
+            _payVM.refresh();
           },
         ),
       ),
