@@ -34,17 +34,45 @@ class PayViewModel extends ChangeNotifier {
 
         rechargeServices = List<Map<String, dynamic>>.from(
           (data['recharge'] as List? ?? []).map((s) => {
-            'icon':      s['icon']      as String,
-            'label':     s['label']     as String,
-            'providers': s['providers'] as List<dynamic>? ?? [],
+            'icon':      s['icon'] as String,
+            'label':     (s['label'] as String).replaceAll('\\n', '\n'),
+            // providers are now objects with name, icon_data, icon_mime
+            'providers': (s['providers'] as List<dynamic>? ?? []).map((p) {
+              if (p is Map) {
+                return {
+                  'name':      p['name'] as String? ?? '',
+                  'icon_data': p['icon_data'] as String?,
+                  'icon_mime': p['icon_mime'] as String?,
+                };
+              }
+              // Fallback for plain strings (old API response)
+              return {
+                'name':      p.toString(),
+                'icon_data': null,
+                'icon_mime': null,
+              };
+            }).toList(),
           }),
         );
 
         billPaymentServices = List<Map<String, dynamic>>.from(
           (data['bill_payment'] as List? ?? []).map((s) => {
-            'icon':      s['icon']      as String,
-            'label':     s['label']     as String,
-            'providers': s['providers'] as List<dynamic>? ?? [],
+            'icon':      s['icon'] as String,
+            'label':     (s['label'] as String).replaceAll('\\n', '\n'),
+            'providers': (s['providers'] as List<dynamic>? ?? []).map((p) {
+              if (p is Map) {
+                return {
+                  'name':      p['name'] as String? ?? '',
+                  'icon_data': p['icon_data'] as String?,
+                  'icon_mime': p['icon_mime'] as String?,
+                };
+              }
+              return {
+                'name':      p.toString(),
+                'icon_data': null,
+                'icon_mime': null,
+              };
+            }).toList(),
           }),
         );
       } else {
@@ -78,36 +106,36 @@ class PayViewModel extends ChangeNotifier {
   // Providers are empty — screen falls through to ServiceDetailScreen.
   void _applyFallback() {
     rechargeServices = const [
-      {'icon': 'mobile_recharge', 'label': 'Mobile\nRecharge',    'providers': <String>[]},
-      {'icon': 'broadband',       'label': 'Broadband\nPostpaid', 'providers': <String>[]},
-      {'icon': 'datacard',        'label': 'DataCard',            'providers': <String>[]},
-      {'icon': 'dth',             'label': 'Cable TV',            'providers': <String>[]},
+      {'icon': 'mobile_recharge', 'label': 'Mobile\nRecharge',    'providers': <Map<String, dynamic>>[]},
+      {'icon': 'broadband',       'label': 'Broadband\nPostpaid', 'providers': <Map<String, dynamic>>[]},
+      {'icon': 'datacard',        'label': 'DataCard',            'providers': <Map<String, dynamic>>[]},
+      {'icon': 'dth',             'label': 'Cable TV',            'providers': <Map<String, dynamic>>[]},
     ];
 
     billPaymentServices = const [
-      {'icon': 'electricity',        'label': 'Electricity',           'providers': <String>[]},
-      {'icon': 'gas',                'label': 'Gas',                   'providers': <String>[]},
-      {'icon': 'lpg_gas',            'label': 'LPG Gas',               'providers': <String>[]},
-      {'icon': 'water',              'label': 'Water',                 'providers': <String>[]},
-      {'icon': 'fastag',             'label': 'Fastag',                'providers': <String>[]},
-      {'icon': 'education',          'label': 'Education\nFees',       'providers': <String>[]},
-      {'icon': 'landline',           'label': 'Landline\nPostpaid',    'providers': <String>[]},
-      {'icon': 'credit_card',        'label': 'Credit Card',           'providers': <String>[]},
-      {'icon': 'municipal_services', 'label': 'Municipal\nServices',   'providers': <String>[]},
-      {'icon': 'municipal_taxes',    'label': 'Municipal\nTaxes',      'providers': <String>[]},
-      {'icon': 'loan',               'label': 'Loan\nRepayment',       'providers': <String>[]},
-      {'icon': 'insurance',          'label': 'Insurance',             'providers': <String>[]},
-      {'icon': 'life_insurance',     'label': 'Life\nInsurance',       'providers': <String>[]},
-      {'icon': 'health_insurance',   'label': 'Health\nInsurance',     'providers': <String>[]},
-      {'icon': 'hospital',           'label': 'Hospital',              'providers': <String>[]},
-      {'icon': 'hospital_pathology', 'label': 'Hospital &\nPathology', 'providers': <String>[]},
-      {'icon': 'housing_society',    'label': 'Housing\nSociety',      'providers': <String>[]},
-      {'icon': 'subscription',       'label': 'Subscription',          'providers': <String>[]},
-      {'icon': 'nps',                'label': 'NPS',                   'providers': <String>[]},
-      {'icon': 'rental',             'label': 'Rental',                'providers': <String>[]},
-      {'icon': 'ncmc',               'label': 'NCMC',                  'providers': <String>[]},
-      {'icon': 'meter',              'label': 'Meter',                 'providers': <String>[]},
-      {'icon': 'donate',             'label': 'Donate',                'providers': <String>[]},
+      {'icon': 'electricity',        'label': 'Electricity',           'providers': <Map<String, dynamic>>[]},
+      {'icon': 'gas',                'label': 'Gas',                   'providers': <Map<String, dynamic>>[]},
+      {'icon': 'lpg_gas',            'label': 'LPG Gas',               'providers': <Map<String, dynamic>>[]},
+      {'icon': 'water',              'label': 'Water',                 'providers': <Map<String, dynamic>>[]},
+      {'icon': 'fastag',             'label': 'Fastag',                'providers': <Map<String, dynamic>>[]},
+      {'icon': 'education',          'label': 'Education\nFees',       'providers': <Map<String, dynamic>>[]},
+      {'icon': 'landline',           'label': 'Landline\nPostpaid',    'providers': <Map<String, dynamic>>[]},
+      {'icon': 'credit_card',        'label': 'Credit Card',           'providers': <Map<String, dynamic>>[]},
+      {'icon': 'municipal_services', 'label': 'Municipal\nServices',   'providers': <Map<String, dynamic>>[]},
+      {'icon': 'municipal_taxes',    'label': 'Municipal\nTaxes',      'providers': <Map<String, dynamic>>[]},
+      {'icon': 'loan',               'label': 'Loan\nRepayment',       'providers': <Map<String, dynamic>>[]},
+      {'icon': 'insurance',          'label': 'Insurance',             'providers': <Map<String, dynamic>>[]},
+      {'icon': 'life_insurance',     'label': 'Life\nInsurance',       'providers': <Map<String, dynamic>>[]},
+      {'icon': 'health_insurance',   'label': 'Health\nInsurance',     'providers': <Map<String, dynamic>>[]},
+      {'icon': 'hospital',           'label': 'Hospital',              'providers': <Map<String, dynamic>>[]},
+      {'icon': 'hospital_pathology', 'label': 'Hospital &\nPathology', 'providers': <Map<String, dynamic>>[]},
+      {'icon': 'housing_society',    'label': 'Housing\nSociety',      'providers': <Map<String, dynamic>>[]},
+      {'icon': 'subscription',       'label': 'Subscription',          'providers': <Map<String, dynamic>>[]},
+      {'icon': 'nps',                'label': 'NPS',                   'providers': <Map<String, dynamic>>[]},
+      {'icon': 'rental',             'label': 'Rental',                'providers': <Map<String, dynamic>>[]},
+      {'icon': 'ncmc',               'label': 'NCMC',                  'providers': <Map<String, dynamic>>[]},
+      {'icon': 'meter',              'label': 'Meter',                 'providers': <Map<String, dynamic>>[]},
+      {'icon': 'donate',             'label': 'Donate',                'providers': <Map<String, dynamic>>[]},
     ];
   }
 }

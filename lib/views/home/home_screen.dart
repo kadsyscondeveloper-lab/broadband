@@ -22,6 +22,7 @@ import '../profile/change_password_screen.dart';
 import '../help/help_screen.dart';
 import '../../viewmodels/help_viewmodel.dart';
 import '../plans/plans_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -576,6 +577,11 @@ class _SpeedoCards extends StatelessWidget {
 class _SpeedoCard extends StatelessWidget {
   final String title, titleSuffix, subtitle;
   final bool isTv;
+
+  // Replace these with your actual Play Store package names
+  static const _primePacakge = 'com.speedoprime';
+  static const _tvPackage    = 'com.speedotv';
+
   const _SpeedoCard({
     required this.title,
     required this.titleSuffix,
@@ -583,47 +589,69 @@ class _SpeedoCard extends StatelessWidget {
     required this.subtitle,
   });
 
+  Future<void> _launch() async {
+    final package   = isTv ? _tvPackage : _primePacakge;
+    final appUri    = Uri.parse('android-app://$package');
+    final storeUri  = Uri.parse('https://play.google.com/store/apps/details?id=$package');
+
+    // Try opening the app directly first, fall back to Play Store
+    if (await canLaunchUrl(appUri)) {
+      await launchUrl(appUri);
+    } else {
+      await launchUrl(storeUri, mode: LaunchMode.externalApplication);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      constraints: const BoxConstraints(minHeight: 180),
-      decoration: BoxDecoration(
-        color:        AppColors.cardBg,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
+    return GestureDetector(        // ← wrap with GestureDetector
+      onTap: _launch,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        constraints: const BoxConstraints(minHeight: 180),
+        decoration: BoxDecoration(
+          color:        AppColors.cardBg,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
               color:      Colors.black.withOpacity(0.05),
               blurRadius: 8,
-              offset:     const Offset(0, 2))
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Image.asset(
-            isTv ? 'assets/images/speedo_tv.png' : 'assets/images/speedo_prime.png',
-            width: 140,
-            height: 50,
-            fit: BoxFit.contain,
-          ),
-          const SizedBox(height: 8),
-          Text(subtitle,
+              offset:     const Offset(0, 2),
+            )
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset(
+              isTv ? 'assets/images/speedo_tv.png' : 'assets/images/speedo_prime.png',
+              width: 140, height: 50,
+              fit: BoxFit.contain,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
               maxLines: 2,
               style: const TextStyle(
-                  fontSize: 13, color: AppColors.textGrey, height: 1.4)),
-          const SizedBox(height: 8),
-          Row(children: [
-            const Text('Watch Now',
+                fontSize: 13, color: AppColors.textGrey, height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(children: [
+              const Text(
+                'Watch Now',
                 style: TextStyle(
-                    color:      AppColors.primary,
-                    fontWeight: FontWeight.w700,
-                    fontSize:   13)),
-            const SizedBox(width: 4),
-            AppIcon(AppIcons.arrowRight, size: 14, color: AppColors.primary),
-          ]),
-        ],
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(width: 4),
+              AppIcon(AppIcons.arrowRight, size: 14, color: AppColors.primary),
+            ]),
+          ],
+        ),
       ),
     );
   }

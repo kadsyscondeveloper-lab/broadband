@@ -11,29 +11,43 @@ class PayScreen extends StatelessWidget {
 
   const PayScreen({super.key, required this.viewModel});
 
-  // No more hardcoded _providerData — providers now come from the backend
-  // via viewModel.rechargeServices and viewModel.billPaymentServices,
-  // each of which includes a 'providers' list.
-
-  void _navigate(BuildContext context, String serviceLabel, List<String> providers) {
+  void _navigate(
+      BuildContext context,
+      String serviceLabel,
+      List<Map<String, dynamic>> providers,
+      ) {
     if (serviceLabel == 'Mobile\nRecharge' || serviceLabel == 'Mobile Recharge') {
-      Navigator.push(context,
-          MaterialPageRoute(builder: (_) => const MobileRechargeScreen()));
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => MobileRechargeScreen(providers: providers),
+        ),
+      );
       return;
     }
 
     final cleanType = serviceLabel.replaceAll('\n', ' ');
 
     if (providers.isNotEmpty) {
-      Navigator.push(context, MaterialPageRoute(
-        builder: (_) =>
-            ProviderListScreen(serviceType: cleanType, providers: providers),
-      ));
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ProviderListScreen(
+            serviceType: cleanType,
+            providers: providers,
+          ),
+        ),
+      );
     } else {
-      Navigator.push(context, MaterialPageRoute(
-        builder: (_) =>
-            ServiceDetailScreen(serviceType: cleanType, providerName: cleanType),
-      ));
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ServiceDetailScreen(
+            serviceType: cleanType,
+            providerName: cleanType,
+          ),
+        ),
+      );
     }
   }
 
@@ -102,58 +116,72 @@ class PayScreen extends StatelessWidget {
                       ),
                     ),
                     child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 10),
-                            decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(10)),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('BHARAT BILL PAYMENT',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 13,
-                                        letterSpacing: 0.5,
-                                        color: AppColors.textDark)),
-                                Image.asset(
-                                  'assets/images/bharat_connect.png',
-                                  height: 32,
-                                  fit: BoxFit.contain,
-                                  errorBuilder: (_, __, ___) => Row(children: [
-                                    Container(
-                                        width: 24,
-                                        height: 24,
-                                        decoration: const BoxDecoration(
-                                            color: Colors.orange,
-                                            shape: BoxShape.circle)),
-                                    const SizedBox(width: 4),
-                                    const Text('Bharat\nConnect',
-                                        style: TextStyle(
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w700,
-                                            color: Color(0xFF1565C0))),
-                                  ]),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'BHARAT BILL PAYMENT',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 13,
+                                  letterSpacing: 0.5,
+                                  color: AppColors.textDark,
                                 ),
-                              ],
-                            ),
+                              ),
+                              Image.asset(
+                                'assets/images/bharat_connect.png',
+                                height: 32,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => Row(
+                                  children: [
+                                    Container(
+                                      width: 24,
+                                      height: 24,
+                                      decoration: const BoxDecoration(
+                                        color: Colors.orange,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    const Text(
+                                      'Bharat\nConnect',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF1565C0),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 20),
-                          const Text('Current Balance',
-                              style: TextStyle(
-                                  color: Colors.white70, fontSize: 14)),
-                          const SizedBox(height: 6),
-                          Text(
-                            '₹${viewModel.currentBalance.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 36,
-                                fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 20),
+                        const Text(
+                          'Current Balance',
+                          style: TextStyle(color: Colors.white70, fontSize: 14),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '₹${viewModel.currentBalance.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 36,
+                            fontWeight: FontWeight.w800,
                           ),
-                        ]),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
 
@@ -161,15 +189,13 @@ class PayScreen extends StatelessWidget {
                 if (viewModel.isLoading)
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding:
-                      EdgeInsets.fromLTRB(16, 20, 16, bottomNavHeight + 8),
+                      padding: EdgeInsets.fromLTRB(16, 20, 16, bottomNavHeight + 8),
                       child: const _ServicesSkeleton(),
                     ),
                   ),
 
                 // ── Recharge section ────────────────────────────────────────
-                if (!viewModel.isLoading &&
-                    viewModel.rechargeServices.isNotEmpty)
+                if (!viewModel.isLoading && viewModel.rechargeServices.isNotEmpty)
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
@@ -184,12 +210,10 @@ class PayScreen extends StatelessWidget {
                   ),
 
                 // ── Bill Payment section ────────────────────────────────────
-                if (!viewModel.isLoading &&
-                    viewModel.billPaymentServices.isNotEmpty)
+                if (!viewModel.isLoading && viewModel.billPaymentServices.isNotEmpty)
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                          16, 16, 16, bottomNavHeight + 8),
+                      padding: EdgeInsets.fromLTRB(16, 16, 16, bottomNavHeight + 8),
                       child: _ServiceSection(
                         title:    'Bill Payment',
                         services: viewModel.billPaymentServices,
@@ -244,11 +268,13 @@ class _ServicesSkeletonState extends State<_ServicesSkeleton>
       animation: _anim,
       builder: (_, __) => Opacity(
         opacity: _anim.value,
-        child: Column(children: [
-          _box(200),
-          const SizedBox(height: 16),
-          _box(380),
-        ]),
+        child: Column(
+          children: [
+            _box(200),
+            const SizedBox(height: 16),
+            _box(380),
+          ],
+        ),
       ),
     );
   }
@@ -270,8 +296,7 @@ class _ServiceSection extends StatelessWidget {
   final String title;
   final List<Map<String, dynamic>> services;
   final IconData Function(String) getIcon;
-  // Now passes both label AND providers list to the tap handler
-  final void Function(String label, List<String> providers) onTap;
+  final void Function(String label, List<Map<String, dynamic>> providers) onTap;
 
   const _ServiceSection({
     required this.title,
@@ -300,21 +325,33 @@ class _ServiceSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textDark)),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textDark,
+            ),
+          ),
           const SizedBox(height: 16),
           Wrap(
             spacing:    0,
             runSpacing: 16,
             children: services.map((s) {
-              final label     = s['label']     as String;
-              final icon      = s['icon']      as String;
-              // providers is List<dynamic> from JSON decode — cast to List<String>
+              final label = s['label'] as String;
+              final icon  = s['icon']  as String;
+
+              // Providers are now List<Map<String, dynamic>>
               final providers = (s['providers'] as List<dynamic>? ?? [])
-                  .map((p) => p.toString())
+                  .map((p) {
+                if (p is Map<String, dynamic>) return p;
+                // Fallback: plain string from old API or cache
+                return <String, dynamic>{
+                  'name':      p.toString(),
+                  'icon_data': null,
+                  'icon_mime': null,
+                };
+              })
                   .toList();
 
               return SizedBox(
@@ -332,8 +369,11 @@ class _ServiceSection extends StatelessWidget {
                           color: Color(0xFFEEEEF5),
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(getIcon(icon),
-                            color: const Color(0xFF3D4066), size: 22),
+                        child: Icon(
+                          getIcon(icon),
+                          color: const Color(0xFF3D4066),
+                          size: 22,
+                        ),
                       ),
                       const SizedBox(height: 6),
                       Text(
