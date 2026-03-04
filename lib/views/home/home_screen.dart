@@ -57,6 +57,20 @@ class _HomeScreenState extends State<HomeScreen> {
     widget.viewModel.refreshKycStatus();
   }
 
+  /// Navigate to ReferEarnScreen, passing real referral data from the ViewModel.
+  void _openReferEarn() {
+    final vm = widget.viewModel;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReferEarnScreen(
+          referralCode: vm.referralCode,   // ← real code from HomeViewModel
+          referralUrl:  vm.referralUrl,    // ← real URL  from HomeViewModel
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final vm           = widget.viewModel;
@@ -93,8 +107,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 widget.onNavigateToPay?.call();
                 break;
               case 'Refer & Earn':
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const ReferEarnScreen()));
+              // ── FIX 1: pass real referral data from vm ────────────────
+                _openReferEarn();
+                // ─────────────────────────────────────────────────────────
                 break;
               case 'KYC':
                 _openKyc();
@@ -219,10 +234,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 16),
 
                       // 5. Features / Refer & Earn
+                      // ── FIX 2: pass onReferTap so the slide uses real data
                       _FeaturesSection(
                         currentIndex: vm.featureBannerIndex,
                         onPageChanged: vm.onFeatureBannerPageChanged,
+                        onReferTap: _openReferEarn,
                       ),
+                      // ─────────────────────────────────────────────────
                       const SizedBox(height: 24),
                       const _FooterText(),
                     ],
@@ -373,10 +391,6 @@ class _RejectedBanner extends StatelessWidget {
 // MANAGE SERVICES
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MANAGE SERVICES  — replace the existing _ManageServicesCard & _ServiceItem
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _ManageServicesCard extends StatelessWidget {
   final List<Map<String, String>> services;
   final VoidCallback?  onNavigateToPay;
@@ -463,8 +477,6 @@ class _ManageServicesCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _ServiceItem extends StatelessWidget {
   final String        imageAsset;
   final String        label;
@@ -523,8 +535,6 @@ class _ServiceItem extends StatelessWidget {
           child: Image.asset(imageAsset, fit: BoxFit.contain),
         ),
         const SizedBox(height: 8),
-        // FIX: FittedBox shrinks the text to fit in one line when it's too
-        // long (e.g. "Outstanding"), preventing mid-word line breaks.
         SizedBox(
           width: 72,
           child: FittedBox(
@@ -578,7 +588,6 @@ class _SpeedoCard extends StatelessWidget {
   final String title, titleSuffix, subtitle;
   final bool isTv;
 
-  // Replace these with your actual Play Store package names
   static const _primePacakge = 'com.speedoprime';
   static const _tvPackage    = 'com.speedotv';
 
@@ -594,7 +603,6 @@ class _SpeedoCard extends StatelessWidget {
     final appUri    = Uri.parse('android-app://$package');
     final storeUri  = Uri.parse('https://play.google.com/store/apps/details?id=$package');
 
-    // Try opening the app directly first, fall back to Play Store
     if (await canLaunchUrl(appUri)) {
       await launchUrl(appUri);
     } else {
@@ -604,7 +612,7 @@ class _SpeedoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(        // ← wrap with GestureDetector
+    return GestureDetector(
       onTap: _launch,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -658,12 +666,7 @@ class _SpeedoCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROMO BANNER (Auto-Scrolling Carousel from Backend)
-// Fixes:
-//   - Backend Buffer → base64 conversion (done in carousels.js)
-//   - Pre-decodes base64 → Uint8List once so PageView never stalls
-//   - Shows shimmer while loading instead of disappearing
-//   - Auto-scroll timer only starts after images are ready
+// PROMO BANNER
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PromoBanner extends StatefulWidget {
@@ -682,7 +685,6 @@ class _PromoBanner extends StatefulWidget {
 }
 
 class _PromoBannerState extends State<_PromoBanner> {
-  /// Each entry holds pre-decoded image bytes + metadata
   List<Map<String, dynamic>> _items = [];
   bool _loading = true;
   late final PageController _pageController;
@@ -705,7 +707,6 @@ class _PromoBannerState extends State<_PromoBanner> {
     try {
       final raw = await widget.viewModel!.getCarousels();
 
-      // Decode base64 → Uint8List up front so Image.memory never stalls
       final items = <Map<String, dynamic>>[];
       for (final c in raw) {
         final url = (c['image_url'] as String?) ?? '';
@@ -716,9 +717,7 @@ class _PromoBannerState extends State<_PromoBanner> {
             if (comma != -1) {
               bytes = base64Decode(url.substring(comma + 1));
             }
-          } catch (_) {
-            // corrupt data — skip this banner
-          }
+          } catch (_) {}
         }
         if (bytes != null) {
           items.add({
@@ -734,7 +733,6 @@ class _PromoBannerState extends State<_PromoBanner> {
           _items   = items;
           _loading = false;
         });
-        // Only start auto-scroll once we have more than one image
         if (_items.length > 1) _startAutoScroll();
       }
     } catch (e) {
@@ -765,7 +763,6 @@ class _PromoBannerState extends State<_PromoBanner> {
 
   @override
   Widget build(BuildContext context) {
-    // ── Shimmer placeholder while fetching ───────────────────────────────
     if (_loading) {
       return Container(
         height: 176,
@@ -786,10 +783,8 @@ class _PromoBannerState extends State<_PromoBanner> {
       );
     }
 
-    // ── No banners returned / all images corrupt ──────────────────────────
     if (_items.isEmpty) return const SizedBox.shrink();
 
-    // ── Carousel ─────────────────────────────────────────────────────────
     return Container(
       decoration: BoxDecoration(
         color:        AppColors.cardBg,
@@ -832,7 +827,6 @@ class _PromoBannerState extends State<_PromoBanner> {
           ),
         ),
 
-        // Dot indicators — only shown when more than one banner
         if (_items.length > 1)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 10),
@@ -860,9 +854,6 @@ class _PromoBannerState extends State<_PromoBanner> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Shimmer placeholder for the banner while images load
-// ─────────────────────────────────────────────────────────────────────────────
 class _BannerShimmer extends StatefulWidget {
   const _BannerShimmer();
   @override
@@ -914,13 +905,20 @@ class _BannerShimmerState extends State<_BannerShimmer>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FEATURES SECTION
+// ── FIX: accepts onReferTap so the slide can use the real referral data
+//    without needing direct access to HomeViewModel.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _FeaturesSection extends StatefulWidget {
-  final int currentIndex;
+  final int          currentIndex;
   final Function(int) onPageChanged;
-  const _FeaturesSection(
-      {required this.currentIndex, required this.onPageChanged});
+  final VoidCallback  onReferTap; // ← NEW
+
+  const _FeaturesSection({
+    required this.currentIndex,
+    required this.onPageChanged,
+    required this.onReferTap,   // ← NEW
+  });
 
   @override
   State<_FeaturesSection> createState() => _FeaturesSectionState();
@@ -993,10 +991,9 @@ class _FeaturesSectionState extends State<_FeaturesSection> {
                 title:       'More Refer More Rewards',
                 subtitle:    'Refer your friend and win exciting prizes!',
                 buttonLabel: 'Refer Now',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ReferEarnScreen()),
-                ),
+                // ── FIX 2: use the callback that carries real data ────────
+                onTap: widget.onReferTap,
+                // ─────────────────────────────────────────────────────────
               ),
               _FeatureSlide(
                 imagePath:   'assets/images/support.png',

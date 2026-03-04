@@ -182,7 +182,8 @@ class _PlansScreenState extends State<PlansScreen>
               if (_vm.isLoading)
                 const SliverFillRemaining(
                   child: Center(
-                      child: CircularProgressIndicator(color: AppColors.primary)),
+                      child: CircularProgressIndicator(
+                          color: AppColors.primary)),
                 )
               else if (_vm.error != null)
                 SliverFillRemaining(
@@ -194,7 +195,8 @@ class _PlansScreenState extends State<PlansScreen>
                               size: 48, color: AppColors.textLight),
                           const SizedBox(height: 12),
                           Text(_vm.error!,
-                              style: const TextStyle(color: AppColors.textGrey)),
+                              style: const TextStyle(
+                                  color: AppColors.textGrey)),
                           const SizedBox(height: 16),
                           ElevatedButton(
                             onPressed: _vm.load,
@@ -258,23 +260,27 @@ class _ActiveSubBanner extends StatelessWidget {
         const Icon(Icons.check_circle_rounded, color: Colors.white, size: 28),
         const SizedBox(width: 12),
         Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(sub.planName,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14)),
-            const SizedBox(height: 2),
-            Text(
-              sub.isExpiringSoon
-                  ? '⚠️ Expires in ${sub.daysRemaining} days'
-                  : 'Active · ${sub.daysRemaining} days left',
-              style: TextStyle(
-                color: sub.isExpiringSoon ? Colors.amber : Colors.white70,
-                fontSize: 12,
-              ),
-            ),
-          ]),
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(sub.planName,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14)),
+                const SizedBox(height: 2),
+                Text(
+                  sub.isExpiringSoon
+                      ? '⚠️ Expires in ${sub.daysRemaining} days'
+                      : 'Active · ${sub.daysRemaining} days left',
+                  style: TextStyle(
+                    color: sub.isExpiringSoon
+                        ? Colors.amber
+                        : Colors.white70,
+                    fontSize: 12,
+                  ),
+                ),
+              ]),
         ),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Text('${sub.speedMbps} Mbps',
@@ -308,8 +314,8 @@ class _PlanList extends StatelessWidget {
   Widget build(BuildContext context) {
     if (plans.isEmpty) {
       return const Center(
-        child:
-        Text('No plans available', style: TextStyle(color: AppColors.textGrey)),
+        child: Text('No plans available',
+            style: TextStyle(color: AppColors.textGrey)),
       );
     }
     return ListView.separated(
@@ -418,9 +424,7 @@ class _PlanCard extends StatelessWidget {
                             color: AppColors.textDark)),
                     const SizedBox(height: 4),
                     Row(children: [
-                      _Tag(
-                          icon: Icons.data_usage,
-                          label: plan.dataLabel),
+                      _Tag(icon: Icons.data_usage, label: plan.dataLabel),
                       const SizedBox(width: 8),
                       _Tag(
                           icon: Icons.calendar_today_outlined,
@@ -504,14 +508,13 @@ class _Tag extends StatelessWidget {
       Icon(icon, size: 11, color: AppColors.textGrey),
       const SizedBox(width: 3),
       Text(label,
-          style:
-          const TextStyle(fontSize: 11, color: AppColors.textGrey)),
+          style: const TextStyle(fontSize: 11, color: AppColors.textGrey)),
     ]);
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PURCHASE SHEET  ← the key update
+// PURCHASE SHEET
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PurchaseSheet extends StatefulWidget {
@@ -533,10 +536,18 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
   bool   _loading = false;
 
   // Coupon state
-  bool                     _couponLoading = false;
-  CouponValidationResult?  _couponResult;
-  String?                  _couponError;
-  bool                     _couponApplied = false;
+  bool                    _couponLoading = false;
+  CouponValidationResult? _couponResult;
+  String?                 _couponError;
+  bool                    _couponApplied = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // ── FIX: listen to controller so Apply button rebuilds as user types ──
+    _couponController.addListener(() => setState(() {}));
+    // ─────────────────────────────────────────────────────────────────────
+  }
 
   @override
   void dispose() {
@@ -589,15 +600,13 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
     if (_couponApplied && _couponResult != null) {
       return _couponResult!.finalTotal;
     }
-    // base + 18% GST
     final base = widget.plan.price;
     final gst  = base * 0.18;
     return double.parse((base + gst).toStringAsFixed(2));
   }
 
-  double get _gstAmount {
-    return double.parse((widget.plan.price * 0.18).toStringAsFixed(2));
-  }
+  double get _gstAmount =>
+      double.parse((widget.plan.price * 0.18).toStringAsFixed(2));
 
   @override
   Widget build(BuildContext context) {
@@ -605,7 +614,6 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
     final baseAmt = plan.price;
 
     return Padding(
-      // Keeps the sheet above the keyboard
       padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
@@ -690,11 +698,13 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                     textCapitalization: TextCapitalization.characters,
                     onSubmitted: (_) => _applyCoupon(),
                     decoration: InputDecoration(
-                      hintText:    'Enter coupon code',
-                      hintStyle:   const TextStyle(
+                      hintText:   'Enter coupon code',
+                      hintStyle:  const TextStyle(
                           color: AppColors.textLight, fontSize: 14),
-                      prefixIcon:  const Icon(Icons.local_offer_outlined,
-                          color: AppColors.textGrey, size: 20),
+                      prefixIcon: const Icon(
+                          Icons.local_offer_outlined,
+                          color: AppColors.textGrey,
+                          size: 20),
                       suffixIcon: _couponApplied
                           ? GestureDetector(
                         onTap: _removeCoupon,
@@ -702,14 +712,14 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                             color: AppColors.textGrey, size: 18),
                       )
                           : null,
-                      filled:     true,
-                      fillColor:  _couponApplied
+                      filled:    true,
+                      fillColor: _couponApplied
                           ? const Color(0xFFE8F5E9)
                           : AppColors.white,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide:
-                        const BorderSide(color: AppColors.borderColor),
+                        borderSide: const BorderSide(
+                            color: AppColors.borderColor),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
@@ -719,7 +729,8 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                               : _couponError != null
                               ? Colors.red
                               : AppColors.borderColor,
-                          width: _couponApplied || _couponError != null
+                          width:
+                          _couponApplied || _couponError != null
                               ? 1.5
                               : 1,
                         ),
@@ -742,52 +753,54 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                _couponLoading
-                    ? const SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: Center(
-                    child: SizedBox(
-                      width: 22, height: 22,
-                      child: CircularProgressIndicator(
-                          color: AppColors.primary, strokeWidth: 2.5),
+
+                // ── Apply / loading / applied indicator ──────────────────
+                if (_couponLoading)
+                  const SizedBox(
+                    width: 48, height: 48,
+                    child: Center(
+                      child: SizedBox(
+                        width: 22, height: 22,
+                        child: CircularProgressIndicator(
+                            color: AppColors.primary, strokeWidth: 2.5),
+                      ),
+                    ),
+                  )
+                else if (_couponApplied)
+                  Container(
+                    width: 48, height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.green),
+                    ),
+                    child: const Icon(Icons.check_rounded,
+                        color: Colors.green, size: 22),
+                  )
+                else
+                  SizedBox(
+                    width: 80, height: 48,
+                    child: ElevatedButton(
+                      // ── FIX: button is now enabled whenever text is present
+                      onPressed: _couponController.text.trim().isEmpty
+                          ? null
+                          : _applyCoupon,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        disabledBackgroundColor:
+                        AppColors.primary.withOpacity(0.4),
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        elevation: 0,
+                      ),
+                      child: const Text('Apply',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13)),
                     ),
                   ),
-                )
-                    : _couponApplied
-                    ? Container(
-                  width: 48, height: 48,
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade50,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.green),
-                  ),
-                  child: const Icon(Icons.check_rounded,
-                      color: Colors.green, size: 22),
-                )
-                    : SizedBox(
-                  width: 80,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: _couponController.text.trim().isEmpty
-                        ? null
-                        : _applyCoupon,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      disabledBackgroundColor:
-                      AppColors.primary.withOpacity(0.4),
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      elevation: 0,
-                    ),
-                    child: const Text('Apply',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13)),
-                  ),
-                ),
               ]),
 
               // Coupon feedback
@@ -812,7 +825,8 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                       size: 14, color: Colors.green),
                   const SizedBox(width: 4),
                   Text(
-                    '${_couponResult!.discountLabel} applied — you save ₹${_couponResult!.discountAmount.toStringAsFixed(2)}',
+                    '${_couponResult!.discountLabel} applied — '
+                        'you save ₹${_couponResult!.discountAmount.toStringAsFixed(2)}',
                     style: const TextStyle(
                         fontSize: 12,
                         color: Colors.green,
@@ -842,9 +856,11 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(children: [
-                  _AmountRow('Plan price', '₹${baseAmt.toStringAsFixed(2)}'),
+                  _AmountRow(
+                      'Plan price', '₹${baseAmt.toStringAsFixed(2)}'),
                   const SizedBox(height: 8),
-                  _AmountRow('GST (18%)', '₹${_gstAmount.toStringAsFixed(2)}'),
+                  _AmountRow(
+                      'GST (18%)', '₹${_gstAmount.toStringAsFixed(2)}'),
                   if (_couponApplied && _couponResult != null) ...[
                     const SizedBox(height: 8),
                     _AmountRow(
@@ -855,7 +871,8 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                   ],
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 10),
-                    child: Divider(height: 1, color: AppColors.borderColor),
+                    child: Divider(
+                        height: 1, color: AppColors.borderColor),
                   ),
                   Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -903,13 +920,16 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                     widget.onConfirm(
                       _mode,
                       _couponApplied
-                          ? _couponController.text.trim().toUpperCase()
+                          ? _couponController.text
+                          .trim()
+                          .toUpperCase()
                           : null,
                     );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    padding:
+                    const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
                     disabledBackgroundColor:
@@ -918,7 +938,8 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                   ),
                   child: _loading
                       ? const SizedBox(
-                      height: 20, width: 20,
+                      height: 20,
+                      width: 20,
                       child: CircularProgressIndicator(
                           color: Colors.white, strokeWidth: 2))
                       : Text(
@@ -938,11 +959,12 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
   }
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 class _AmountRow extends StatelessWidget {
   final String label;
   final String value;
   final Color  valueColor;
-
   const _AmountRow(this.label, this.value,
       {this.valueColor = AppColors.textDark});
 
@@ -963,8 +985,64 @@ class _AmountRow extends StatelessWidget {
   }
 }
 
+class _ModeOption extends StatelessWidget {
+  final String     value, selected, label;
+  final IconData   icon;
+  final VoidCallback onTap;
+
+  const _ModeOption({
+    required this.value,
+    required this.selected,
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = value == selected;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding:
+        const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.primary.withOpacity(0.06)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected
+                ? AppColors.primary
+                : AppColors.borderColor,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(children: [
+          Icon(icon,
+              color: isSelected
+                  ? AppColors.primary
+                  : AppColors.textLight,
+              size: 22),
+          const SizedBox(width: 12),
+          Text(label,
+              style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: isSelected
+                      ? AppColors.primary
+                      : AppColors.textDark)),
+          const Spacer(),
+          if (isSelected)
+            const Icon(Icons.check_circle,
+                color: AppColors.primary, size: 20),
+        ]),
+      ),
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// SUCCESS DIALOG — shows coupon savings if applied
+// SUCCESS DIALOG
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SuccessDialog extends StatelessWidget {
@@ -975,22 +1053,27 @@ class _SuccessDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final planName  = (result['plan'] as Map<String, dynamic>?)?['name'] ?? 'Plan';
+    final planName  =
+        (result['plan'] as Map<String, dynamic>?)?['name'] ?? 'Plan';
     final expiresAt = result['expires_at'] != null
         ? DateTime.tryParse(result['expires_at'].toString())
         : null;
     final startDate = result['start_date'] != null
         ? DateTime.tryParse(result['start_date'].toString())
         : null;
-    final isQueued  = startDate != null && startDate.isAfter(DateTime.now());
-    final discount  = (result['discount_applied'] as num?)?.toDouble() ?? 0;
-    final coupon    = result['coupon_code'] as String?;
+    final isQueued =
+        startDate != null && startDate.isAfter(DateTime.now());
+    final discount =
+        (result['discount_applied'] as num?)?.toDouble() ?? 0;
+    final coupon = result['coupon_code'] as String?;
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
+        child:
+        Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
             width: 72, height: 72,
             decoration: BoxDecoration(
@@ -1034,8 +1117,6 @@ class _SuccessDialog extends StatelessWidget {
               style: const TextStyle(
                   color: AppColors.textGrey, fontSize: 13),
             ),
-
-          // Savings badge
           if (discount > 0 && coupon != null) ...[
             const SizedBox(height: 14),
             Container(
@@ -1060,7 +1141,6 @@ class _SuccessDialog extends StatelessWidget {
               ]),
             ),
           ],
-
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
@@ -1068,7 +1148,8 @@ class _SuccessDialog extends StatelessWidget {
               onPressed: onDone,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding:
+                const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
@@ -1085,59 +1166,8 @@ class _SuccessDialog extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HELPERS
+// QUEUED SUB BANNER
 // ─────────────────────────────────────────────────────────────────────────────
-
-class _ModeOption extends StatelessWidget {
-  final String     value, selected, label;
-  final IconData   icon;
-  final VoidCallback onTap;
-
-  const _ModeOption({
-    required this.value, required this.selected,
-    required this.label, required this.icon, required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isSelected = value == selected;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding:
-        const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.primary.withOpacity(0.06)
-              : Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isSelected ? AppColors.primary : AppColors.borderColor,
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: Row(children: [
-          Icon(icon,
-              color: isSelected
-                  ? AppColors.primary
-                  : AppColors.textLight,
-              size: 22),
-          const SizedBox(width: 12),
-          Text(label,
-              style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: isSelected
-                      ? AppColors.primary
-                      : AppColors.textDark)),
-          const Spacer(),
-          if (isSelected)
-            const Icon(Icons.check_circle,
-                color: AppColors.primary, size: 20),
-        ]),
-      ),
-    );
-  }
-}
 
 class _QueuedSubBanner extends StatelessWidget {
   final ActiveSubscription sub;
@@ -1150,7 +1180,8 @@ class _QueuedSubBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.10),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.20)),
+        border:
+        Border.all(color: Colors.white.withOpacity(0.20)),
       ),
       child: Row(children: [
         const Icon(Icons.schedule_rounded,
