@@ -5,10 +5,7 @@ import '../../theme/app_theme.dart';
 import '../../viewmodels/signup_viewmodel.dart';
 
 class SignupScreen extends StatefulWidget {
-  /// Called when signup succeeds — navigate to AppShell from here.
   final VoidCallback onSignupSuccess;
-
-  /// Called when user taps "Already have an account? Login"
   final VoidCallback onNavigateToLogin;
 
   const SignupScreen({
@@ -23,31 +20,30 @@ class SignupScreen extends StatefulWidget {
 
 class _SignupScreenState extends State<SignupScreen>
     with SingleTickerProviderStateMixin {
-  final _vm                     = SignupViewModel();
-  final _nameController         = TextEditingController();
-  final _phoneController        = TextEditingController();
-  final _passwordController     = TextEditingController();
+  final _vm                        = SignupViewModel();
+  final _nameController            = TextEditingController();
+  final _phoneController           = TextEditingController();
+  final _passwordController        = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _referralController     = TextEditingController();
+  final _referralController        = TextEditingController();
 
   late final AnimationController _animController;
   late final Animation<double>   _fadeAnim;
   late final Animation<Offset>   _slideAnim;
 
+  /// Show the checklist once the user has touched the password field.
+  bool _passwordTouched = false;
+
   @override
   void initState() {
     super.initState();
     _animController = AnimationController(
-      vsync:    this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _fadeAnim = CurvedAnimation(
-        parent: _animController, curve: Curves.easeOut);
+        vsync: this, duration: const Duration(milliseconds: 600));
+    _fadeAnim  = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _slideAnim = Tween<Offset>(
       begin: const Offset(0, 0.18),
       end:   Offset.zero,
-    ).animate(CurvedAnimation(
-        parent: _animController, curve: Curves.easeOut));
+    ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
     _animController.forward();
   }
 
@@ -63,20 +59,15 @@ class _SignupScreenState extends State<SignupScreen>
     super.dispose();
   }
 
-  // ── Signup action ─────────────────────────────────────────────────────────
-
   Future<void> _handleSignup() async {
     _vm.setName(_nameController.text);
     _vm.setPhone(_phoneController.text);
     _vm.setPassword(_passwordController.text);
     _vm.setConfirmPassword(_confirmPasswordController.text);
     _vm.setReferralCode(_referralController.text);
-
     final ok = await _vm.signup();
     if (ok && mounted) widget.onSignupSuccess();
   }
-
-  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -93,10 +84,7 @@ class _SignupScreenState extends State<SignupScreen>
           builder: (context, _) {
             return Column(
               children: [
-                // ── Red hero section ───────────────────────────────────
                 _HeroSection(),
-
-                // ── White form card ────────────────────────────────────
                 Expanded(
                   child: FadeTransition(
                     opacity: _fadeAnim,
@@ -119,13 +107,18 @@ class _SignupScreenState extends State<SignupScreen>
                             bottom: MediaQuery.of(context).viewInsets.bottom + 32,
                           ),
                           child: _SignupForm(
-                            vm:                       _vm,
-                            nameController:           _nameController,
-                            phoneController:          _phoneController,
-                            passwordController:       _passwordController,
-                            confirmPasswordController: _confirmPasswordController,
-                            referralController:       _referralController,
-                            onSignup:                 _handleSignup,
+                            vm:                          _vm,
+                            nameController:              _nameController,
+                            phoneController:             _phoneController,
+                            passwordController:          _passwordController,
+                            confirmPasswordController:   _confirmPasswordController,
+                            referralController:          _referralController,
+                            passwordTouched:             _passwordTouched,
+                            onPasswordChanged: (v) {
+                              setState(() => _passwordTouched = true);
+                              _vm.setPassword(v);
+                            },
+                            onSignup:          _handleSignup,
                             onNavigateToLogin: () => Navigator.of(context).pop(),
                           ),
                         ),
@@ -153,7 +146,6 @@ class _HeroSection extends StatelessWidget {
       color:  AppColors.primary,
       child: Stack(
         children: [
-          // Decorative circles
           Positioned(
             top: -30, right: -30,
             child: Container(
@@ -174,7 +166,6 @@ class _HeroSection extends StatelessWidget {
               ),
             ),
           ),
-          // Cloud shapes
           Positioned(
             top: 55, right: 20,
             child: _CloudShape(width: 48, height: 24, opacity: 0.25),
@@ -183,8 +174,6 @@ class _HeroSection extends StatelessWidget {
             top: 35, right: 130,
             child: _CloudShape(width: 32, height: 16, opacity: 0.18),
           ),
-
-          // Content
           Padding(
             padding: EdgeInsets.only(
               top:   MediaQuery.of(context).padding.top + 20,
@@ -194,14 +183,11 @@ class _HeroSection extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Text side
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // "Hello" speech bubble
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: const BorderRadius.only(
@@ -230,19 +216,16 @@ class _HeroSection extends StatelessWidget {
                     const Text(
                       "Let's Get\nStarted!",
                       style: TextStyle(
-                        color:       Colors.white,
-                        fontSize:    34,
-                        fontWeight:  FontWeight.w900,
-                        height:      1.15,
+                        color:         Colors.white,
+                        fontSize:      34,
+                        fontWeight:    FontWeight.w900,
+                        height:        1.15,
                         letterSpacing: 0.5,
                       ),
                     ),
                   ],
                 ),
-
                 const Spacer(),
-
-                // Illustration
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Image.asset(
@@ -250,9 +233,8 @@ class _HeroSection extends StatelessWidget {
                     width:  150,
                     height: 170,
                     fit:    BoxFit.contain,
-                    // Fallback if asset not available yet
-                    errorBuilder: (_, __, ___) => const SizedBox(
-                        width: 150, height: 170),
+                    errorBuilder: (_, __, ___) =>
+                    const SizedBox(width: 150, height: 170),
                   ),
                 ),
               ],
@@ -266,9 +248,7 @@ class _HeroSection extends StatelessWidget {
 
 class _CloudShape extends StatelessWidget {
   final double width, height, opacity;
-  const _CloudShape(
-      {required this.width, required this.height, required this.opacity});
-
+  const _CloudShape({required this.width, required this.height, required this.opacity});
   @override
   Widget build(BuildContext context) => Container(
     width:  width,
@@ -283,14 +263,16 @@ class _CloudShape extends StatelessWidget {
 // ── Signup form ───────────────────────────────────────────────────────────────
 
 class _SignupForm extends StatelessWidget {
-  final SignupViewModel           vm;
-  final TextEditingController     nameController;
-  final TextEditingController     phoneController;
-  final TextEditingController     passwordController;
-  final TextEditingController     confirmPasswordController;
-  final TextEditingController     referralController;
-  final VoidCallback              onSignup;
-  final VoidCallback              onNavigateToLogin;
+  final SignupViewModel       vm;
+  final TextEditingController nameController;
+  final TextEditingController phoneController;
+  final TextEditingController passwordController;
+  final TextEditingController confirmPasswordController;
+  final TextEditingController referralController;
+  final bool                  passwordTouched;
+  final ValueChanged<String>  onPasswordChanged;
+  final VoidCallback          onSignup;
+  final VoidCallback          onNavigateToLogin;
 
   const _SignupForm({
     required this.vm,
@@ -299,12 +281,17 @@ class _SignupForm extends StatelessWidget {
     required this.passwordController,
     required this.confirmPasswordController,
     required this.referralController,
+    required this.passwordTouched,
+    required this.onPasswordChanged,
     required this.onSignup,
     required this.onNavigateToLogin,
   });
 
   @override
   Widget build(BuildContext context) {
+    final ruleResults = vm.passwordRuleResults;
+    final showChecklist = passwordTouched || vm.password.isNotEmpty;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -314,48 +301,48 @@ class _SignupForm extends StatelessWidget {
           child: Text(
             'Create an Account',
             style: TextStyle(
-              fontSize:   22,
-              fontWeight: FontWeight.w800,
-              color:      AppColors.textDark,
+              fontSize:      22,
+              fontWeight:    FontWeight.w800,
+              color:         AppColors.textDark,
               letterSpacing: 0.3,
             ),
           ),
         ),
         const SizedBox(height: 28),
 
-        // Full Name
+        // ── Full Name ──────────────────────────────────────────────────────
         _FieldLabel(text: 'Full Name'),
         const SizedBox(height: 8),
         _SignupTextField(
-          controller:    nameController,
-          hint:          'Enter your full name',
-          keyboardType:  TextInputType.name,
+          controller:         nameController,
+          hint:               'Enter your full name',
+          keyboardType:       TextInputType.name,
           textCapitalization: TextCapitalization.words,
-          onChanged:     vm.setName,
+          onChanged:          vm.setName,
         ),
         const SizedBox(height: 20),
 
-        // Mobile No.
+        // ── Mobile ─────────────────────────────────────────────────────────
         _FieldLabel(text: 'Mobile No.'),
         const SizedBox(height: 8),
         _SignupTextField(
-          controller:       phoneController,
-          hint:             'Enter mobile number',
-          keyboardType:     TextInputType.phone,
-          maxLength:        10,
-          inputFormatters:  [FilteringTextInputFormatter.digitsOnly],
-          onChanged:        vm.setPhone,
+          controller:      phoneController,
+          hint:            'Enter mobile number',
+          keyboardType:    TextInputType.phone,
+          maxLength:       10,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          onChanged:       vm.setPhone,
         ),
         const SizedBox(height: 20),
 
-        // Password
+        // ── Password ───────────────────────────────────────────────────────
         _FieldLabel(text: 'Password'),
         const SizedBox(height: 8),
         _SignupTextField(
           controller:  passwordController,
           hint:        'Create a password',
           obscureText: !vm.isPasswordVisible,
-          onChanged:   vm.setPassword,
+          onChanged:   onPasswordChanged,   // ← uses wrapper that sets passwordTouched
           suffixIcon: GestureDetector(
             onTap: vm.togglePasswordVisibility,
             child: Icon(
@@ -367,9 +354,50 @@ class _SignupForm extends StatelessWidget {
             ),
           ),
         ),
+
+        // ── Strength bar + checklist (appear once user starts typing) ──────
+        if (showChecklist) ...[
+          const SizedBox(height: 10),
+
+          // Strength bar
+          _PasswordStrengthBar(strength: vm.passwordStrength),
+          const SizedBox(height: 10),
+
+          // Rules checklist
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+              color:        AppColors.background,
+              borderRadius: BorderRadius.circular(12),
+              border:       Border.all(color: AppColors.borderColor),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'PASSWORD REQUIREMENTS',
+                  style: TextStyle(
+                    fontSize:      10,
+                    fontWeight:    FontWeight.w700,
+                    color:         AppColors.textGrey,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...List.generate(
+                  SignupViewModel.passwordRules.length,
+                      (i) => _RuleRow(
+                    label:  SignupViewModel.passwordRules[i].label,
+                    passed: ruleResults[i],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 20),
 
-        // Confirm Password
+        // ── Confirm Password ───────────────────────────────────────────────
         _FieldLabel(text: 'Confirm Password'),
         const SizedBox(height: 8),
         _SignupTextField(
@@ -377,7 +405,8 @@ class _SignupForm extends StatelessWidget {
           hint:        'Re-enter your password',
           obscureText: !vm.isConfirmPasswordVisible,
           onChanged:   vm.setConfirmPassword,
-          suffixIcon: GestureDetector(
+          suffixIcon: confirmPasswordController.text.isEmpty
+              ? GestureDetector(
             onTap: vm.toggleConfirmPasswordVisibility,
             child: Icon(
               vm.isConfirmPasswordVisible
@@ -386,11 +415,67 @@ class _SignupForm extends StatelessWidget {
               color: AppColors.textGrey,
               size: 20,
             ),
+          )
+              : Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  vm.passwordsMatch
+                      ? Icons.check_circle_rounded
+                      : Icons.cancel_rounded,
+                  color: vm.passwordsMatch
+                      ? Colors.green.shade500
+                      : Colors.red.shade400,
+                  size: 20,
+                ),
+                const SizedBox(width: 2),
+                GestureDetector(
+                  onTap: vm.toggleConfirmPasswordVisibility,
+                  child: Icon(
+                    vm.isConfirmPasswordVisible
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                    color: AppColors.textGrey,
+                    size: 20,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
+
+        // Match hint
+        if (confirmPasswordController.text.isNotEmpty) ...[
+          const SizedBox(height: 5),
+          Row(children: [
+            const SizedBox(width: 2),
+            Icon(
+              vm.passwordsMatch
+                  ? Icons.check_circle_outline_rounded
+                  : Icons.cancel_outlined,
+              size:  13,
+              color: vm.passwordsMatch
+                  ? Colors.green.shade600
+                  : Colors.red.shade400,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              vm.passwordsMatch ? 'Passwords match' : 'Passwords do not match',
+              style: TextStyle(
+                fontSize:   12,
+                fontWeight: FontWeight.w500,
+                color: vm.passwordsMatch
+                    ? Colors.green.shade600
+                    : Colors.red.shade400,
+              ),
+            ),
+          ]),
+        ],
         const SizedBox(height: 20),
 
-        // Referral Code
+        // ── Referral Code ──────────────────────────────────────────────────
         _FieldLabel(text: 'Referral Code'),
         const SizedBox(height: 8),
         _SignupTextField(
@@ -400,20 +485,19 @@ class _SignupForm extends StatelessWidget {
         ),
         const SizedBox(height: 24),
 
-        // Terms & Conditions checkbox
+        // ── Terms & Conditions ─────────────────────────────────────────────
         GestureDetector(
-          onTap: vm.toggleAgreedToTerms,
+          onTap:    vm.toggleAgreedToTerms,
           behavior: HitTestBehavior.opaque,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               SizedBox(
-                width:  24,
-                height: 24,
+                width: 24, height: 24,
                 child: Checkbox(
-                  value:           vm.agreedToTerms,
-                  onChanged:       (_) => vm.toggleAgreedToTerms(),
-                  activeColor:     AppColors.primary,
+                  value:       vm.agreedToTerms,
+                  onChanged:   (_) => vm.toggleAgreedToTerms(),
+                  activeColor: AppColors.primary,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(4)),
                 ),
@@ -426,9 +510,9 @@ class _SignupForm extends StatelessWidget {
                         fontSize: 13, color: AppColors.textGrey),
                     children: [
                       const TextSpan(text: 'Yes, I agree to the '),
-                      TextSpan(
+                      const TextSpan(
                         text: 'Terms & Conditions',
-                        style: const TextStyle(
+                        style: TextStyle(
                           color:      AppColors.primary,
                           fontWeight: FontWeight.w700,
                         ),
@@ -442,15 +526,14 @@ class _SignupForm extends StatelessWidget {
         ),
         const SizedBox(height: 8),
 
-        // Error banner
+        // ── Error banner ───────────────────────────────────────────────────
         if (vm.errorMessage != null) ...[
           const SizedBox(height: 8),
           _ErrorBanner(message: vm.errorMessage!),
         ],
-
         const SizedBox(height: 24),
 
-        // Sign Up button
+        // ── Sign Up button ─────────────────────────────────────────────────
         SizedBox(
           width:  double.infinity,
           height: 54,
@@ -466,17 +549,15 @@ class _SignupForm extends StatelessWidget {
             ),
             child: vm.isLoading
                 ? const SizedBox(
-              width:  22,
-              height: 22,
-              child: CircularProgressIndicator(
-                  color: Colors.white, strokeWidth: 2.5),
-            )
+                width: 22, height: 22,
+                child: CircularProgressIndicator(
+                    color: Colors.white, strokeWidth: 2.5))
                 : const Text(
               'Sign Up',
               style: TextStyle(
-                color:      Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize:   16,
+                color:         Colors.white,
+                fontWeight:    FontWeight.w800,
+                fontSize:      16,
                 letterSpacing: 0.3,
               ),
             ),
@@ -484,7 +565,7 @@ class _SignupForm extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
-        // Already have an account?
+        // ── Already have an account? ───────────────────────────────────────
         Center(
           child: GestureDetector(
             onTap: onNavigateToLogin,
@@ -494,9 +575,9 @@ class _SignupForm extends StatelessWidget {
                     fontSize: 14, color: AppColors.textGrey),
                 children: [
                   const TextSpan(text: 'Already have an account? '),
-                  TextSpan(
+                  const TextSpan(
                     text: 'Login',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color:      AppColors.primary,
                       fontWeight: FontWeight.w700,
                     ),
@@ -508,6 +589,100 @@ class _SignupForm extends StatelessWidget {
         ),
         const SizedBox(height: 12),
       ],
+    );
+  }
+}
+
+// ── Password strength bar ─────────────────────────────────────────────────────
+
+class _PasswordStrengthBar extends StatelessWidget {
+  final double strength; // 0.0–1.0
+
+  const _PasswordStrengthBar({required this.strength});
+
+  String get _label {
+    if (strength == 0)   return '';
+    if (strength <= 0.2) return 'Very Weak';
+    if (strength <= 0.4) return 'Weak';
+    if (strength <= 0.6) return 'Fair';
+    if (strength <= 0.8) return 'Strong';
+    return 'Very Strong';
+  }
+
+  Color get _color {
+    if (strength <= 0.2) return Colors.red.shade600;
+    if (strength <= 0.4) return Colors.orange.shade600;
+    if (strength <= 0.6) return Colors.amber.shade600;
+    if (strength <= 0.8) return Colors.lightGreen.shade600;
+    return Colors.green.shade600;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Password strength',
+                style: TextStyle(fontSize: 11, color: AppColors.textGrey)),
+            if (strength > 0)
+              Text(_label,
+                  style: TextStyle(
+                      fontSize:   11,
+                      fontWeight: FontWeight.w700,
+                      color:      _color)),
+          ],
+        ),
+        const SizedBox(height: 5),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value:           strength,
+            minHeight:       6,
+            backgroundColor: Colors.grey.shade200,
+            valueColor:      AlwaysStoppedAnimation(_color),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Single rule row ───────────────────────────────────────────────────────────
+
+class _RuleRow extends StatelessWidget {
+  final String label;
+  final bool   passed;
+  const _RuleRow({required this.label, required this.passed});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Row(children: [
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: Icon(
+            passed
+                ? Icons.check_circle_rounded
+                : Icons.radio_button_unchecked_rounded,
+            key:   ValueKey(passed),
+            size:  15,
+            color: passed ? Colors.green.shade500 : Colors.grey.shade400,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize:   12,
+            color:      passed ? Colors.green.shade600 : AppColors.textGrey,
+            fontWeight: passed ? FontWeight.w600 : FontWeight.w400,
+          ),
+        ),
+      ]),
     );
   }
 }
@@ -530,26 +705,26 @@ class _FieldLabel extends StatelessWidget {
 }
 
 class _SignupTextField extends StatelessWidget {
-  final TextEditingController      controller;
-  final String                     hint;
-  final bool                       obscureText;
-  final TextInputType              keyboardType;
-  final int?                       maxLength;
-  final List<TextInputFormatter>?  inputFormatters;
-  final Widget?                    suffixIcon;
-  final ValueChanged<String>?      onChanged;
-  final TextCapitalization         textCapitalization;
+  final TextEditingController     controller;
+  final String                    hint;
+  final bool                      obscureText;
+  final TextInputType             keyboardType;
+  final int?                      maxLength;
+  final List<TextInputFormatter>? inputFormatters;
+  final Widget?                   suffixIcon;
+  final ValueChanged<String>?     onChanged;
+  final TextCapitalization        textCapitalization;
 
   const _SignupTextField({
     required this.controller,
     required this.hint,
-    this.obscureText         = false,
-    this.keyboardType        = TextInputType.text,
+    this.obscureText        = false,
+    this.keyboardType       = TextInputType.text,
     this.maxLength,
     this.inputFormatters,
     this.suffixIcon,
     this.onChanged,
-    this.textCapitalization  = TextCapitalization.none,
+    this.textCapitalization = TextCapitalization.none,
   });
 
   @override
@@ -574,12 +749,12 @@ class _SignupTextField extends StatelessWidget {
           fontWeight: FontWeight.w500,
         ),
         decoration: InputDecoration(
-          hintText:       hint,
-          hintStyle: const TextStyle(
+          hintText:    hint,
+          hintStyle:   const TextStyle(
               color: AppColors.textLight, fontSize: 14),
-          suffixIcon:     suffixIcon,
-          border:         InputBorder.none,
-          counterText:    '',
+          suffixIcon:  suffixIcon,
+          border:      InputBorder.none,
+          counterText: '',
           contentPadding: const EdgeInsets.symmetric(
               horizontal: 16, vertical: 16),
         ),

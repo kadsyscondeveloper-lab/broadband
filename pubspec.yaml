@@ -26,7 +26,8 @@ dependencies:
   #no internet
   connectivity_plus: ^6.0.3
 
-
+  #webview
+  webview_flutter: ^4.10.0
 
   #phone_numbers
   flutter_contacts: ^1.1.9

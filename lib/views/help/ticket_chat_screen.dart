@@ -26,18 +26,16 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
   final _controller = TextEditingController();
   final _scrollCtrl = ScrollController();
 
-  List<TicketMessage> _messages   = [];
-  bool    _isLoading  = true;
-  bool    _isSending  = false;
-  bool    _isActive   = true;
-  String  _status     = '';
+  List<TicketMessage> _messages      = [];
+  bool    _isLoading    = true;
+  bool    _isSending    = false;
+  bool    _isActive     = true;
+  String  _status       = '';
   String? _error;
   int?    _lastMessageId;
 
   Timer? _pollTimer;
   static const _pollInterval = Duration(seconds: 5);
-
-  // ─────────────────────────────────────────────────────────────────────────
 
   @override
   void initState() {
@@ -53,7 +51,7 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
     super.dispose();
   }
 
-  // ── Full load ─────────────────────────────────────────────────────────────
+  // ── Load ──────────────────────────────────────────────────────────────────
 
   Future<void> _loadMessages() async {
     setState(() { _isLoading = true; _error = null; });
@@ -65,9 +63,8 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
         _isActive      = state.isActive;
         _status        = state.status;
         _lastMessageId = state.messages.isNotEmpty
-            ? state.messages.last.id
-            : null;
-        _isLoading = false;
+            ? state.messages.last.id : null;
+        _isLoading     = false;
       });
       _scrollToBottom(jump: true);
       _startPolling();
@@ -77,36 +74,28 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
     }
   }
 
-  // ── Polling every 5s for new messages ────────────────────────────────────
+  // ── Polling ───────────────────────────────────────────────────────────────
 
   void _startPolling() {
     _pollTimer?.cancel();
-    if (!_isActive) return; // no need to poll closed tickets
-
+    if (!_isActive) return;
     _pollTimer = Timer.periodic(_pollInterval, (_) async {
       try {
         final state = await _service.getMessages(
-          widget.ticketId,
-          afterId: _lastMessageId,
-        );
+            widget.ticketId, afterId: _lastMessageId);
         if (!mounted || state == null) return;
-
         final newMessages = state.messages;
         if (newMessages.isNotEmpty || state.status != _status) {
           setState(() {
             _messages.addAll(newMessages);
             _isActive = state.isActive;
             _status   = state.status;
-            if (newMessages.isNotEmpty) {
-              _lastMessageId = newMessages.last.id;
-            }
+            if (newMessages.isNotEmpty) _lastMessageId = newMessages.last.id;
           });
           if (newMessages.isNotEmpty) _scrollToBottom();
           if (!state.isActive) _pollTimer?.cancel();
         }
-      } catch (_) {
-        // Silently ignore poll errors — don't disrupt the UI
-      }
+      } catch (_) {}
     });
   }
 
@@ -119,17 +108,11 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
     setState(() => _isSending = true);
     _controller.clear();
 
-    // Optimistic insert — show immediately before server confirms
     final tempId = DateTime.now().millisecondsSinceEpoch;
-    final optimistic = TicketMessage(
-      id:         tempId,
-      senderId:   0,
-      senderType: 'user',
-      message:    text,
-      createdAt:  DateTime.now(),
-    );
-
-    setState(() => _messages.add(optimistic));
+    setState(() => _messages.add(TicketMessage(
+      id: tempId, senderId: 0, senderType: 'user',
+      message: text, createdAt: DateTime.now(),
+    )));
     _scrollToBottom();
 
     try {
@@ -150,7 +133,7 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content:         Text('Failed to send. Please try again.'),
+          content: Text('Failed to send. Please try again.'),
           backgroundColor: AppColors.primary,
         ),
       );
@@ -163,30 +146,37 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollCtrl.hasClients) return;
       final max = _scrollCtrl.position.maxScrollExtent;
-      if (jump) {
-        _scrollCtrl.jumpTo(max);
-      } else {
-        _scrollCtrl.animateTo(
-          max,
+      jump
+          ? _scrollCtrl.jumpTo(max)
+          : _scrollCtrl.animateTo(max,
           duration: const Duration(milliseconds: 280),
-          curve:    Curves.easeOut,
-        );
-      }
+          curve: Curves.easeOut);
     });
   }
 
-  // ── Status chip color ─────────────────────────────────────────────────────
+  // ── Status helpers ────────────────────────────────────────────────────────
 
-  Color _statusColor(String s) {
-    switch (s.toLowerCase()) {
-      case 'open':            return Colors.blue;
-      case 'in progress':
-      case 'in_progress':     return Colors.orange;
-      case 'awaiting user':
-      case 'awaiting_user':   return Colors.purple;
-      case 'resolved':        return Colors.green;
-      case 'closed':          return Colors.grey;
-      default:                return Colors.blue;
+  String get _statusLabel {
+    switch (_status.toLowerCase()) {
+      case 'in_progress':
+      case 'in progress':   return 'In Progress';
+      case 'resolved':      return 'Resolved';
+      case 'closed':        return 'Closed';
+      case 'awaiting_user':
+      case 'awaiting user': return 'Awaiting You';
+      default:              return 'Open';
+    }
+  }
+
+  Color get _statusColor {
+    switch (_status.toLowerCase()) {
+      case 'resolved':      return Colors.green;
+      case 'closed':        return Colors.grey;
+      case 'in_progress':
+      case 'in progress':   return Colors.orange;
+      case 'awaiting_user':
+      case 'awaiting user': return Colors.purple;
+      default:              return Colors.blue;
     }
   }
 
@@ -197,7 +187,7 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: const Color(0xFFF2F3F7),
       appBar: _buildAppBar(),
       body: _isLoading
           ? const Center(
@@ -216,49 +206,76 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       backgroundColor: AppColors.primary,
+      elevation: 0,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios,
+        icon: const Icon(Icons.arrow_back_ios_new_rounded,
             color: Colors.white, size: 20),
         onPressed: () => Navigator.pop(context),
       ),
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            widget.ticketNumber,
-            style: const TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w700),
+      title: Row(children: [
+        // Agent avatar
+        Container(
+          width: 36, height: 36,
+          decoration: BoxDecoration(
+            color:  Colors.white.withOpacity(0.20),
+            shape: BoxShape.circle,
           ),
-          Text(
-            widget.subject,
-            style: const TextStyle(
-                color: Colors.white70, fontSize: 11),
-            overflow: TextOverflow.ellipsis,
+          child: const Icon(Icons.support_agent_rounded,
+              color: Colors.white, size: 20),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.subject,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700),
+                overflow: TextOverflow.ellipsis,
+              ),
+              Text(
+                widget.ticketNumber,
+                style: TextStyle(
+                    color: Colors.white.withOpacity(0.75), fontSize: 11),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ]),
       actions: [
         if (_status.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.only(right: 16),
+            padding: const EdgeInsets.only(right: 14),
             child: Center(
               child: Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 4),
+                    horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color:        _statusColor(_status).withOpacity(0.25),
+                  color:        Colors.white.withOpacity(0.18),
                   borderRadius: BorderRadius.circular(20),
-                  border:       Border.all(color: Colors.white54),
+                  border:       Border.all(
+                      color: Colors.white.withOpacity(0.40)),
                 ),
-                child: Text(
-                  _status,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600),
-                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Container(
+                    width: 6, height: 6,
+                    decoration: BoxDecoration(
+                      color:  Colors.white.withOpacity(0.9),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    _statusLabel,
+                    style: const TextStyle(
+                        color:      Colors.white,
+                        fontSize:   11,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ]),
               ),
             ),
           ),
@@ -271,38 +288,30 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
   Widget _buildMessageList() {
     if (_messages.isEmpty) {
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 72, height: 72,
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.08),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.chat_bubble_outline_rounded,
-                    color: AppColors.primary, size: 32),
-              ),
-              const SizedBox(height: 16),
-              const Text('No messages yet',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                      color: AppColors.textDark)),
-              const SizedBox(height: 8),
-              const Text(
-                'Send a message and our support team\nwill respond shortly.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 13,
-                    color:    AppColors.textGrey,
-                    height:   1.5),
-              ),
-            ],
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 72, height: 72,
+            decoration: BoxDecoration(
+              color:  AppColors.primary.withOpacity(0.08),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.chat_bubble_outline_rounded,
+                color: AppColors.primary, size: 32),
           ),
-        ),
+          const SizedBox(height: 16),
+          const Text('No messages yet',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize:   16,
+                  color:      AppColors.textDark)),
+          const SizedBox(height: 8),
+          const Text(
+            'Send a message and our support\nteam will respond shortly.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontSize: 13, color: AppColors.textGrey, height: 1.5),
+          ),
+        ]),
       );
     }
 
@@ -313,14 +322,23 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
       itemBuilder: (context, index) {
         final msg  = _messages[index];
         final prev = index > 0 ? _messages[index - 1] : null;
+        final next = index < _messages.length - 1
+            ? _messages[index + 1] : null;
+
         final showDate = prev == null ||
             !_isSameDay(prev.createdAt, msg.createdAt);
-        return Column(
-          children: [
-            if (showDate) _DateDivider(date: msg.createdAt),
-            _MessageBubble(message: msg),
-          ],
-        );
+
+        // Group messages from same sender
+        final isLastInGroup = next == null ||
+            next.isFromUser != msg.isFromUser ||
+            !_isSameDay(next.createdAt, msg.createdAt);
+
+        return Column(children: [
+          if (showDate) _DateDivider(date: msg.createdAt),
+          _MessageBubble(
+              message:       msg,
+              isLastInGroup: isLastInGroup),
+        ]);
       },
     );
   }
@@ -328,107 +346,165 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
   // ── Input bar ─────────────────────────────────────────────────────────────
 
   Widget _buildInputBar() {
-    // Ticket is closed/resolved
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+
+    // ── Closed state ─────────────────────────────────────────────────────
     if (!_isActive) {
       return Container(
-        padding: EdgeInsets.only(
-          left: 16, right: 16, top: 12,
-          bottom: MediaQuery.of(context).padding.bottom + 12,
-        ),
+        padding: EdgeInsets.fromLTRB(16, 10, 16, bottomPad + 10),
         decoration: BoxDecoration(
           color: Colors.white,
           boxShadow: [
             BoxShadow(
-                color:      Colors.black.withOpacity(0.06),
-                blurRadius: 8,
-                offset:     const Offset(0, -2)),
+              color:      Colors.black.withOpacity(0.06),
+              blurRadius: 10,
+              offset:     const Offset(0, -3),
+            ),
           ],
         ),
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-              vertical: 12, horizontal: 16),
-          decoration: BoxDecoration(
-            color:        Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.lock_outline_rounded,
-                  size: 16, color: Colors.grey.shade500),
-              const SizedBox(width: 8),
-              Text(
-                'Ticket is $_status — chat closed',
-                style: TextStyle(
-                    fontSize:   13,
-                    color:      Colors.grey.shade500,
-                    fontWeight: FontWeight.w500),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          // Greyed-out input row (visual only)
+          Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color:        Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(children: [
+              Icon(Icons.add_rounded,
+                  color: Colors.grey.shade400, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Type your message...',
+                  style: TextStyle(
+                      color:    Colors.grey.shade400,
+                      fontSize: 14),
+                ),
               ),
-            ],
+              Container(
+                width: 34, height: 34,
+                decoration: BoxDecoration(
+                  color:  Colors.grey.shade300,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.send_rounded,
+                    color: Colors.grey.shade500, size: 16),
+              ),
+            ]),
           ),
-        ),
+          const SizedBox(height: 8),
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(Icons.lock_outline_rounded,
+                size: 12, color: Colors.grey.shade400),
+            const SizedBox(width: 4),
+            Text(
+              'TICKET IS ${_status.toUpperCase()}',
+              style: TextStyle(
+                  fontSize:      10,
+                  fontWeight:    FontWeight.w700,
+                  color:         Colors.grey.shade400,
+                  letterSpacing: 0.8),
+            ),
+          ]),
+        ]),
       );
     }
 
+    // ── Active input ──────────────────────────────────────────────────────
     return Container(
-      padding: EdgeInsets.only(
-        left: 12, right: 8, top: 8,
-        bottom: MediaQuery.of(context).padding.bottom + 8,
-      ),
+      padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPad + 12),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-              color:      Colors.black.withOpacity(0.06),
-              blurRadius: 8,
-              offset:     const Offset(0, -2)),
+            color:      Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset:     const Offset(0, -3),
+          ),
         ],
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+
+          // ── + button (outside the field, left) ───────────────────────
+          GestureDetector(
+            onTap: () {},
+            child: Container(
+              width:  40,
+              height: 40,
+              margin: const EdgeInsets.only(right: 10, bottom: 2),
+              decoration: BoxDecoration(
+                color:        Colors.grey.shade100,
+                shape:        BoxShape.circle,
+                border:       Border.all(color: Colors.grey.shade300),
+              ),
+              child: Icon(Icons.add_rounded,
+                  color: Colors.grey.shade500, size: 22),
+            ),
+          ),
+
+          // ── Text field (its own full-width rounded box) ───────────────
           Expanded(
             child: Container(
+              constraints: const BoxConstraints(maxHeight: 130),
               decoration: BoxDecoration(
-                color:        const Color(0xFFF0F1F5),
-                borderRadius: BorderRadius.circular(24),
+                color:        const Color(0xFFF2F3F7),
+                borderRadius: BorderRadius.circular(26),
+                border:       Border.all(color: Colors.grey.shade200),
               ),
               child: TextField(
                 controller:         _controller,
                 maxLines:           5,
                 minLines:           1,
                 textCapitalization: TextCapitalization.sentences,
+                style: const TextStyle(
+                    fontSize: 15, color: AppColors.textDark),
                 decoration: const InputDecoration(
-                  hintText:        'Type a message...',
-                  hintStyle:       TextStyle(
-                      color: AppColors.textLight, fontSize: 14),
-                  border:          InputBorder.none,
-                  contentPadding:  EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
+                  hintText:       'Type a message...',
+                  hintStyle:      TextStyle(
+                      color: AppColors.textLight, fontSize: 15),
+                  border:         InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(
+                      horizontal: 18, vertical: 12),
                 ),
                 onSubmitted: (_) => _sendMessage(),
               ),
             ),
           ),
-          const SizedBox(width: 8),
+
+          // ── Send button (outside the field, right) ────────────────────
           GestureDetector(
-            onTap: _sendMessage,
-            child: Container(
-              width:  44,
-              height: 44,
+            onTap: _isSending ? null : _sendMessage,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              width:  50,
+              height: 50,
+              margin: const EdgeInsets.only(left: 10, bottom: 1),
               decoration: BoxDecoration(
-                color: _isSending
-                    ? AppColors.textLight
+                color:  _isSending
+                    ? AppColors.primary.withOpacity(0.55)
                     : AppColors.primary,
                 shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color:      AppColors.primary.withOpacity(0.40),
+                    blurRadius: 10,
+                    offset:     const Offset(0, 4),
+                  ),
+                ],
               ),
               child: _isSending
                   ? const Padding(
-                padding: EdgeInsets.all(12),
+                padding: EdgeInsets.all(13),
                 child: CircularProgressIndicator(
-                    color: Colors.white, strokeWidth: 2),
+                    color: Colors.white, strokeWidth: 2.5),
               )
                   : const Icon(Icons.send_rounded,
-                  color: Colors.white, size: 20),
+                  color: Colors.white, size: 22),
             ),
           ),
         ],
@@ -436,34 +512,31 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
     );
   }
 
-  // ── Error state ───────────────────────────────────────────────────────────
+  // ── Error ─────────────────────────────────────────────────────────────────
 
-  Widget _buildError() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline_rounded,
-                size: 48, color: AppColors.textLight),
-            const SizedBox(height: 12),
-            Text(_error!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.textGrey)),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _loadMessages,
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary),
-              child: const Text('Retry',
-                  style: TextStyle(color: Colors.white)),
-            ),
-          ],
+  Widget _buildError() => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        const Icon(Icons.error_outline_rounded,
+            size: 48, color: AppColors.textLight),
+        const SizedBox(height: 12),
+        Text(_error!,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.textGrey)),
+        const SizedBox(height: 16),
+        ElevatedButton(
+          onPressed: _loadMessages,
+          style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10))),
+          child: const Text('Retry',
+              style: TextStyle(color: Colors.white)),
         ),
-      ),
-    );
-  }
+      ]),
+    ),
+  );
 
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
@@ -475,7 +548,12 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
 
 class _MessageBubble extends StatelessWidget {
   final TicketMessage message;
-  const _MessageBubble({required this.message});
+  final bool          isLastInGroup;
+
+  const _MessageBubble({
+    required this.message,
+    required this.isLastInGroup,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -483,97 +561,130 @@ class _MessageBubble extends StatelessWidget {
     final time   = _fmtTime(message.createdAt);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: EdgeInsets.only(
+        bottom: isLastInGroup ? 12 : 3,
+        left:  isUser ? 48 : 0,
+        right: isUser ? 0  : 48,
+      ),
       child: Row(
         mainAxisAlignment:
         isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // Agent avatar
+
+          // ── Agent avatar (only on last in group) ────────────────────────
           if (!isUser) ...[
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: AppColors.primary.withOpacity(0.12),
-              child: const Icon(Icons.support_agent_rounded,
-                  size: 18, color: AppColors.primary),
-            ),
-            const SizedBox(width: 8),
+            if (isLastInGroup)
+              Container(
+                width: 30, height: 30,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  color:  AppColors.primary.withOpacity(0.10),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.support_agent_rounded,
+                    size: 16, color: AppColors.primary),
+              )
+            else
+              const SizedBox(width: 38), // spacer to align messages
           ],
 
+          // ── Bubble ─────────────────────────────────────────────────────
           Flexible(
             child: Column(
               crossAxisAlignment: isUser
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.start,
               children: [
-                // Label for agent
-                if (!isUser)
+                // Sender label (first of group only)
+                if (isLastInGroup && !isUser)
                   const Padding(
-                    padding: EdgeInsets.only(left: 4, bottom: 2),
+                    padding: EdgeInsets.only(left: 4, bottom: 3),
                     child: Text(
-                      'Support Agent',
+                      'SUPPORT TEAM',
                       style: TextStyle(
-                          fontSize:   11,
-                          color:      AppColors.textGrey,
-                          fontWeight: FontWeight.w600),
+                          fontSize:      9,
+                          fontWeight:    FontWeight.w700,
+                          color:         AppColors.textGrey,
+                          letterSpacing: 0.5),
+                    ),
+                  ),
+                if (isLastInGroup && isUser)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 4, bottom: 3),
+                    child: Text(
+                      'YOU',
+                      style: TextStyle(
+                          fontSize:      9,
+                          fontWeight:    FontWeight.w700,
+                          color:         AppColors.primary,
+                          letterSpacing: 0.5),
                     ),
                   ),
 
+                // Message box
                 Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 14, vertical: 10),
-                  constraints: BoxConstraints(
-                    maxWidth: MediaQuery.of(context).size.width * 0.72,
-                  ),
                   decoration: BoxDecoration(
-                    color: isUser ? AppColors.primary : Colors.white,
+                    color:  isUser ? AppColors.primary : Colors.white,
                     borderRadius: BorderRadius.only(
                       topLeft:     const Radius.circular(18),
                       topRight:    const Radius.circular(18),
-                      bottomLeft:  Radius.circular(isUser ? 18 : 4),
-                      bottomRight: Radius.circular(isUser ? 4 : 18),
+                      bottomLeft:  Radius.circular(
+                          !isUser && isLastInGroup ? 4 : 18),
+                      bottomRight: Radius.circular(
+                          isUser && isLastInGroup  ? 4 : 18),
                     ),
                     boxShadow: [
                       BoxShadow(
-                          color:      Colors.black.withOpacity(0.06),
-                          blurRadius: 4,
-                          offset:     const Offset(0, 2)),
+                        color:      Colors.black.withOpacity(0.06),
+                        blurRadius: 6,
+                        offset:     const Offset(0, 2),
+                      ),
                     ],
                   ),
                   child: Text(
                     message.message,
                     style: TextStyle(
                         fontSize: 14,
+                        height:   1.45,
                         color:    isUser
                             ? Colors.white
-                            : AppColors.textDark,
-                        height: 1.4),
+                            : AppColors.textDark),
                   ),
                 ),
 
-                Padding(
-                  padding: const EdgeInsets.only(
-                      top: 3, left: 4, right: 4),
-                  child: Text(
-                    time,
-                    style: const TextStyle(
-                        fontSize: 10,
-                        color:    AppColors.textLight),
+                // Timestamp (only on last in group)
+                if (isLastInGroup)
+                  Padding(
+                    padding: const EdgeInsets.only(
+                        top: 4, left: 4, right: 4),
+                    child: Text(
+                      time,
+                      style: TextStyle(
+                          fontSize: 10,
+                          color:    Colors.grey.shade500),
+                    ),
                   ),
-                ),
               ],
             ),
           ),
 
-          // User avatar
-          if (isUser) ...[
+          // ── User avatar (only on last in group) ──────────────────────────
+          if (isUser && isLastInGroup) ...[
             const SizedBox(width: 8),
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: AppColors.primary.withOpacity(0.12),
+            Container(
+              width: 30, height: 30,
+              decoration: BoxDecoration(
+                color:  AppColors.primary.withOpacity(0.12),
+                shape: BoxShape.circle,
+              ),
               child: const Icon(Icons.person_rounded,
-                  size: 18, color: AppColors.primary),
+                  size: 16, color: AppColors.primary),
             ),
+          ] else if (isUser && !isLastInGroup) ...[
+            const SizedBox(width: 38),
           ],
         ],
       ),
@@ -600,32 +711,47 @@ class _DateDivider extends StatelessWidget {
     final now   = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final d     = DateTime(date.year, date.month, date.day);
-    if (d == today) return 'Today';
-    if (d == today.subtract(const Duration(days: 1))) return 'Yesterday';
-    const months = [
-      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
+    if (d == today)
+      return 'Today';
+    if (d == today.subtract(const Duration(days: 1)))
+      return 'Yesterday';
+    const months = ['', 'Jan','Feb','Mar','Apr','May','Jun',
+      'Jul','Aug','Sep','Oct','Nov','Dec'];
     return '${date.day} ${months[date.month]} ${date.year}';
   }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(children: [
-        Expanded(child: Divider(color: Colors.grey.shade300, height: 1)),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+        Expanded(
+            child: Divider(color: Colors.grey.shade300, height: 1)),
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 10),
+          padding: const EdgeInsets.symmetric(
+              horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color:        Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color:      Colors.black.withOpacity(0.05),
+                blurRadius: 4,
+                offset:     const Offset(0, 1),
+              ),
+            ],
+          ),
           child: Text(
             _label(),
             style: const TextStyle(
                 fontSize:   11,
-                color:      AppColors.textLight,
+                color:      AppColors.textGrey,
                 fontWeight: FontWeight.w600),
           ),
         ),
-        Expanded(child: Divider(color: Colors.grey.shade300, height: 1)),
+        Expanded(
+            child: Divider(color: Colors.grey.shade300, height: 1)),
       ]),
     );
   }

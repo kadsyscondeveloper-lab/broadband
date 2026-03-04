@@ -85,7 +85,6 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // ── no_transactions.png for error state ────────────
                       Image.asset(
                         'assets/images/no_transactions.png',
                         width: 160, height: 160,
@@ -137,6 +136,7 @@ class _TransactionCard extends StatelessWidget {
   final PlanTransaction tx;
   const _TransactionCard({required this.tx});
 
+  // Status chip color (success / failed / pending)
   Color get _statusColor {
     switch (tx.paymentStatus) {
       case 'success': return Colors.green;
@@ -145,11 +145,34 @@ class _TransactionCard extends StatelessWidget {
     }
   }
 
+  // Icon color based on what the transaction IS, not just credit/debit
+  Color get _iconColor {
+    switch (tx.referenceType) {
+      case 'wallet_recharge': return Colors.green;
+      case 'payment_order':   return AppColors.primary;
+      case 'refund':          return Colors.teal;
+      default:
+        return tx.isCredit ? Colors.green : AppColors.primary;
+    }
+  }
+
+  // Icon based on transaction type — much more descriptive than +/−
   dynamic get _typeIcon {
-    switch (tx.type) {
-      case 'credit': return PhosphorIcons.plusCircle();
-      case 'refund': return PhosphorIcons.arrowCounterClockwise();
-      default:       return PhosphorIcons.minusCircle();
+    switch (tx.referenceType) {
+      case 'wallet_recharge':
+      // Money coming into wallet
+        return PhosphorIcons.wallet(PhosphorIconsStyle.fill);
+      case 'payment_order':
+      // Plan purchase / internet payment
+        return PhosphorIcons.wifiHigh(PhosphorIconsStyle.fill);
+      case 'refund':
+      // Money returned
+        return PhosphorIcons.arrowCounterClockwise(PhosphorIconsStyle.fill);
+      default:
+      // Fallback: directional arrow based on credit/debit
+        return tx.isCredit
+            ? PhosphorIcons.arrowCircleDown(PhosphorIconsStyle.fill)
+            : PhosphorIcons.arrowCircleUp(PhosphorIconsStyle.fill);
     }
   }
 
@@ -157,32 +180,39 @@ class _TransactionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final date    = tx.createdAt;
     final dateStr = '${date.day}/${date.month}/${date.year}';
-    final timeStr = '${date.hour.toString().padLeft(2,'0')}:${date.minute.toString().padLeft(2,'0')}';
+    final timeStr = '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(
+        boxShadow: [
+          BoxShadow(
             color: Colors.black.withOpacity(0.05),
             blurRadius: 8,
-            offset: const Offset(0, 2))],
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              // ── Icon avatar ─────────────────────────────────────────────
               Container(
-                width: 46, height: 46,
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
-                  color: _statusColor.withOpacity(0.10),
+                  color: _iconColor.withOpacity(0.10),
                   shape: BoxShape.circle,
                 ),
-                child: PhosphorIcon(_typeIcon, color: _statusColor, size: 22),
+                child: PhosphorIcon(_typeIcon, color: _iconColor, size: 22),
               ),
               const SizedBox(width: 12),
+
+              // ── Title + date ─────────────────────────────────────────────
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -208,6 +238,8 @@ class _TransactionCard extends StatelessWidget {
               ),
             ],
           ),
+
+          // ── Amount ────────────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.only(top: 10, left: 58),
             child: Text(
@@ -219,6 +251,8 @@ class _TransactionCard extends StatelessWidget {
               ),
             ),
           ),
+
+          // ── Chips ─────────────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.only(top: 8, left: 58),
             child: Wrap(
@@ -239,6 +273,10 @@ class _TransactionCard extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHIP
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _Chip extends StatelessWidget {
   final String label;
@@ -277,7 +315,6 @@ class _EmptyState extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          // ── no_transactions.png for empty state ────────────────────────
           Image.asset(
             'assets/images/no_transactions.png',
             width:  160,

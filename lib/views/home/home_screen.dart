@@ -13,6 +13,7 @@ import '../../widgets/app_header.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/app_icon.dart';
 import '../bills/bills_screens.dart' hide MyBillsScreen;
+import '../about/about_screen.dart';
 import '../kyc/kyc_screen.dart';
 import '../recharge/wifi_plans_screen.dart';
 import '../refer/refer_earn_screen.dart';
@@ -111,10 +112,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
                 break;
               case 'About Speedonet':
-                showAboutDialog(
-                  context: context,
-                  applicationName: 'Speedonet',
-                  applicationVersion: '1.0.0',
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AboutScreen()),
                 );
                 break;
               case 'Change Password':
