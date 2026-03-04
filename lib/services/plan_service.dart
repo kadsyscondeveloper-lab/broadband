@@ -40,11 +40,14 @@ class PlanService {
   // ── Purchase ────────────────────────────────────────────────────────────────
 
   /// POST /plans/:id/purchase
-  Future<Map<String, dynamic>> purchasePlan(int planId, {String paymentMode = 'wallet'}) async {
+  Future<Map<String, dynamic>> purchasePlan(int planId, {String paymentMode = 'wallet', String? couponCode}) async {
     final res = await http.post(
       Uri.parse('$_base/plans/$planId/purchase'),
       headers: _authHeaders,
-      body: jsonEncode({'payment_mode': paymentMode}),
+     body: jsonEncode({
+      'payment_mode': paymentMode,
+      if (couponCode != null) 'coupon_code': couponCode,
+    }),
     );
     final body = jsonDecode(res.body) as Map<String, dynamic>;
     if (res.statusCode != 201) throw body['message'] ?? 'Purchase failed';
