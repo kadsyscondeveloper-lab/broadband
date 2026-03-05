@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import '../services/kyc_service.dart';
+import '../services/user_service.dart';
 
 enum KycStep { loading, form, submitting, success, error }
 
@@ -33,10 +34,13 @@ class KycViewModel extends ChangeNotifier {
   File?     get addressFile   => _addressFile;
   File?     get idFile        => _idFile;
 
-  bool get isSubmitting    => _step == KycStep.submitting;
-  bool get hasAddressFile  => _addressFile != null;
-  bool get hasIdFile       => _idFile != null;
-  bool get canSubmit       => hasAddressFile && hasIdFile && !isSubmitting;
+  bool get isSubmitting       => _step == KycStep.submitting;
+  bool get hasAddressFile     => _addressFile != null;
+  bool get hasIdFile          => _idFile != null;
+  bool get canSubmit          => hasAddressFile && hasIdFile && !isSubmitting;
+  bool get isProfileIncomplete =>
+      _step == KycStep.error &&
+          (_errorMessage?.contains('profile') ?? false);
 
   String get addressFileName =>
       _addressFile != null ? _addressFile!.path.split('/').last : '';
@@ -61,9 +65,31 @@ class KycViewModel extends ChangeNotifier {
   ];
 
   // ── Init ──────────────────────────────────────────────────────────────────
+  // In kyc_viewmodel.dart
+  final _userService = UserService();
+
   Future<void> init() async {
     _step = KycStep.loading;
     notifyListeners();
+
+    // Check profile completeness first
+    final profile = await _userService.getProfile();
+    final addr = profile?.address;
+    final isProfileComplete = profile != null &&
+        profile.name.isNotEmpty &&
+        addr != null &&
+        addr.address.isNotEmpty &&
+        addr.city.isNotEmpty &&
+        addr.state.isNotEmpty &&
+        addr.pinCode.isNotEmpty;
+
+    if (!isProfileComplete) {
+      _step = KycStep.error;
+      _errorMessage = 'Please complete your profile (name and address) before submitting KYC.';
+      notifyListeners();
+      return;
+    }
+
     _kycStatus = await _service.getStatus();
     _step = KycStep.form;
     notifyListeners();

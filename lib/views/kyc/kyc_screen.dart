@@ -50,10 +50,12 @@ class _KycScreenState extends State<KycScreen> {
         listenable: _vm,
         builder: (context, _) {
           return switch (_vm.step) {
-            KycStep.loading   => const _LoadingView(),
-            KycStep.success   => _SuccessView(onDone: () => Navigator.pop(context)),
+            KycStep.loading    => const _LoadingView(),
+            KycStep.success    => _SuccessView(onDone: () => Navigator.pop(context)),
             KycStep.submitting => _SubmittingView(message: _vm.progressText ?? 'Submitting...'),
-            _                 => _buildFormView(),
+            KycStep.error when _vm.isProfileIncomplete =>
+                _ProfileIncompleteView(onGoToProfile: () => Navigator.pop(context)),
+            _                  => _buildFormView(),
           };
         },
       ),
@@ -80,8 +82,8 @@ class _KycScreenState extends State<KycScreen> {
                 else if (status != null && status.isRejected)
                     _RejectedBanner(reason: status.rejectionReason ?? 'Documents did not meet requirements'),
 
-                // ── Error banner ───────────────────────────────────────
-                if (_vm.errorMessage != null)
+                // ── Error banner (submission errors only) ──────────────
+                if (_vm.errorMessage != null && _vm.step == KycStep.error && !_vm.isProfileIncomplete)
                   _ErrorBanner(
                     message: _vm.errorMessage!,
                     onRetry: _vm.retryAfterError,
@@ -745,6 +747,74 @@ class _Dot extends StatelessWidget {
       decoration: BoxDecoration(
         color: filled ? AppColors.primary : AppColors.primary.withOpacity(0.2),
         borderRadius: BorderRadius.circular(4),
+      ),
+    );
+  }
+}
+
+// ── Profile incomplete view ───────────────────────────────────────────────────
+
+class _ProfileIncompleteView extends StatelessWidget {
+  final VoidCallback onGoToProfile;
+  const _ProfileIncompleteView({required this.onGoToProfile});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 110,
+              height: 110,
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.person_outline_rounded,
+                  color: Colors.orange.shade600, size: 56),
+            ),
+            const SizedBox(height: 28),
+            const Text(
+              'Complete Your Profile First',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textDark),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Your name and address details are required before you can submit KYC documents.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 14, color: AppColors.textGrey, height: 1.6),
+            ),
+            const SizedBox(height: 36),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: onGoToProfile,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+                child: const Text(
+                  'Go to Profile',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
