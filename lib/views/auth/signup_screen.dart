@@ -31,7 +31,6 @@ class _SignupScreenState extends State<SignupScreen>
   late final Animation<double>   _fadeAnim;
   late final Animation<Offset>   _slideAnim;
 
-  /// Show the checklist once the user has touched the password field.
   bool _passwordTouched = false;
 
   @override
@@ -65,8 +64,23 @@ class _SignupScreenState extends State<SignupScreen>
     _vm.setPassword(_passwordController.text);
     _vm.setConfirmPassword(_confirmPasswordController.text);
     _vm.setReferralCode(_referralController.text);
+
     final ok = await _vm.signup();
-    if (ok && mounted) widget.onSignupSuccess();
+
+    if (!ok || !mounted) return;
+
+    // ── ADDED: if the backend returned a referral coupon, show it first ───
+    final coupon = _vm.signupResult?.user.referralCoupon;
+    if (coupon != null && coupon.isNotEmpty && mounted) {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _ReferralCouponDialog(couponCode: coupon),
+      );
+    }
+    // ──────────────────────────────────────────────────────────────────────
+
+    if (mounted) widget.onSignupSuccess();
   }
 
   @override
@@ -129,6 +143,142 @@ class _SignupScreenState extends State<SignupScreen>
               ],
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+// ── Referral coupon dialog ────────────────────────────────────────────────────
+// Shown right after signup when the user signed up with someone's referral code.
+// The coupon is theirs to use on their first plan purchase.
+
+class _ReferralCouponDialog extends StatelessWidget {
+  final String couponCode;
+  const _ReferralCouponDialog({required this.couponCode});
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Gift icon
+            Container(
+              width: 64, height: 64,
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: const Center(
+                child: Text('🎁', style: TextStyle(fontSize: 30)),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Headline
+            const Text(
+              'You got a reward!',
+              style: TextStyle(
+                fontSize:   20,
+                fontWeight: FontWeight.w800,
+                color:      AppColors.textDark,
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Sub-text
+            const Text(
+              'Use this coupon when purchasing your first plan to get 20% off.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color:    AppColors.textGrey,
+                fontSize: 13,
+                height:   1.5,
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Coupon code box
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: BoxDecoration(
+                color:        Colors.green.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border:       Border.all(color: Colors.green.shade300),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    couponCode,
+                    style: TextStyle(
+                      fontSize:      20,
+                      fontWeight:    FontWeight.w900,
+                      letterSpacing: 2,
+                      color:         Colors.green.shade700,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: couponCode));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content:  Text('Coupon code copied!'),
+                          duration: Duration(seconds: 1),
+                        ),
+                      );
+                    },
+                    child: Icon(
+                      Icons.copy_rounded,
+                      color: Colors.green.shade600,
+                      size:  22,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Validity hint
+            Text(
+              'Valid for 30 days · Max discount ₹500',
+              style: TextStyle(
+                fontSize: 11,
+                color:    Colors.green.shade600,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // CTA
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
+                child: const Text(
+                  'Got it!',
+                  style: TextStyle(
+                    color:      Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize:   16,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -289,14 +439,13 @@ class _SignupForm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ruleResults = vm.passwordRuleResults;
+    final ruleResults   = vm.passwordRuleResults;
     final showChecklist = passwordTouched || vm.password.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
 
-        // Title
         const Center(
           child: Text(
             'Create an Account',
@@ -310,7 +459,6 @@ class _SignupForm extends StatelessWidget {
         ),
         const SizedBox(height: 28),
 
-        // ── Full Name ──────────────────────────────────────────────────────
         _FieldLabel(text: 'Full Name'),
         const SizedBox(height: 8),
         _SignupTextField(
@@ -322,7 +470,6 @@ class _SignupForm extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
-        // ── Mobile ─────────────────────────────────────────────────────────
         _FieldLabel(text: 'Mobile No.'),
         const SizedBox(height: 8),
         _SignupTextField(
@@ -335,14 +482,13 @@ class _SignupForm extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
-        // ── Password ───────────────────────────────────────────────────────
         _FieldLabel(text: 'Password'),
         const SizedBox(height: 8),
         _SignupTextField(
           controller:  passwordController,
           hint:        'Create a password',
           obscureText: !vm.isPasswordVisible,
-          onChanged:   onPasswordChanged,   // ← uses wrapper that sets passwordTouched
+          onChanged:   onPasswordChanged,
           suffixIcon: GestureDetector(
             onTap: vm.togglePasswordVisibility,
             child: Icon(
@@ -355,15 +501,10 @@ class _SignupForm extends StatelessWidget {
           ),
         ),
 
-        // ── Strength bar + checklist (appear once user starts typing) ──────
         if (showChecklist) ...[
           const SizedBox(height: 10),
-
-          // Strength bar
           _PasswordStrengthBar(strength: vm.passwordStrength),
           const SizedBox(height: 10),
-
-          // Rules checklist
           Container(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
             decoration: BoxDecoration(
@@ -397,7 +538,6 @@ class _SignupForm extends StatelessWidget {
         ],
         const SizedBox(height: 20),
 
-        // ── Confirm Password ───────────────────────────────────────────────
         _FieldLabel(text: 'Confirm Password'),
         const SizedBox(height: 8),
         _SignupTextField(
@@ -446,7 +586,6 @@ class _SignupForm extends StatelessWidget {
           ),
         ),
 
-        // Match hint
         if (confirmPasswordController.text.isNotEmpty) ...[
           const SizedBox(height: 5),
           Row(children: [
@@ -475,7 +614,6 @@ class _SignupForm extends StatelessWidget {
         ],
         const SizedBox(height: 20),
 
-        // ── Referral Code ──────────────────────────────────────────────────
         _FieldLabel(text: 'Referral Code'),
         const SizedBox(height: 8),
         _SignupTextField(
@@ -485,7 +623,6 @@ class _SignupForm extends StatelessWidget {
         ),
         const SizedBox(height: 24),
 
-        // ── Terms & Conditions ─────────────────────────────────────────────
         GestureDetector(
           onTap:    vm.toggleAgreedToTerms,
           behavior: HitTestBehavior.opaque,
@@ -508,9 +645,9 @@ class _SignupForm extends StatelessWidget {
                   text: TextSpan(
                     style: const TextStyle(
                         fontSize: 13, color: AppColors.textGrey),
-                    children: [
-                      const TextSpan(text: 'Yes, I agree to the '),
-                      const TextSpan(
+                    children: const [
+                      TextSpan(text: 'Yes, I agree to the '),
+                      TextSpan(
                         text: 'Terms & Conditions',
                         style: TextStyle(
                           color:      AppColors.primary,
@@ -526,14 +663,12 @@ class _SignupForm extends StatelessWidget {
         ),
         const SizedBox(height: 8),
 
-        // ── Error banner ───────────────────────────────────────────────────
         if (vm.errorMessage != null) ...[
           const SizedBox(height: 8),
           _ErrorBanner(message: vm.errorMessage!),
         ],
         const SizedBox(height: 24),
 
-        // ── Sign Up button ─────────────────────────────────────────────────
         SizedBox(
           width:  double.infinity,
           height: 54,
@@ -565,7 +700,6 @@ class _SignupForm extends StatelessWidget {
         ),
         const SizedBox(height: 20),
 
-        // ── Already have an account? ───────────────────────────────────────
         Center(
           child: GestureDetector(
             onTap: onNavigateToLogin,
@@ -573,9 +707,9 @@ class _SignupForm extends StatelessWidget {
               text: TextSpan(
                 style: const TextStyle(
                     fontSize: 14, color: AppColors.textGrey),
-                children: [
-                  const TextSpan(text: 'Already have an account? '),
-                  const TextSpan(
+                children: const [
+                  TextSpan(text: 'Already have an account? '),
+                  TextSpan(
                     text: 'Login',
                     style: TextStyle(
                       color:      AppColors.primary,
@@ -596,8 +730,7 @@ class _SignupForm extends StatelessWidget {
 // ── Password strength bar ─────────────────────────────────────────────────────
 
 class _PasswordStrengthBar extends StatelessWidget {
-  final double strength; // 0.0–1.0
-
+  final double strength;
   const _PasswordStrengthBar({required this.strength});
 
   String get _label {

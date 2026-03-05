@@ -34,7 +34,9 @@ class HomeViewModel extends ChangeNotifier {
 
   String  get userName        => _profile?.name          ?? '';
   double  get walletBalance   => _profile?.walletBalance ?? 0.0;
-  String? get profileImageUrl => _profile?.profileImageUrl; // NEW — avatar in header/drawer
+  String? get profileImageUrl => _profile?.profileImageUrl;
+  String  get referralCode => _profile?.referralCode ?? '';
+  String  get referralUrl  => _profile?.referralUrl  ?? '';
 
   // ── Load ──────────────────────────────────────────────────────────────────
 

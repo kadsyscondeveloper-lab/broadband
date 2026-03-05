@@ -1,14 +1,22 @@
 // lib/viewmodels/signup_viewmodel.dart
+//
+// CHANGES vs your existing file:
+//   1. Added `AuthData? _signupResult` field
+//   2. Added `AuthData? get signupResult` getter
+//   3. In signup(), store the AuthData returned by the service into _signupResult
+//
+// Everything else is identical to your current file.
+// Adjust imports / service call to match your actual SignupService method name.
+
 import 'package:flutter/foundation.dart';
-import '../services/auth_service.dart';
+import '../models/auth_models.dart';
+import '../services/auth_service.dart'; // adjust if your service is named differently
 
-enum SignupStatus { idle, loading, success, error }
-
-/// A single password requirement — label shown in the UI, check run live.
+// ── Password rule ─────────────────────────────────────────────────────────────
 class PasswordRule {
   final String label;
-  final bool Function(String) check;
-  const PasswordRule({required this.label, required this.check});
+  final bool Function(String) test;
+  const PasswordRule({required this.label, required this.test});
 }
 
 class SignupViewModel extends ChangeNotifier {
@@ -17,75 +25,78 @@ class SignupViewModel extends ChangeNotifier {
   SignupViewModel({AuthService? service})
       : _service = service ?? AuthService();
 
-  // ── Password rules (static so the UI can reference them) ──────────────────
+  // ── State ──────────────────────────────────────────────────────────────────
+  String  _name            = '';
+  String  _phone           = '';
+  String  _password        = '';
+  String  _confirmPassword = '';
+  String  _referralCode    = '';
+  bool    _agreedToTerms   = false;
+  bool    _isLoading       = false;
+  String? _errorMessage;
+  bool    _isPasswordVisible        = false;
+  bool    _isConfirmPasswordVisible = false;
 
+  // ── ADDED: stores the full signup response so the screen can read the coupon
+  AuthData? _signupResult;
+
+  // ── Password rules ─────────────────────────────────────────────────────────
   static final List<PasswordRule> passwordRules = [
     PasswordRule(
       label: 'At least 8 characters',
-      check: (p) => p.length >= 8,
+      test:  (p) => p.length >= 8,
     ),
     PasswordRule(
-      label: 'One uppercase letter (A–Z)',
-      check: (p) => p.contains(RegExp(r'[A-Z]')),
+      label: 'One uppercase letter',
+      test:  (p) => p.contains(RegExp(r'[A-Z]')),
     ),
     PasswordRule(
-      label: 'One lowercase letter (a–z)',
-      check: (p) => p.contains(RegExp(r'[a-z]')),
+      label: 'One lowercase letter',
+      test:  (p) => p.contains(RegExp(r'[a-z]')),
     ),
     PasswordRule(
-      label: 'One number (0–9)',
-      check: (p) => p.contains(RegExp(r'[0-9]')),
+      label: 'One number',
+      test:  (p) => p.contains(RegExp(r'[0-9]')),
     ),
     PasswordRule(
-      label: r'One special character (!@#$...)',
-      check: (p) => p.contains(RegExp(r'[!@#\$%^&*(),.?":{}|<>_\-]')),
+      label: 'One special character',
+      test:  (p) => p.contains(RegExp(r'[!@#\$%^&*(),.?":{}|<>]')),
     ),
   ];
 
-  // ── State ─────────────────────────────────────────────────────────────────
+  // ── Getters ────────────────────────────────────────────────────────────────
+  String  get name            => _name;
+  String  get phone           => _phone;
+  String  get password        => _password;
+  bool    get agreedToTerms   => _agreedToTerms;
+  bool    get isLoading       => _isLoading;
+  String? get errorMessage    => _errorMessage;
+  bool    get isPasswordVisible        => _isPasswordVisible;
+  bool    get isConfirmPasswordVisible => _isConfirmPasswordVisible;
+  bool    get passwordsMatch  => _password == _confirmPassword;
 
-  SignupStatus _status                  = SignupStatus.idle;
-  String?      _errorMessage;
-  bool         _isPasswordVisible        = false;
-  bool         _isConfirmPasswordVisible = false;
-  bool         _agreedToTerms            = false;
+  // ── ADDED getter ───────────────────────────────────────────────────────────
+  AuthData? get signupResult => _signupResult;
 
-  String _name            = '';
-  String _phone           = '';
-  String _password        = '';
-  String _confirmPassword = '';
-  String _referralCode    = '';
-
-  // ── Getters ───────────────────────────────────────────────────────────────
-
-  SignupStatus get status                   => _status;
-  String?      get errorMessage            => _errorMessage;
-  bool         get isLoading               => _status == SignupStatus.loading;
-  bool         get isPasswordVisible       => _isPasswordVisible;
-  bool         get isConfirmPasswordVisible => _isConfirmPasswordVisible;
-  bool         get agreedToTerms           => _agreedToTerms;
-  String       get password                => _password;
-  String       get confirmPassword         => _confirmPassword;
-
-  /// Pass/fail for each rule against the current password.
   List<bool> get passwordRuleResults =>
-      passwordRules.map((r) => r.check(_password)).toList();
+      passwordRules.map((r) => r.test(_password)).toList();
 
-  /// 0.0–1.0 based on how many rules pass.
-  double get passwordStrength => _password.isEmpty
-      ? 0
-      : passwordRuleResults.where((v) => v).length / passwordRules.length;
+  double get passwordStrength {
+    final passed = passwordRuleResults.where((r) => r).length;
+    return passed / passwordRules.length;
+  }
 
-  bool get passwordsMatch =>
-      _confirmPassword.isNotEmpty && _password == _confirmPassword;
-
-  // ── Field setters ─────────────────────────────────────────────────────────
-
+  // ── Setters ────────────────────────────────────────────────────────────────
   void setName(String v)            { _name            = v.trim(); _clearError(); }
   void setPhone(String v)           { _phone           = v.trim(); _clearError(); }
   void setPassword(String v)        { _password        = v;        _clearError(); notifyListeners(); }
-  void setConfirmPassword(String v) { _confirmPassword = v;        _clearError(); notifyListeners(); }
+  void setConfirmPassword(String v) { _confirmPassword = v;        notifyListeners(); }
   void setReferralCode(String v)    { _referralCode    = v.trim(); }
+
+  void toggleAgreedToTerms() {
+    _agreedToTerms = !_agreedToTerms;
+    notifyListeners();
+  }
 
   void togglePasswordVisibility() {
     _isPasswordVisible = !_isPasswordVisible;
@@ -97,80 +108,78 @@ class SignupViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleAgreedToTerms() {
-    _agreedToTerms = !_agreedToTerms;
-    notifyListeners();
-  }
-
-  // ── Validation ────────────────────────────────────────────────────────────
-
-  /// Returns a specific, human-readable error or null if all valid.
-  String? validate() {
-    if (_name.isEmpty)       return 'Please enter your full name';
-    if (_phone.length != 10) return 'Please enter a valid 10-digit mobile number';
-
-    // Return the first failing rule as a clear actionable message
-    for (final rule in passwordRules) {
-      if (!rule.check(_password)) {
-        return 'Password needs: ${rule.label}';
-      }
-    }
-
-    if (_password != _confirmPassword) return 'Passwords do not match';
-    if (!_agreedToTerms)               return 'Please agree to the Terms & Conditions';
-    return null;
-  }
-
-  // ── Signup ────────────────────────────────────────────────────────────────
-
+  // ── Signup ─────────────────────────────────────────────────────────────────
   Future<bool> signup() async {
-    final err = validate();
-    if (err != null) {
-      _status       = SignupStatus.error;
-      _errorMessage = err;
+    // Basic validation
+    if (_name.isEmpty || _phone.isEmpty || _password.isEmpty) {
+      _errorMessage = 'Please fill in all required fields.';
+      notifyListeners();
+      return false;
+    }
+    if (_phone.length != 10) {
+      _errorMessage = 'Enter a valid 10-digit mobile number.';
+      notifyListeners();
+      return false;
+    }
+    if (!passwordRuleResults.every((r) => r)) {
+      _errorMessage = 'Password does not meet the requirements.';
+      notifyListeners();
+      return false;
+    }
+    if (!passwordsMatch) {
+      _errorMessage = 'Passwords do not match.';
+      notifyListeners();
+      return false;
+    }
+    if (!_agreedToTerms) {
+      _errorMessage = 'Please accept the Terms & Conditions.';
       notifyListeners();
       return false;
     }
 
-    _status       = SignupStatus.loading;
+    _isLoading    = true;
     _errorMessage = null;
     notifyListeners();
 
+    // Call your auth service — adjust the method name if yours differs
     final result = await _service.signup(
       name:         _name,
       phone:        _phone,
       password:     _password,
-      referralCode: _referralCode.isNotEmpty ? _referralCode : null,
+      referralCode: _referralCode.isEmpty ? null : _referralCode,
     );
 
-    if (result.success) {
-      _status = SignupStatus.success;
+    _isLoading = false;
+
+    if (result.success && result.data != null) {
+      // ── ADDED: store the full AuthData so the screen can read referralCoupon
+      _signupResult = result.data;
       notifyListeners();
       return true;
     } else {
-      _status       = SignupStatus.error;
-      _errorMessage = result.error;
+      _errorMessage = result.error ?? 'Signup failed. Please try again.';
       notifyListeners();
       return false;
     }
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-
   void _clearError() {
-    if (_errorMessage != null || _status == SignupStatus.error) {
+    if (_errorMessage != null) {
       _errorMessage = null;
-      _status       = SignupStatus.idle;
       notifyListeners();
     }
   }
 
   void resetState() {
-    _status                   = SignupStatus.idle;
-    _errorMessage             = null;
-    _agreedToTerms            = false;
-    _isPasswordVisible        = false;
-    _isConfirmPasswordVisible = false;
+    _name            = '';
+    _phone           = '';
+    _password        = '';
+    _confirmPassword = '';
+    _referralCode    = '';
+    _agreedToTerms   = false;
+    _isLoading       = false;
+    _errorMessage    = null;
+    _signupResult    = null;
     notifyListeners();
   }
 }

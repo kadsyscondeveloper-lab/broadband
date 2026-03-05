@@ -40,7 +40,7 @@ dependencies:
   # Atom Pay official Flutter SDK (handles WebView, encryption, callbacks internally)
   ntt_atom_flutter: ^1.0.5
 
-  share_plus: ^9.0.0
+  share_plus: 12.0.1
 
   url_launcher: ^6.3.0
   image_picker: ^1.0.7

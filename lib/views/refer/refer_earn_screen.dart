@@ -1,22 +1,59 @@
 // lib/views/refer/refer_earn_screen.dart
-//
-// Changes vs previous version:
-//  1. Accepts referralCode + referralUrl constructor params instead of hardcoded string.
-//  2. Share button calls share_plus Share.share() with the real link.
-//  3. Copy button uses the real link.
-//  4. Shows a loading/fallback state while the link is null.
-//
-// IMPORTANT — add this to pubspec.yaml if not already present:
-//   share_plus: ^9.0.0
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:share_plus/share_plus.dart'; // ← add share_plus to pubspec.yaml
+import 'package:share_plus/share_plus.dart';
+import '../../core/api_client.dart';
 import '../../theme/app_theme.dart';
 
-class ReferEarnScreen extends StatelessWidget {
-  // ── FIX: real data passed in from the calling screen ──────────────────────
+// ── Simple coupon model (matches GET /api/v1/user/coupons response) ───────────
+class _Coupon {
+  final String  code;
+  final String? description;
+  final String  discountType;   // 'percentage' | 'flat'
+  final double  discountValue;
+  final double? maxDiscountAmount;
+  final DateTime validTo;
+
+  const _Coupon({
+    required this.code,
+    this.description,
+    required this.discountType,
+    required this.discountValue,
+    this.maxDiscountAmount,
+    required this.validTo,
+  });
+
+  factory _Coupon.fromJson(Map<String, dynamic> j) => _Coupon(
+    code:              j['code']               as String,
+    description:       j['description']        as String?,
+    discountType:      j['discount_type']      as String,
+    discountValue:     (j['discount_value']    as num).toDouble(),
+    maxDiscountAmount: j['max_discount_amount'] != null
+        ? (j['max_discount_amount'] as num).toDouble()
+        : null,
+    validTo: DateTime.parse(j['valid_to'] as String),
+  );
+
+  String get discountLabel {
+    if (discountType == 'percentage') {
+      final cap = maxDiscountAmount != null
+          ? ' (up to ₹${maxDiscountAmount!.toStringAsFixed(0)})'
+          : '';
+      return '${discountValue.toStringAsFixed(0)}% off$cap';
+    }
+    return '₹${discountValue.toStringAsFixed(0)} off';
+  }
+
+  int get daysLeft {
+    final diff = validTo.difference(DateTime.now()).inDays;
+    return diff < 0 ? 0 : diff;
+  }
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
+
+class ReferEarnScreen extends StatefulWidget {
   final String? referralCode;
   final String? referralUrl;
 
@@ -25,14 +62,46 @@ class ReferEarnScreen extends StatelessWidget {
     this.referralCode,
     this.referralUrl,
   });
-  // ─────────────────────────────────────────────────────────────────────────
 
-  /// The shareable link — uses referralUrl from backend if available,
-  /// falls back to a constructed URL using the code.
+  @override
+  State<ReferEarnScreen> createState() => _ReferEarnScreenState();
+}
+
+class _ReferEarnScreenState extends State<ReferEarnScreen> {
+  List<_Coupon> _coupons     = [];
+  bool          _loadingCoupons = true;
+  String?       _couponsError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCoupons();
+  }
+
+  Future<void> _loadCoupons() async {
+    try {
+      // Calls GET /api/v1/user/coupons via your existing ApiClient
+      final res = await ApiClient().get('/user/coupons');
+      final List<dynamic> raw =
+          (res.data['data']['coupons'] as List<dynamic>?) ?? [];
+      setState(() {
+        _coupons       = raw.map((e) => _Coupon.fromJson(e as Map<String, dynamic>)).toList();
+        _loadingCoupons = false;
+      });
+    } catch (e) {
+      setState(() {
+        _couponsError   = 'Could not load coupons';
+        _loadingCoupons = false;
+      });
+    }
+  }
+
   String get _shareLink {
-    if (referralUrl != null && referralUrl!.isNotEmpty) return referralUrl!;
-    if (referralCode != null && referralCode!.isNotEmpty) {
-      return 'https://speedonet.in/refer?code=$referralCode';
+    if (widget.referralUrl != null && widget.referralUrl!.isNotEmpty) {
+      return widget.referralUrl!;
+    }
+    if (widget.referralCode != null && widget.referralCode!.isNotEmpty) {
+      return 'https://speedonet.in/refer?code=${widget.referralCode}';
     }
     return '';
   }
@@ -72,6 +141,7 @@ class ReferEarnScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+
             // ── Hero banner ───────────────────────────────────────────────
             Container(
               width: double.infinity,
@@ -192,16 +262,14 @@ class ReferEarnScreen extends StatelessWidget {
             const SizedBox(height: 16),
 
             // ── Referral code badge ───────────────────────────────────────
-            if (referralCode != null && referralCode!.isNotEmpty) ...[
+            if (widget.referralCode != null && widget.referralCode!.isNotEmpty) ...[
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withOpacity(0.06),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: AppColors.primary.withOpacity(0.2)),
+                  border: Border.all(color: AppColors.primary.withOpacity(0.2)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -209,29 +277,32 @@ class ReferEarnScreen extends StatelessWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Your Referral Code',
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textGrey,
-                                fontWeight: FontWeight.w500)),
+                        const Text(
+                          'Your Referral Code',
+                          style: TextStyle(
+                            fontSize:   11,
+                            color:      AppColors.textGrey,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                         const SizedBox(height: 2),
                         Text(
-                          referralCode!,
+                          widget.referralCode!,
                           style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                              color: AppColors.primary,
-                              letterSpacing: 2),
+                            fontSize:      22,
+                            fontWeight:    FontWeight.w900,
+                            color:         AppColors.primary,
+                            letterSpacing: 2,
+                          ),
                         ),
                       ],
                     ),
                     GestureDetector(
                       onTap: () {
-                        Clipboard.setData(
-                            ClipboardData(text: referralCode!));
+                        Clipboard.setData(ClipboardData(text: widget.referralCode!));
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Referral code copied!'),
+                            content:  Text('Referral code copied!'),
                             duration: Duration(seconds: 1),
                           ),
                         );
@@ -239,7 +310,7 @@ class ReferEarnScreen extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: AppColors.background,
+                          color:        AppColors.background,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Icon(Icons.copy_outlined,
@@ -255,32 +326,28 @@ class ReferEarnScreen extends StatelessWidget {
             // ── Referral link box ─────────────────────────────────────────
             if (hasLink) ...[
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color:        Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.borderColor),
+                  border:       Border.all(color: AppColors.borderColor),
                 ),
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
                         _shareLink,
-                        style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textDark),
+                        style: const TextStyle(fontSize: 13, color: AppColors.textDark),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     const SizedBox(width: 8),
                     GestureDetector(
                       onTap: () {
-                        Clipboard.setData(
-                            ClipboardData(text: _shareLink));
+                        Clipboard.setData(ClipboardData(text: _shareLink));
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Link copied!'),
+                            content:  Text('Link copied!'),
                             duration: Duration(seconds: 1),
                           ),
                         );
@@ -288,7 +355,7 @@ class ReferEarnScreen extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: AppColors.background,
+                          color:        AppColors.background,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Icon(Icons.copy_outlined,
@@ -300,19 +367,17 @@ class ReferEarnScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
             ] else ...[
-              // Shown while profile is still loading or if no code exists
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
+                  color:        Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Center(
                   child: Text(
                     'Referral link not available yet',
-                    style: TextStyle(
-                        color: AppColors.textGrey, fontSize: 13),
+                    style: TextStyle(color: AppColors.textGrey, fontSize: 13),
                   ),
                 ),
               ),
@@ -323,7 +388,6 @@ class ReferEarnScreen extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                // ── FIX: calls share_plus with the real link ──────────────
                 onPressed: hasLink
                     ? () => Share.share(
                   'Join me on Speedonet! Use my referral link to sign up '
@@ -331,42 +395,137 @@ class ReferEarnScreen extends StatelessWidget {
                   subject: 'Join Speedonet with my referral',
                 )
                     : null,
-                // ─────────────────────────────────────────────────────────
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  disabledBackgroundColor:
-                  AppColors.primary.withOpacity(0.4),
+                  backgroundColor:         AppColors.primary,
+                  disabledBackgroundColor: AppColors.primary.withOpacity(0.4),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                   elevation: 0,
                 ),
-                child: const Text('Share Link',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16)),
+                child: const Text(
+                  'Share Link',
+                  style: TextStyle(
+                    color:      Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize:   16,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 24),
 
+            // ── MY COUPONS SECTION ────────────────────────────────────────
+            // Shows active referral coupons the user received on signup.
+            // Fetched from GET /api/v1/user/coupons
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'My Coupons',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+                if (!_loadingCoupons && _coupons.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color:        AppColors.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '${_coupons.length} active',
+                      style: const TextStyle(
+                        fontSize:   11,
+                        color:      AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            if (_loadingCoupons)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                decoration: BoxDecoration(
+                  color:        Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Center(
+                  child: SizedBox(
+                    width: 22, height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              )
+            else if (_couponsError != null)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                decoration: BoxDecoration(
+                  color:        Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Center(
+                  child: Text(
+                    _couponsError!,
+                    style: const TextStyle(
+                        color: AppColors.textGrey, fontSize: 13),
+                  ),
+                ),
+              )
+            else if (_coupons.isEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color:        Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(PhosphorIcons.ticket(),
+                          color: AppColors.textLight, size: 28),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          'No coupons yet.\nReferral coupons appear here after signup.',
+                          style: TextStyle(
+                              color: AppColors.textGrey, fontSize: 13, height: 1.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _coupons.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (_, i) => _CouponCard(coupon: _coupons[i]),
+                ),
+            // ─────────────────────────────────────────────────────────────
+
+            const SizedBox(height: 24),
+
             // ── How it works ──────────────────────────────────────────────
-            const Text('How it works?',
-                style: TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w700)),
+            const Text(
+              'How it works?',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 12),
             Container(
               decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12)),
+                  color: Colors.white, borderRadius: BorderRadius.circular(12)),
               child: ListView.separated(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: howItWorks.length,
-                separatorBuilder: (_, __) => Divider(
-                    height: 1,
-                    color: AppColors.borderColor,
-                    indent: 72),
+                separatorBuilder: (_, __) =>
+                    Divider(height: 1, color: AppColors.borderColor, indent: 72),
                 itemBuilder: (_, i) {
                   final item = howItWorks[i];
                   return ListTile(
@@ -381,16 +540,17 @@ class ReferEarnScreen extends StatelessWidget {
                       ),
                       child: Center(
                         child: PhosphorIcon(
-                            item['icon'] as PhosphorIconData,
-                            color: AppColors.textDark,
-                            size: 22),
+                          item['icon'] as PhosphorIconData,
+                          color: AppColors.textDark,
+                          size:  22,
+                        ),
                       ),
                     ),
-                    title: Text(item['text'] as String,
-                        style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textGrey,
-                            height: 1.4)),
+                    title: Text(
+                      item['text'] as String,
+                      style: const TextStyle(
+                          fontSize: 13, color: AppColors.textGrey, height: 1.4),
+                    ),
                   );
                 },
               ),
@@ -400,8 +560,7 @@ class ReferEarnScreen extends StatelessWidget {
             // ── FAQ & Terms ───────────────────────────────────────────────
             Container(
               decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12)),
+                  color: Colors.white, borderRadius: BorderRadius.circular(12)),
               child: Column(
                 children: [
                   ListTile(
@@ -421,16 +580,13 @@ class ReferEarnScreen extends StatelessWidget {
                     ),
                     title: const Text('Frequently Asked Questions',
                         style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500)),
+                            fontSize: 14, fontWeight: FontWeight.w500)),
                     trailing: const Icon(Icons.arrow_forward_ios,
                         size: 14, color: AppColors.textLight),
                     onTap: () {},
                   ),
                   Divider(
-                      height: 1,
-                      color: AppColors.borderColor,
-                      indent: 72),
+                      height: 1, color: AppColors.borderColor, indent: 72),
                   ListTile(
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 14),
@@ -448,8 +604,7 @@ class ReferEarnScreen extends StatelessWidget {
                     ),
                     title: const Text('Terms and Conditions',
                         style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500)),
+                            fontSize: 14, fontWeight: FontWeight.w500)),
                     trailing: const Icon(Icons.arrow_forward_ios,
                         size: 14, color: AppColors.textLight),
                     onTap: () {},
@@ -458,6 +613,186 @@ class ReferEarnScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Coupon card ───────────────────────────────────────────────────────────────
+
+class _CouponCard extends StatelessWidget {
+  final _Coupon coupon;
+  const _CouponCard({required this.coupon});
+
+  @override
+  Widget build(BuildContext context) {
+    final daysLeft  = coupon.daysLeft;
+    final isUrgent  = daysLeft <= 5;
+
+    return Container(
+      decoration: BoxDecoration(
+        color:        Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border:       Border.all(
+          color: isUrgent
+              ? Colors.orange.shade200
+              : Colors.green.shade200,
+        ),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            // Left coloured strip
+            Container(
+              width: 6,
+              decoration: BoxDecoration(
+                color: isUrgent
+                    ? Colors.orange.shade400
+                    : Colors.green.shade500,
+                borderRadius: const BorderRadius.only(
+                  topLeft:    Radius.circular(12),
+                  bottomLeft: Radius.circular(12),
+                ),
+              ),
+            ),
+
+            // Content
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Discount headline
+                          Text(
+                            coupon.discountLabel,
+                            style: TextStyle(
+                              fontSize:   15,
+                              fontWeight: FontWeight.w800,
+                              color:      isUrgent
+                                  ? Colors.orange.shade700
+                                  : Colors.green.shade700,
+                            ),
+                          ),
+                          if (coupon.description != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              coupon.description!,
+                              style: const TextStyle(
+                                  fontSize: 11, color: AppColors.textGrey),
+                            ),
+                          ],
+                          const SizedBox(height: 8),
+                          // Code chip
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: isUrgent
+                                  ? Colors.orange.shade50
+                                  : Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: isUrgent
+                                    ? Colors.orange.shade200
+                                    : Colors.green.shade200,
+                              ),
+                            ),
+                            child: Text(
+                              coupon.code,
+                              style: TextStyle(
+                                fontSize:      13,
+                                fontWeight:    FontWeight.w800,
+                                letterSpacing: 1.5,
+                                color: isUrgent
+                                    ? Colors.orange.shade700
+                                    : Colors.green.shade700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          // Expiry
+                          Row(children: [
+                            Icon(
+                              Icons.access_time_rounded,
+                              size:  12,
+                              color: isUrgent
+                                  ? Colors.orange.shade600
+                                  : AppColors.textGrey,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              daysLeft == 0
+                                  ? 'Expires today!'
+                                  : 'Expires in $daysLeft day${daysLeft == 1 ? '' : 's'}',
+                              style: TextStyle(
+                                fontSize:   11,
+                                color:      isUrgent
+                                    ? Colors.orange.shade600
+                                    : AppColors.textGrey,
+                                fontWeight: isUrgent
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
+                              ),
+                            ),
+                          ]),
+                        ],
+                      ),
+                    ),
+
+                    // Copy button
+                    GestureDetector(
+                      onTap: () {
+                        Clipboard.setData(
+                            ClipboardData(text: coupon.code));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content:  Text('${coupon.code} copied!'),
+                            duration: const Duration(seconds: 1),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color:        AppColors.background,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.copy_rounded,
+                              size:  18,
+                              color: isUrgent
+                                  ? Colors.orange.shade600
+                                  : Colors.green.shade600,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Copy',
+                              style: TextStyle(
+                                fontSize:   9,
+                                color:      isUrgent
+                                    ? Colors.orange.shade600
+                                    : Colors.green.shade600,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
