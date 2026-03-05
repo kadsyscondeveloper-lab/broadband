@@ -943,7 +943,7 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                       child: CircularProgressIndicator(
                           color: Colors.white, strokeWidth: 2))
                       : Text(
-                    'Pay ₹${_finalTotal.toStringAsFixed(0)}',
+                    'Pay ₹${_finalTotal.toStringAsFixed(2)}',
                     style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
@@ -1127,16 +1127,20 @@ class _SuccessDialog extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: Colors.green.shade200),
               ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.local_offer_rounded,
-                    color: Colors.green, size: 16),
+              child: Row(children: [
+                const Icon(Icons.local_offer_rounded, color: Colors.green, size: 16),
                 const SizedBox(width: 6),
-                Text(
-                  'Coupon $coupon saved you ₹${discount.toStringAsFixed(2)}',
-                  style: const TextStyle(
+                Expanded(
+                  child: Text(
+                    'Coupon $coupon saved you ₹${discount.toStringAsFixed(2)}',
+                    style: const TextStyle(
                       fontSize: 13,
                       color: Colors.green,
-                      fontWeight: FontWeight.w600),
+                      fontWeight: FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
+                  ),
                 ),
               ]),
             ),
