@@ -18,7 +18,6 @@ class ProfileAddress {
     this.pinCode = '',
   });
 
-  // Fields are FLAT on the profile object (not nested)
   factory ProfileAddress.fromFlatJson(Map<String, dynamic> j) => ProfileAddress(
     houseNo: j['house_no']  as String? ?? '',
     address: j['address']   as String? ?? '',
@@ -55,8 +54,6 @@ class FullProfile {
     required this.address,
   });
 
-  // API response: data.profile — all fields are FLAT (no nested address object)
-  // Example: { "name": "...", "house_no": "...", "city": "...", "kyc_status": "pending" }
   factory FullProfile.fromJson(Map<String, dynamic> j) {
     final rawId = j['id'];
     final id = rawId is num
@@ -74,11 +71,11 @@ class FullProfile {
       phone:           j['phone']         as String? ?? '',
       email:           j['email']         as String? ?? '',
       walletBalance:   balance,
-      profileImageUrl: j['profile_image'] as String?,   // key is profile_image not profile_image_url
+      profileImageUrl: j['profile_image'] as String?,
       kycStatus:       j['kyc_status']    as String? ?? 'not_submitted',
       referralCode:    j['referral_code'] as String?,
       referralUrl:     j['referral_url']  as String?,
-      address:         ProfileAddress.fromFlatJson(j),  // flat — same object
+      address:         ProfileAddress.fromFlatJson(j),
     );
   }
 
@@ -119,11 +116,9 @@ class UserService {
   final _api = ApiClient();
 
   // GET /user/profile
-  // Response: { "data": { "profile": { ...flat fields... } } }
   Future<FullProfile?> getProfile() async {
     try {
       final res = await _api.get('/user/profile');
-      // Unwrap: res.data['data']['profile']
       final profileJson = res.data['data']?['profile'] as Map<String, dynamic>?;
       if (profileJson == null) return null;
       return FullProfile.fromJson(profileJson);
@@ -132,7 +127,28 @@ class UserService {
     }
   }
 
-  // PUT /user/profile — { name, email }
+  // GET /locations/states
+  Future<List<String>> getStates() async {
+    try {
+      final res = await _api.get('/locations/states');  // ✅ _api not _dio
+      return List<String>.from(res.data['data']['states'] as List);
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // GET /locations/cities?state=Maharashtra
+  Future<List<String>> getCities(String state) async {
+    try {
+      final encoded = Uri.encodeQueryComponent(state);
+      final res = await _api.get('/locations/cities?state=$encoded');
+      return List<String>.from(res.data['data']['cities'] as List);
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // PUT /user/profile
   Future<UserResult> updateProfile({
     required String name,
     required String email,
@@ -147,7 +163,7 @@ class UserService {
     }
   }
 
-  // PUT /user/addresses/primary — { house_no, address, city, state, pin_code }
+  // PUT /user/addresses/primary
   Future<UserResult> updatePrimaryAddress({
     required String houseNo,
     required String address,

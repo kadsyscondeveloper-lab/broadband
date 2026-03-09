@@ -16,9 +16,16 @@ class ProfileViewModel extends ChangeNotifier {
   bool    _updateSuccess  = false;
 
   // ── Image upload state ────────────────────────────────────────────────────
-  String? _localImageBase64; // raw base64 from the picker — shown immediately
+  String? _localImageBase64;
   bool    _imageUploading = false;
   String? _imageError;
+
+  // ── Location state ────────────────────────────────────────────────────────
+  List<String> _states          = [];
+  List<String> _cities          = [];
+  bool         _statesLoading   = false;
+  bool         _citiesLoading   = false;
+  String?      _locationsError;
 
   // ── Getters ───────────────────────────────────────────────────────────────
 
@@ -34,6 +41,13 @@ class ProfileViewModel extends ChangeNotifier {
   bool    get imageUploading    => _imageUploading;
   String? get imageError        => _imageError;
 
+  // Locations
+  List<String> get states         => _states;
+  List<String> get cities         => _cities;
+  bool         get statesLoading  => _statesLoading;
+  bool         get citiesLoading  => _citiesLoading;
+  String?      get locationsError => _locationsError;
+
   // Convenience getters used directly in the UI
   String get name          => _profile?.name          ?? '';
   String get phone         => _profile?.phone         ?? '';
@@ -46,22 +60,7 @@ class ProfileViewModel extends ChangeNotifier {
   double get walletBalance => _profile?.walletBalance ?? 0.0;
   String get kycStatus     => _profile?.kycStatus     ?? 'not_submitted';
 
-  /// The server-stored image URL/data URI — used by other screens.
   String? get profileImageUrl => _profile?.profileImageUrl;
-
-  final List<String> states = [
-    'Andhra Pradesh', 'Assam', 'Bihar', 'Delhi', 'Gujarat',
-    'Haryana', 'Karnataka', 'Kerala', 'Madhya Pradesh',
-    'Maharashtra', 'Punjab', 'Rajasthan', 'Tamil Nadu',
-    'Telangana', 'Uttar Pradesh', 'West Bengal',
-  ];
-
-  final List<String> cities = [
-    'Ahmedabad', 'Bangalore', 'Bawana', 'Chennai', 'Delhi',
-    'Dwarka', 'Gurgaon', 'Hyderabad', 'Jaipur', 'Kolkata',
-    'Lajpat Nagar', 'Lucknow', 'Mumbai', 'Noida', 'Pune',
-    'Rohini', 'Saket', 'Surat',
-  ];
 
   // ── Load profile from API ─────────────────────────────────────────────────
 
@@ -77,13 +76,52 @@ class ProfileViewModel extends ChangeNotifier {
 
     _isLoading = false;
     notifyListeners();
+
+    // After profile loads, fetch states and cities for the current state
+    await loadStates();
+    if (state.isNotEmpty) {
+      await loadCitiesForState(state);
+    }
+  }
+
+  // ── Location loaders ──────────────────────────────────────────────────────
+
+  Future<void> loadStates() async {
+    if (_statesLoading) return;
+    _statesLoading   = true;
+    _locationsError  = null;
+    notifyListeners();
+
+    try {
+      _states = await _service.getStates();
+    } catch (_) {
+      _locationsError = 'Could not load states. Please try again.';
+    }
+
+    _statesLoading = false;
+    notifyListeners();
+  }
+
+  /// Called whenever the user picks a new state — clears city and fetches
+  /// the fresh city list for that state from the backend.
+  Future<void> loadCitiesForState(String stateName) async {
+    if (_citiesLoading) return;
+    _cities        = [];
+    _citiesLoading = true;
+    notifyListeners();
+
+    try {
+      _cities = await _service.getCities(stateName);
+    } catch (_) {
+      _locationsError = 'Could not load cities. Please try again.';
+    }
+
+    _citiesLoading = false;
+    notifyListeners();
   }
 
   // ── Profile image upload ──────────────────────────────────────────────────
 
-  /// Shows system image picker for [source], uploads to backend, and
-  /// updates local state immediately so the UI refreshes without waiting
-  /// for a full profile reload.
   Future<void> pickAndUploadImage(ImageSource source) async {
     _imageUploading = true;
     _imageError     = null;
@@ -93,11 +131,8 @@ class ProfileViewModel extends ChangeNotifier {
 
     if (result.success) {
       _localImageBase64 = result.imageBase64;
-      // Refresh full profile in the background so other screens get the
-      // updated URL too — don't await to keep UI snappy
       loadProfile();
     } else if (result.error != null) {
-      // null error = user cancelled, don't show anything
       _imageError = result.error;
     }
 
@@ -117,9 +152,13 @@ class ProfileViewModel extends ChangeNotifier {
 
   void updateState(String v) {
     _profile = _profile?.copyWith(address: ProfileAddress(
-      houseNo: houseNo, address: address, city: city, state: v, pinCode: pinCode,
+      houseNo: houseNo, address: address,
+      // Clear city when state changes — old city may not belong to new state
+      city: '', state: v, pinCode: pinCode,
     ));
     notifyListeners();
+    // Fetch fresh city list for the newly selected state
+    loadCitiesForState(v);
   }
 
   void updateCity(String v) {
@@ -159,7 +198,6 @@ class ProfileViewModel extends ChangeNotifier {
     _updateSuccess = false;
     notifyListeners();
 
-    // Run both calls concurrently
     final results = await Future.wait([
       _service.updateProfile(name: name, email: email),
       _service.updatePrimaryAddress(

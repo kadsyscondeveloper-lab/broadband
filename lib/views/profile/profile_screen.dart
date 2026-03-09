@@ -441,6 +441,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   value: vm.state,
                   items: vm.states,
                   onChanged: vm.updateState,
+                  isLoading: vm.statesLoading,
+                  hint: 'Select State',
                 ),
                 const SizedBox(height: 16),
 
@@ -451,6 +453,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   value: vm.city,
                   items: vm.cities,
                   onChanged: vm.updateCity,
+                  isLoading: vm.citiesLoading,
+                  hint: 'Select City',
                 ),
                 const SizedBox(height: 16),
 
@@ -594,16 +598,21 @@ class _DropdownField extends StatelessWidget {
   final String value;
   final List<String> items;
   final Function(String) onChanged;
+  final bool isLoading;
+  final String hint;
 
   const _DropdownField({
     required this.value,
     required this.items,
     required this.onChanged,
+    this.isLoading = false,
+    this.hint = 'Select',
   });
 
   @override
   Widget build(BuildContext context) {
-    final effectiveValue = items.contains(value) ? value : items.first;
+    // null when list is empty or value isn't in the list yet
+    final effectiveValue = items.contains(value) ? value : null;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -613,9 +622,40 @@ class _DropdownField extends StatelessWidget {
         border: Border.all(color: AppColors.borderColor),
       ),
       child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
+        child: isLoading
+            ? const SizedBox(
+          height: 48,
+          child: Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.primary,
+                ),
+              ),
+              SizedBox(width: 12),
+              Text(
+                'Loading...',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: AppColors.textGrey,
+                ),
+              ),
+            ],
+          ),
+        )
+            : DropdownButton<String>(
           value: effectiveValue,
           isExpanded: true,
+          hint: Text(
+            hint,
+            style: const TextStyle(
+              fontSize: 15,
+              color: AppColors.textGrey,
+            ),
+          ),
           icon: const Icon(Icons.keyboard_arrow_down,
               color: AppColors.textGrey),
           items: items
@@ -631,7 +671,9 @@ class _DropdownField extends StatelessWidget {
             ),
           ))
               .toList(),
-          onChanged: (v) => v != null ? onChanged(v) : null,
+          onChanged: items.isEmpty
+              ? null
+              : (v) => v != null ? onChanged(v) : null,
         ),
       ),
     );
