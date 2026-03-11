@@ -1,4 +1,4 @@
-// lib/services/atom_payment_service.dart
+ // lib/services/atom_payment_service.dart
 import '../core/api_client.dart';
 import '../core/app_config.dart';
 
@@ -35,7 +35,7 @@ class AtomInitiateResult {
     );
   }
 }
-
+  
 // ── Payment status model ──────────────────────────────────────────────────────
 
 class AtomPaymentStatus {
