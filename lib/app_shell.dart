@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:speedonet/views/payment/payments_screen.dart';
 import 'views/home/home_screen.dart';
-import 'views/payment/payments_screen.dart';
 import 'views/help/help_screen.dart';
 import 'views/pay/pay_screen.dart';
 import 'views/profile/profile_screen.dart';

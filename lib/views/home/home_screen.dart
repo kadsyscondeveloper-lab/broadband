@@ -3,7 +3,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../services/auth_service.dart';
 import '../../services/kyc_service.dart';
 import '../../theme/app_theme.dart';
