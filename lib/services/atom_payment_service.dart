@@ -1,44 +1,52 @@
 // lib/services/atom_payment_service.dart
-//
-// Payment Gateway (Omniware / KAD SYSCON) integration
-// Replaces old Atom logic — keeping same class/method names so no other files break
 
 import 'package:dio/dio.dart';
 import '../core/api_client.dart';
 
-// ── Initiate result ───────────────────────────────────────────────────────────
-
 class AtomInitiateResult {
   final String  orderRef;
   final String  amount;
-  final String  paymentUrl;  // unique PG payment page URL
+  final String  paymentUrl;
+  final String  gateway;      // 'omniware' or 'atom'
   final String? uuid;
   final String? expiresAt;
+  final String? custName;
+  final String? custEmail;
+  final String? custMobile;
 
   const AtomInitiateResult({
     required this.orderRef,
     required this.amount,
     required this.paymentUrl,
+    required this.gateway,
     this.uuid,
     this.expiresAt,
+    this.custName,
+    this.custEmail,
+    this.custMobile,
   });
+
+  bool get isAtom     => gateway == 'atom';
+  bool get isOmniware => gateway == 'omniware';
 
   factory AtomInitiateResult.fromJson(Map<String, dynamic> json) {
     return AtomInitiateResult(
-      orderRef:   json['orderRef']   as String? ?? '',
-      amount:     json['amount']     as String? ?? '0.00',
-      paymentUrl: json['paymentUrl'] as String? ?? '',
-      uuid:       json['uuid']       as String?,
-      expiresAt:  json['expiresAt']  as String?,
+      orderRef:   json['orderRef']    as String? ?? '',
+      amount:     json['amount']      as String? ?? '0.00',
+      paymentUrl: json['paymentUrl']  as String? ?? '',
+      gateway:    json['gateway']     as String? ?? 'omniware',
+      uuid:       json['uuid']        as String?,
+      expiresAt:  json['expiresAt']   as String?,
+      custName:   json['custName']    as String?,
+      custEmail:  json['custEmail']   as String?,
+      custMobile: json['custMobile']  as String?,
     );
   }
 }
 
-// ── Payment status result ─────────────────────────────────────────────────────
-
 class AtomPaymentStatus {
   final String  orderRef;
-  final String  paymentStatus; // 'pending' | 'success' | 'failed'
+  final String  paymentStatus;
   final String  totalAmount;
   final String? gatewayTxnId;
   final String? gatewayOrderId;
@@ -67,10 +75,7 @@ class AtomPaymentStatus {
   }
 }
 
-// ── Service ───────────────────────────────────────────────────────────────────
-
 class AtomPaymentService {
-  // Singleton
   static final AtomPaymentService _i = AtomPaymentService._();
   factory AtomPaymentService() => _i;
   AtomPaymentService._();
@@ -78,22 +83,19 @@ class AtomPaymentService {
   final _api = ApiClient();
 
   /// POST /api/v1/payments/pg/initiate
-  /// Used for wallet top-ups (wallet recharge screen).
-  Future<AtomInitiateResult?> initiateWalletRecharge(double amount) async {
-    return _initiate(amount);
-  }
-
-  /// POST /api/v1/payments/pg/initiate
-  /// Used for plan purchases (recharge screen).
-  Future<AtomInitiateResult?> initiateRecharge(double amount) async {
-    return _initiate(amount);
-  }
-
-  Future<AtomInitiateResult?> _initiate(double amount) async {
+  ///
+  /// [gateway] — 'omniware' (default/live) or 'atom' (UAT/test)
+  Future<AtomInitiateResult?> initiateWalletRecharge(
+      double amount, {
+        String gateway = 'omniware',
+      }) async {
     try {
       final response = await _api.post(
         '/payments/pg/initiate',
-        data: {'amount': amount},
+        data: {
+          'amount':  amount,
+          'gateway': gateway,
+        },
       );
 
       if (response.data['success'] == true) {
@@ -108,8 +110,12 @@ class AtomPaymentService {
     }
   }
 
+  /// Alias for backward compatibility
+  Future<AtomInitiateResult?> initiateRecharge(double amount) async {
+    return initiateWalletRecharge(amount);
+  }
+
   /// GET /api/v1/payments/pg/status/:orderRef
-  /// Polls until status is no longer 'pending', up to [maxAttempts] times.
   Future<AtomPaymentStatus?> pollPaymentStatus(
       String orderRef, {
         int maxAttempts = 12,
@@ -117,22 +123,15 @@ class AtomPaymentService {
       }) async {
     for (int i = 0; i < maxAttempts; i++) {
       try {
-        final response = await _api.get(
-          '/payments/pg/status/$orderRef',
-        );
-
+        final response = await _api.get('/payments/pg/status/$orderRef');
         if (response.data['success'] == true) {
           final status = AtomPaymentStatus.fromJson(
-            response.data['data'] as Map<String, dynamic>,
-          );
+              response.data['data'] as Map<String, dynamic>);
           if (!status.isPending) return status;
         }
       } catch (_) {}
-
-      if (i < maxAttempts - 1) {
-        await Future.delayed(delay);
-      }
+      if (i < maxAttempts - 1) await Future.delayed(delay);
     }
-    return null; // still pending after all attempts
+    return null;
   }
 }
