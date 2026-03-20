@@ -43,15 +43,10 @@ class _MobileRechargeScreenState extends State<MobileRechargeScreen>
     {'amount': '719', 'data': '2GB',   'validity': '84 Days', 'desc': 'Unlimited calls, 100 SMS/day + Data'},
   ];
 
-  final FlutterNativeContactPicker _contactPicker = FlutterNativeContactPicker();
-
   Future<void> _openContactPicker() async {
-    final contact = await _contactPicker.selectContact();
-    if (contact != null && contact.phoneNumbers != null && contact.phoneNumbers!.isNotEmpty) {
-      setState(() {
-        _phoneController.text = contact.phoneNumbers!.first.replaceAll(RegExp(r'[^0-9]'), '');
-      });
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Contact picker coming soon on iOS')),
+    );
   }
 
   List<Map<String, dynamic>> get _prepaidProviders {
@@ -307,17 +302,32 @@ class _MobileRechargeScreenState extends State<MobileRechargeScreen>
             ),
             child: providers.isEmpty
                 ? const Center(
-                    child: Text(
-                      'No postpaid providers available',
-                      style: TextStyle(color: AppColors.textLight, fontSize: 14),
-                    ),
-                  )
+              child: Text(
+                'No postpaid providers available',
+                style: TextStyle(color: AppColors.textLight, fontSize: 14),
+              ),
+            )
                 : ListView.separated(
-                    itemCount: providers.length,
-                    separatorBuilder: (_, __) => Divider(
-                      height: 1,
-                      color: AppColors.borderColor,
-                      indent: 68,
+              itemCount: providers.length,
+              separatorBuilder: (_, __) => Divider(
+                height: 1,
+                color: AppColors.borderColor,
+                indent: 68,
+              ),
+              itemBuilder: (ctx, i) {
+                final provider = providers[i];
+                final name = provider['name'] as String;
+                return ListTile(
+                  leading: ProviderAvatar(provider: provider, size: 40),
+                  title: Text(name, style: const TextStyle(fontSize: 14)),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CheckoutScreen(
+                        serviceType: 'Mobile Recharge Postpaid',
+                        providerName: name,
+                        amount: 0,
+                      ),
                     ),
                     itemBuilder: (ctx, i) {
                       final provider = providers[i];
