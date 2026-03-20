@@ -1,6 +1,5 @@
 // lib/views/recharge/mobile_recharge_screen.dart
 import 'package:flutter/material.dart';
-import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/provider_avatar.dart';
 import '../checkout/checkout_screen.dart';
@@ -243,7 +242,7 @@ class _MobileRechargeScreenState extends State<MobileRechargeScreen>
             ),
             const SizedBox(height: 12),
             ...plans.map(
-              (p) => _PlanCard(
+                  (p) => _PlanCard(
                 plan: p,
                 onSelect: () => Navigator.push(
                   context,
@@ -329,25 +328,10 @@ class _MobileRechargeScreenState extends State<MobileRechargeScreen>
                         amount: 0,
                       ),
                     ),
-                    itemBuilder: (ctx, i) {
-                      final provider = providers[i];
-                      final name = provider['name'] as String;
-                      return ListTile(
-                        leading: ProviderAvatar(provider: provider, size: 40),
-                        title: Text(name, style: const TextStyle(fontSize: 14)),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => CheckoutScreen(
-                              serviceType: 'Mobile Recharge Postpaid',
-                              providerName: name,
-                              amount: 0,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
                   ),
+                );
+              },
+            ),
           ),
         ),
       ],
