@@ -186,11 +186,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   onMenuTap: () =>
                       _scaffoldKey.currentState?.openDrawer(),
                   onNotificationTap: () async {
-                    await Navigator.push(
+                    final result = await Navigator.push<String>(
                       context,
                       MaterialPageRoute(builder: (_) => const NotificationsScreen()),
                     );
                     vm.refreshUnreadCount();
+
+                    if (!mounted) return;
+                    if (result == 'wallet') widget.onWalletTap?.call();
+                    if (result == 'refer')  _openReferEarn();
                   },
                   onWalletTap: widget.onWalletTap,
                 ),
