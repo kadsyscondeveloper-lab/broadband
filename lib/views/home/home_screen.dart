@@ -204,7 +204,7 @@ class _HomeScreenState extends State<HomeScreen> {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(
-                      16, 16, 16, bottomNavHeight + 16),
+                      16, 8, 16, bottomNavHeight + 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
