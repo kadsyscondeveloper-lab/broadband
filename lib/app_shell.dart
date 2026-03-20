@@ -1,6 +1,6 @@
 // lib/app_shell.dart
 import 'package:flutter/material.dart';
-import 'package:speedonet/views/payment/payments_screen.dart';
+import 'package:speedonet/views/payment/payment_history_screen.dart';
 import 'views/home/home_screen.dart';
 import 'views/help/help_screen.dart';
 import 'views/pay/pay_screen.dart';
@@ -106,7 +106,7 @@ class _AppShellState extends State<AppShell> {
           onLogout:            widget.onLogout,
         );
       case 1:
-        return const PaymentsScreen();
+        return const PaymentHistoryScreen();
       case 2:
         return PayScreen(viewModel: _payVM);
       case 3:
