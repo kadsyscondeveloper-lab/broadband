@@ -6,7 +6,7 @@ environment:
   sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
-  flutter_native_contact_picker: ^0.0.11
+  flutter_native_contact_picker: 0.0.11
   flutter:
     sdk: flutter
 

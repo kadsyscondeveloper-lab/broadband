@@ -1,5 +1,6 @@
 // lib/views/recharge/mobile_recharge_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/provider_avatar.dart';
 import '../checkout/checkout_screen.dart';
@@ -18,6 +19,7 @@ class _MobileRechargeScreenState extends State<MobileRechargeScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _phoneController = TextEditingController();
+  final FlutterNativeContactPicker _contactPicker = FlutterNativeContactPicker();
   String? _selectedOperator;
   String? _selectedCircle;
   String _planFilter = 'Top up Plans';
@@ -43,9 +45,23 @@ class _MobileRechargeScreenState extends State<MobileRechargeScreen>
   ];
 
   Future<void> _openContactPicker() async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Contact picker coming soon on iOS')),
-    );
+    try {
+      final contact = await _contactPicker.selectContact();
+      if (contact != null &&
+          contact.phoneNumbers != null &&
+          contact.phoneNumbers!.isNotEmpty) {
+        setState(() {
+          _phoneController.text = contact.phoneNumbers!.first
+              .replaceAll(RegExp(r'[^0-9]'), '');
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open contacts')),
+        );
+      }
+    }
   }
 
   List<Map<String, dynamic>> get _prepaidProviders {
@@ -320,7 +336,7 @@ class _MobileRechargeScreenState extends State<MobileRechargeScreen>
                   leading: ProviderAvatar(provider: provider, size: 40),
                   title: Text(name, style: const TextStyle(fontSize: 14)),
                   onTap: () => Navigator.push(
-                    context,
+                    ctx,
                     MaterialPageRoute(
                       builder: (_) => CheckoutScreen(
                         serviceType: 'Mobile Recharge Postpaid',
@@ -380,12 +396,19 @@ class _MobileRechargeScreenState extends State<MobileRechargeScreen>
                   errorBuilder: (_, __, ___) => Row(children: [
                     Container(
                       width: 18, height: 18,
-                      decoration: const BoxDecoration(color: Colors.orange, shape: BoxShape.circle),
+                      decoration: const BoxDecoration(
+                        color: Colors.orange,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                     const SizedBox(width: 4),
                     const Text(
                       'Bharat\nConnect',
-                      style: TextStyle(fontSize: 8, fontWeight: FontWeight.w700, color: Color(0xFF1565C0)),
+                      style: TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1565C0),
+                      ),
                     ),
                   ]),
                 ),
@@ -410,14 +433,18 @@ class _MobileRechargeScreenState extends State<MobileRechargeScreen>
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         decoration: BoxDecoration(
-                          color: _tabController.index == 0 ? AppColors.primary : Colors.transparent,
+                          color: _tabController.index == 0
+                              ? AppColors.primary
+                              : Colors.transparent,
                           borderRadius: BorderRadius.circular(27),
                         ),
                         child: Center(
                           child: Text(
                             'Prepaid',
                             style: TextStyle(
-                              color: _tabController.index == 0 ? Colors.white : AppColors.textGrey,
+                              color: _tabController.index == 0
+                                  ? Colors.white
+                                  : AppColors.textGrey,
                               fontWeight: FontWeight.w700,
                               fontSize: 14,
                             ),
@@ -432,14 +459,18 @@ class _MobileRechargeScreenState extends State<MobileRechargeScreen>
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         decoration: BoxDecoration(
-                          color: _tabController.index == 1 ? AppColors.primary : Colors.transparent,
+                          color: _tabController.index == 1
+                              ? AppColors.primary
+                              : Colors.transparent,
                           borderRadius: BorderRadius.circular(27),
                         ),
                         child: Center(
                           child: Text(
                             'Postpaid',
                             style: TextStyle(
-                              color: _tabController.index == 1 ? Colors.white : AppColors.textGrey,
+                              color: _tabController.index == 1
+                                  ? Colors.white
+                                  : AppColors.textGrey,
                               fontWeight: FontWeight.w700,
                               fontSize: 14,
                             ),
@@ -640,8 +671,10 @@ class _PlanCard extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(plan['data']!, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                            const Text('Data', style: TextStyle(color: AppColors.textGrey, fontSize: 12)),
+                            Text(plan['data']!,
+                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                            const Text('Data',
+                                style: TextStyle(color: AppColors.textGrey, fontSize: 12)),
                           ],
                         ),
                       ),
@@ -649,8 +682,10 @@ class _PlanCard extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(plan['validity']!, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                            const Text('Validity', style: TextStyle(color: AppColors.textGrey, fontSize: 12)),
+                            Text(plan['validity']!,
+                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                            const Text('Validity',
+                                style: TextStyle(color: AppColors.textGrey, fontSize: 12)),
                           ],
                         ),
                       ),
@@ -704,7 +739,8 @@ class _EmptyState extends StatelessWidget {
                   color: Colors.grey.shade100,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.description_outlined, size: 50, color: Colors.grey.shade300),
+                child: Icon(Icons.description_outlined,
+                    size: 50, color: Colors.grey.shade300),
               ),
               Positioned(
                 child: Icon(Icons.search, size: 30, color: Colors.grey.shade400),
@@ -713,7 +749,10 @@ class _EmptyState extends StatelessWidget {
                 right: 18, bottom: 18,
                 child: Container(
                   padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+                  decoration: const BoxDecoration(
+                    color: AppColors.primary,
+                    shape: BoxShape.circle,
+                  ),
                   child: const Icon(Icons.close, size: 12, color: Colors.white),
                 ),
               ),
@@ -728,7 +767,8 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             subtitle,
-            style: const TextStyle(color: AppColors.textGrey, fontSize: 13, height: 1.5),
+            style: const TextStyle(
+                color: AppColors.textGrey, fontSize: 13, height: 1.5),
             textAlign: TextAlign.center,
           ),
         ],
