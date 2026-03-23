@@ -38,7 +38,35 @@ class _PlansScreenState extends State<PlansScreen>
     super.dispose();
   }
 
+  // ── KYC check ─────────────────────────────────────────────────────────────
+
+  /// Returns true when the user's KYC is approved.
+  /// Falls back to true (don't block) if homeViewModel hasn't loaded yet,
+  /// so we never accidentally lock out someone whose status just isn't cached.
+  bool get _kycApproved {
+    final status = widget.homeViewModel?.kycStatus;
+    if (status == null) return true; // not loaded — let backend enforce
+    return status.isApproved;
+  }
+
+  void _showKycRequiredSheet() {
+    showModalBottomSheet(
+      context:            context,
+      isScrollControlled: true,
+      backgroundColor:    Colors.transparent,
+      builder: (_) => const _KycRequiredSheet(),
+    );
+  }
+
+  // ── Purchase entry point ──────────────────────────────────────────────────
+
   void _confirmPurchase(Plan plan) {
+    // Block purchase until KYC is verified.
+    if (!_kycApproved) {
+      _showKycRequiredSheet();
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -48,7 +76,6 @@ class _PlansScreenState extends State<PlansScreen>
         walletBalance: widget.homeViewModel?.walletBalance ?? 0,
         onConfirm: (mode, couponCode, totalAmount) async {
           Navigator.pop(context);
-
           if (mode == 'pg') {
             await _handlePgPurchase(plan, couponCode, totalAmount);
           } else {
@@ -61,7 +88,8 @@ class _PlansScreenState extends State<PlansScreen>
 
   // ── Wallet purchase ────────────────────────────────────────────────────────
   Future<void> _handleWalletPurchase(Plan plan, String? couponCode) async {
-    await _vm.purchasePlan(plan.id, paymentMode: 'wallet', couponCode: couponCode);
+    await _vm.purchasePlan(plan.id,
+        paymentMode: 'wallet', couponCode: couponCode);
     if (!mounted) return;
     if (_vm.purchaseState == PlanPurchaseState.success) {
       await widget.homeViewModel?.refreshWalletBalance();
@@ -73,8 +101,8 @@ class _PlansScreenState extends State<PlansScreen>
   }
 
   // ── Payment gateway purchase ───────────────────────────────────────────────
-  Future<void> _handlePgPurchase(Plan plan, String? couponCode, double amount) async {
-    // Step 1: initiate PG payment
+  Future<void> _handlePgPurchase(
+      Plan plan, String? couponCode, double amount) async {
     final pgService  = AtomPaymentService();
     final initResult = await pgService.initiateRecharge(amount);
 
@@ -85,12 +113,10 @@ class _PlansScreenState extends State<PlansScreen>
       return;
     }
 
-    // Step 2: open WebView
     final payResult = await Navigator.push<AtomPaymentResult>(
       context,
       MaterialPageRoute(
-        builder: (_) => AtomPaymentScreen(initiateResult: initResult),
-      ),
+          builder: (_) => AtomPaymentScreen(initiateResult: initResult)),
     );
 
     if (!mounted) return;
@@ -99,20 +125,18 @@ class _PlansScreenState extends State<PlansScreen>
       _showErrorSnack('Payment was cancelled.');
       return;
     }
-
     if (payResult.isPending) {
       _showErrorSnack(
           'Payment pending. Your plan will activate once the bank confirms.');
       return;
     }
-
     if (!payResult.isSuccess) {
       _showErrorSnack('Payment failed. Please try again.');
       return;
     }
 
-    // Step 3: PG credited wallet — now purchase plan
-    await _vm.purchasePlan(plan.id, paymentMode: 'wallet', couponCode: couponCode);
+    await _vm.purchasePlan(plan.id,
+        paymentMode: 'wallet', couponCode: couponCode);
     if (!mounted) return;
     if (_vm.purchaseState == PlanPurchaseState.success) {
       await widget.homeViewModel?.refreshWalletBalance();
@@ -156,7 +180,7 @@ class _PlansScreenState extends State<PlansScreen>
         builder: (context, _) {
           return CustomScrollView(
             slivers: [
-              // ── Header ──────────────────────────────────────────────────
+              // ── Header ───────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Container(
                   padding: EdgeInsets.only(
@@ -173,45 +197,48 @@ class _PlansScreenState extends State<PlansScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Top nav row
-                      Row(
-                        children: [
-                          if (canPop)
-                            GestureDetector(
-                              onTap: () => Navigator.pop(context),
-                              child: const Padding(
-                                padding: EdgeInsets.only(right: 14),
-                                child: Icon(Icons.arrow_back_ios,
-                                    color: Colors.white, size: 20),
-                              ),
-                            ),
-                          const Icon(Icons.router_outlined,
-                              color: Colors.white, size: 22),
-                          const SizedBox(width: 10),
-                          const Text(
-                            'Choose a Plan',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
+                      Row(children: [
+                        if (canPop)
+                          GestureDetector(
+                            onTap: () => Navigator.pop(context),
+                            child: const Padding(
+                              padding: EdgeInsets.only(right: 14),
+                              child: Icon(Icons.arrow_back_ios,
+                                  color: Colors.white, size: 20),
                             ),
                           ),
-                        ],
-                      ),
+                        const Icon(Icons.router_outlined,
+                            color: Colors.white, size: 22),
+                        const SizedBox(width: 10),
+                        const Text(
+                          'Choose a Plan',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ]),
                       const SizedBox(height: 20),
-                      // Active sub banner
                       if (_vm.activeSub != null)
                         _ActiveSubBanner(sub: _vm.activeSub!),
                       if (_vm.queuedSub != null) ...[
                         const SizedBox(height: 8),
                         _QueuedSubBanner(sub: _vm.queuedSub!),
                       ],
+                      // ── KYC warning strip ─────────────────────────────
+                      if (!_kycApproved) ...[
+                        const SizedBox(height: 12),
+                        _KycWarningStrip(
+                          onTap: _showKycRequiredSheet,
+                        ),
+                      ],
                     ],
                   ),
                 ),
               ),
 
-              // ── Tab bar ──────────────────────────────────────────────────
+              // ── Tab bar ──────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
@@ -252,7 +279,7 @@ class _PlansScreenState extends State<PlansScreen>
                 ),
               ),
 
-              // ── Plan list ────────────────────────────────────────────────
+              // ── Plan list ────────────────────────────────────────────
               if (_vm.isLoading)
                 const SliverFillRemaining(
                   child: Center(
@@ -292,14 +319,17 @@ class _PlansScreenState extends State<PlansScreen>
                         _PlanList(
                             plans: _vm.monthlyPlans,
                             activeSub: _vm.activeSub,
+                            kycApproved: _kycApproved,
                             onSelect: _confirmPurchase),
                         _PlanList(
                             plans: _vm.quarterlyPlans,
                             activeSub: _vm.activeSub,
+                            kycApproved: _kycApproved,
                             onSelect: _confirmPurchase),
                         _PlanList(
                             plans: _vm.annualPlans,
                             activeSub: _vm.activeSub,
+                            kycApproved: _kycApproved,
                             onSelect: _confirmPurchase),
                       ],
                     ),
@@ -314,7 +344,217 @@ class _PlansScreenState extends State<PlansScreen>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ACTIVE SUB BANNER — with circular progress indicator
+// KYC WARNING STRIP  (shown in header when KYC not approved)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _KycWarningStrip extends StatelessWidget {
+  final VoidCallback onTap;
+  const _KycWarningStrip({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.amber.shade700.withOpacity(0.18),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.amber.shade300.withOpacity(0.5)),
+        ),
+        child: Row(children: [
+          const Icon(Icons.lock_outline_rounded,
+              color: Colors.amber, size: 18),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'KYC required to purchase a plan. Tap to learn more.',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                height: 1.4,
+              ),
+            ),
+          ),
+          const Icon(Icons.arrow_forward_ios_rounded,
+              color: Colors.white54, size: 12),
+        ]),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KYC REQUIRED SHEET
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _KycRequiredSheet extends StatelessWidget {
+  const _KycRequiredSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color:        Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        24, 12, 24,
+        24 + MediaQuery.of(context).padding.bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+
+          // Drag handle
+          Container(
+            width: 36, height: 4,
+            decoration: BoxDecoration(
+              color:        Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Lock icon
+          Container(
+            width: 72, height: 72,
+            decoration: BoxDecoration(
+              color:  Colors.amber.shade50,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.amber.shade200, width: 1.5),
+            ),
+            child: Icon(Icons.verified_user_outlined,
+                size: 36, color: Colors.amber.shade700),
+          ),
+          const SizedBox(height: 20),
+
+          // Title
+          const Text(
+            'KYC Verification Required',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize:   18,
+              fontWeight: FontWeight.w800,
+              color:      Color(0xFF1A1A2E),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Body
+          const Text(
+            'To purchase a Speedonet plan, you need to complete '
+                'your KYC verification first. This is a one-time process '
+                'that ensures your account is secure and compliant.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              color:    Color(0xFF666680),
+              height:   1.6,
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Step list
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color:        const Color(0xFFFFFBF0),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.amber.shade100),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'How to complete KYC:',
+                  style: TextStyle(
+                    fontSize:   12,
+                    fontWeight: FontWeight.w700,
+                    color:      Colors.amber.shade800,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ...[
+                  ('1', 'Go to Home → tap KYC'),
+                  ('2', 'Upload your address proof'),
+                  ('3', 'Upload your ID proof'),
+                  ('4', 'Wait for approval (usually within 24h)'),
+                ].map(
+                      (step) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 20, height: 20,
+                          decoration: BoxDecoration(
+                            color:  Colors.amber.shade700,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text(
+                              step.$1,
+                              style: const TextStyle(
+                                color:      Colors.white,
+                                fontSize:   10,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            step.$2,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color:    Colors.amber.shade900,
+                              height:   1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Dismiss
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1A1A2E),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+              child: const Text(
+                'Got It',
+                style: TextStyle(
+                  color:      Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize:   15,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTIVE SUB BANNER
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ActiveSubBanner extends StatelessWidget {
@@ -323,7 +563,6 @@ class _ActiveSubBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Assume max ~365 days for the arc; clamp to [0,1]
     final progress = (sub.daysRemaining / 365.0).clamp(0.0, 1.0);
 
     return Container(
@@ -333,99 +572,55 @@ class _ActiveSubBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withOpacity(0.30)),
       ),
-      child: Row(
-        children: [
-          // Text block
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Current Plan',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  sub.planName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 22,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${sub.speedMbps} Mbps',
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
+      child: Row(children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Current Plan',
+                style: TextStyle(color: Colors.white70, fontSize: 12,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: 4),
+            Text(sub.planName,
+                style: const TextStyle(color: Colors.white,
+                    fontWeight: FontWeight.w800, fontSize: 22)),
+            const SizedBox(height: 2),
+            Text('${sub.speedMbps} Mbps',
+                style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          ]),
+        ),
+        Column(mainAxisSize: MainAxisSize.min, children: [
+          SizedBox(
+            width: 72, height: 72,
+            child: Stack(alignment: Alignment.center, children: [
+              SizedBox(
+                width: 72, height: 72,
+                child: CustomPaint(
+                    painter: _CircleProgressPainter(progress: progress)),
+              ),
+              Container(
+                width: 38, height: 38,
+                decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+                child: const Icon(Icons.check_rounded,
+                    color: Colors.white, size: 22),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            sub.isExpiringSoon
+                ? '⚠️ ${sub.daysRemaining}d left'
+                : 'Active · ${sub.daysRemaining}d',
+            style: TextStyle(
+              color: sub.isExpiringSoon ? Colors.amber : Colors.white70,
+              fontSize: 10, fontWeight: FontWeight.w600,
             ),
           ),
-
-          // Circular progress + label below
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: 72,
-                height: 72,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // Ring painter
-                    SizedBox(
-                      width: 72,
-                      height: 72,
-                      child: CustomPaint(
-                        painter: _CircleProgressPainter(progress: progress),
-                      ),
-                    ),
-                    // Check icon
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.check_rounded,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                sub.isExpiringSoon
-                    ? '⚠️ ${sub.daysRemaining}d left'
-                    : 'Active · ${sub.daysRemaining}d',
-                style: TextStyle(
-                  color: sub.isExpiringSoon
-                      ? Colors.amber
-                      : Colors.white70,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+        ]),
+      ]),
     );
   }
 }
 
-/// Draws a thin arc ring showing subscription time remaining.
 class _CircleProgressPainter extends CustomPainter {
   final double progress;
   const _CircleProgressPainter({required this.progress});
@@ -437,26 +632,21 @@ class _CircleProgressPainter extends CustomPainter {
     final radius = (size.width / 2) - 5;
     final rect = Rect.fromCircle(center: Offset(cx, cy), radius: radius);
 
-    // Background ring
-    final bgPaint = Paint()
-      ..color = Colors.white.withOpacity(0.25)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4
-      ..strokeCap = StrokeCap.round;
-    canvas.drawCircle(Offset(cx, cy), radius, bgPaint);
-
-    // Progress arc
-    final fgPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4
-      ..strokeCap = StrokeCap.round;
+    canvas.drawCircle(
+      Offset(cx, cy), radius,
+      Paint()
+        ..color = Colors.white.withOpacity(0.25)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4
+        ..strokeCap = StrokeCap.round,
+    );
     canvas.drawArc(
-      rect,
-      -math.pi / 2,
-      2 * math.pi * progress,
-      false,
-      fgPaint,
+      rect, -math.pi / 2, 2 * math.pi * progress, false,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4
+        ..strokeCap = StrokeCap.round,
     );
   }
 
@@ -469,13 +659,15 @@ class _CircleProgressPainter extends CustomPainter {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PlanList extends StatelessWidget {
-  final List<Plan> plans;
+  final List<Plan>         plans;
   final ActiveSubscription? activeSub;
+  final bool               kycApproved;
   final void Function(Plan) onSelect;
 
   const _PlanList({
     required this.plans,
     required this.activeSub,
+    required this.kycApproved,
     required this.onSelect,
   });
 
@@ -483,9 +675,8 @@ class _PlanList extends StatelessWidget {
   Widget build(BuildContext context) {
     if (plans.isEmpty) {
       return const Center(
-        child: Text('No plans available',
-            style: TextStyle(color: AppColors.textGrey)),
-      );
+          child: Text('No plans available',
+              style: TextStyle(color: AppColors.textGrey)));
     }
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
@@ -496,9 +687,10 @@ class _PlanList extends StatelessWidget {
         final isCurrent = activeSub?.planId == plan.id &&
             !(activeSub?.startsAt?.isAfter(DateTime.now()) ?? false);
         return _PlanCard(
-          plan: plan,
-          isCurrent: isCurrent,
-          onSelect: () => onSelect(plan),
+          plan:        plan,
+          isCurrent:   isCurrent,
+          kycApproved: kycApproved,
+          onSelect:    () => onSelect(plan),
         );
       },
     );
@@ -506,33 +698,35 @@ class _PlanList extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PLAN CARD — redesigned to match screenshot
+// PLAN CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PlanCard extends StatelessWidget {
-  final Plan plan;
-  final bool isCurrent;
+  final Plan         plan;
+  final bool         isCurrent;
+  final bool         kycApproved;
   final VoidCallback onSelect;
 
   const _PlanCard({
     required this.plan,
     required this.isCurrent,
+    required this.kycApproved,
     required this.onSelect,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isPopular = plan.speedMbps == 100 && plan.validityDays == 30;
+    final isPopular  = plan.speedMbps == 100 && plan.validityDays == 30;
     final badgeColor = isCurrent ? Colors.green : AppColors.primary;
-    final badgeBg = isCurrent
-        ? Colors.green.shade50
-        : const Color(0xFFFFEBEB);
+    final badgeBg    = isCurrent ? Colors.green.shade50 : const Color(0xFFFFEBEB);
+
+    // Buy button appearance: locked if KYC not done (and not current plan)
+    final buyLocked = !kycApproved && !isCurrent;
 
     return Stack(
       clipBehavior: Clip.none,
       children: [
         Container(
-          // Extra top margin when popular so the floating badge has space above
           margin: isPopular && !isCurrent
               ? const EdgeInsets.only(top: 14)
               : EdgeInsets.zero,
@@ -540,161 +734,111 @@ class _PlanCard extends StatelessWidget {
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isCurrent
-                  ? Colors.green.shade300
-                  : Colors.grey.shade200,
+              color: isCurrent ? Colors.green.shade300 : Colors.grey.shade200,
               width: 1.5,
             ),
             boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
-              ),
+              BoxShadow(color: Colors.black.withOpacity(0.04),
+                  blurRadius: 10, offset: const Offset(0, 3)),
             ],
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              // ── Speed badge ──────────────────────────────────────────────
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: badgeBg,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      plan.speedMbps >= 1000
-                          ? '${plan.speedMbps ~/ 1000}'
-                          : '${plan.speedMbps}',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                        color: badgeColor,
-                        height: 1.1,
-                      ),
-                    ),
-                    Text(
-                      plan.speedMbps >= 1000 ? 'Gbps' : 'Mbps',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: badgeColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 14),
+          child: Row(children: [
 
-              // ── Plan details ─────────────────────────────────────────────
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      plan.name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                        color: AppColors.textDark,
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      '${plan.dataLabel}  |  ${plan.validityLabel}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textGrey,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                  ],
+            // Speed badge
+            Container(
+              width: 64, height: 64,
+              decoration: BoxDecoration(
+                  color: badgeBg, borderRadius: BorderRadius.circular(14)),
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Text(
+                  plan.speedMbps >= 1000
+                      ? '${plan.speedMbps ~/ 1000}'
+                      : '${plan.speedMbps}',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900,
+                      color: badgeColor, height: 1.1),
                 ),
-              ),
-              const SizedBox(width: 12),
+                Text(
+                  plan.speedMbps >= 1000 ? 'Gbps' : 'Mbps',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                      color: badgeColor),
+                ),
+              ]),
+            ),
+            const SizedBox(width: 14),
 
-              // ── Price + action ───────────────────────────────────────────
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '₹${plan.price.toStringAsFixed(0)}',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.textDark,
-                    ),
+            // Details
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(plan.name,
+                    style: const TextStyle(fontWeight: FontWeight.w700,
+                        fontSize: 15, color: AppColors.textDark)),
+                const SizedBox(height: 5),
+                Text('${plan.dataLabel}  |  ${plan.validityLabel}',
+                    style: const TextStyle(fontSize: 12, color: AppColors.textGrey)),
+              ]),
+            ),
+            const SizedBox(width: 12),
+
+            // Price + action
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text('₹${plan.price.toStringAsFixed(0)}',
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900,
+                      color: AppColors.textDark)),
+              const SizedBox(height: 6),
+              if (isCurrent)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.green.shade300),
                   ),
-                  const SizedBox(height: 6),
-                  isCurrent
-                      ? Container(
+                  child: const Text('Active',
+                      style: TextStyle(color: Colors.green, fontSize: 12,
+                          fontWeight: FontWeight.w700)),
+                )
+              else
+                GestureDetector(
+                  onTap: onSelect,
+                  child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 6),
+                        horizontal: 20, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.green.shade50,
+                      // Slightly dimmed when KYC not done
+                      color: buyLocked
+                          ? AppColors.primary.withOpacity(0.45)
+                          : AppColors.primary,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                          color: Colors.green.shade300),
                     ),
-                    child: const Text(
-                      'Active',
-                      style: TextStyle(
-                        color: Colors.green,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  )
-                      : GestureDetector(
-                    onTap: onSelect,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Text(
-                        'Buy',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      if (buyLocked) ...[
+                        const Icon(Icons.lock_rounded,
+                            color: Colors.white, size: 12),
+                        const SizedBox(width: 4),
+                      ],
+                      const Text('Buy',
+                          style: TextStyle(color: Colors.white, fontSize: 13,
+                              fontWeight: FontWeight.w700)),
+                    ]),
                   ),
-                ],
-              ),
-            ],
-          ),
+                ),
+            ]),
+          ]),
         ),
 
-        // ── "Most Popular" badge ─────────────────────────────────────────
+        // "Most Popular" badge
         if (isPopular && !isCurrent)
           Positioned(
-            top: 0,
-            right: 14,
+            top: 0, right: 14,
             child: Container(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
               decoration: BoxDecoration(
-                color: const Color(0xFFFF6B35),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Text(
-                'Most Popular',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+                  color: const Color(0xFFFF6B35),
+                  borderRadius: BorderRadius.circular(20)),
+              child: const Text('Most Popular',
+                  style: TextStyle(color: Colors.white, fontSize: 11,
+                      fontWeight: FontWeight.w700)),
             ),
           ),
       ],
@@ -703,7 +847,7 @@ class _PlanCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PURCHASE SHEET — redesigned to match screenshot
+// PURCHASE SHEET
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PurchaseSheet extends StatefulWidget {
@@ -758,15 +902,14 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
       _couponApplied = false;
     });
     final result = await _couponService.validate(
-      planId: widget.plan.id, couponCode: code,
-    );
+        planId: widget.plan.id, couponCode: code);
     setState(() {
       _couponLoading = false;
       if (result.valid) {
         _couponResult  = result;
         _couponApplied = true;
       } else {
-        _couponError   = result.error;
+        _couponError = result.error;
       }
     });
   }
@@ -784,9 +927,7 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
       double.parse((widget.plan.price * 0.18).toStringAsFixed(2));
 
   double get _finalTotal {
-    if (_couponApplied && _couponResult != null) {
-      return _couponResult!.finalTotal;
-    }
+    if (_couponApplied && _couponResult != null) return _couponResult!.finalTotal;
     return double.parse(
         (widget.plan.price + _gstAmount).toStringAsFixed(2));
   }
@@ -797,8 +938,8 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
     final baseAmt = plan.price;
 
     return Padding(
-      padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding:
+      EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
         decoration: const BoxDecoration(
           color: Colors.white,
@@ -811,89 +952,57 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Handle
               Center(
                 child: Container(
                   width: 40, height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2)),
                 ),
               ),
               const SizedBox(height: 20),
-
-              // Title
-              const Text(
-                'Confirm Purchase',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textDark,
-                ),
-              ),
+              const Text('Confirm Purchase',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800,
+                      color: AppColors.textDark)),
               const SizedBox(height: 18),
 
-              // ── Plan summary card ────────────────────────────────────────
+              // Plan summary
               Container(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF5F5F5),
-                  borderRadius: BorderRadius.circular(14),
-                ),
+                    color: const Color(0xFFF5F5F5),
+                    borderRadius: BorderRadius.circular(14)),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          plan.name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                            color: AppColors.textDark,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${plan.speedLabel} · ${plan.dataLabel} · ${plan.validityLabel}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textGrey,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      '₹${baseAmt.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.primary,
+                    Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(plan.name,
+                          style: const TextStyle(fontWeight: FontWeight.w700,
+                              fontSize: 16, color: AppColors.textDark)),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${plan.speedLabel} · ${plan.dataLabel} · ${plan.validityLabel}',
+                        style: const TextStyle(
+                            fontSize: 12, color: AppColors.textGrey),
                       ),
-                    ),
+                    ]),
+                    Text('₹${baseAmt.toStringAsFixed(0)}',
+                        style: const TextStyle(fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.primary)),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
-
               const Divider(height: 1, color: Color(0xFFEEEEEE)),
               const SizedBox(height: 20),
 
-              // ── Coupon section ───────────────────────────────────────────
-              const Text(
-                'Have a coupon?',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                  color: AppColors.textDark,
-                ),
-              ),
+              // Coupon
+              const Text('Have a coupon?',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14,
+                      color: AppColors.textDark)),
               const SizedBox(height: 10),
-
-              // Coupon row: single bordered box with field + divider + Apply
               Container(
                 height: 52,
                 decoration: BoxDecoration(
@@ -916,27 +1025,25 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                     const SizedBox(width: 14),
                     Expanded(
                       child: TextField(
-                        controller: _couponController,
-                        focusNode: _couponFocus,
-                        enabled: !_couponApplied,
+                        controller:       _couponController,
+                        focusNode:        _couponFocus,
+                        enabled:          !_couponApplied,
                         textCapitalization: TextCapitalization.characters,
                         onSubmitted: (_) => _applyCoupon(),
                         decoration: InputDecoration(
                           hintText: 'Enter coupon code',
                           hintStyle: const TextStyle(
-                            color: Color(0xFFBBBBBB),
-                            fontSize: 14,
-                          ),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
+                              color: Color(0xFFBBBBBB), fontSize: 14),
+                          border:         InputBorder.none,
+                          enabledBorder:  InputBorder.none,
+                          focusedBorder:  InputBorder.none,
                           disabledBorder: InputBorder.none,
-                          isDense: true,
+                          isDense:        true,
                           contentPadding: EdgeInsets.zero,
-                          filled: false,
+                          filled:         false,
                         ),
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize:   14,
                           fontWeight: FontWeight.w600,
                           color: _couponApplied
                               ? Colors.green.shade700
@@ -944,13 +1051,8 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                         ),
                       ),
                     ),
-                    // Vertical divider
-                    Container(
-                      width: 1,
-                      height: 28,
-                      color: const Color(0xFFEEEEEE),
-                    ),
-                    // Apply / loading / close
+                    Container(width: 1, height: 28,
+                        color: const Color(0xFFEEEEEE)),
                     if (_couponApplied)
                       GestureDetector(
                         onTap: _removeCoupon,
@@ -963,14 +1065,9 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                     else if (_couponLoading)
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 14),
-                        child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            color: AppColors.primary,
-                            strokeWidth: 2,
-                          ),
-                        ),
+                        child: SizedBox(width: 18, height: 18,
+                            child: CircularProgressIndicator(
+                                color: AppColors.primary, strokeWidth: 2)),
                       )
                     else
                       GestureDetector(
@@ -978,35 +1075,28 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                             ? null
                             : _applyCoupon,
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            'Apply',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                              color: _couponController.text.trim().isEmpty
-                                  ? AppColors.primary.withOpacity(0.4)
-                                  : AppColors.primary,
-                            ),
-                          ),
+                          padding:
+                          const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text('Apply',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                                color: _couponController.text.trim().isEmpty
+                                    ? AppColors.primary.withOpacity(0.4)
+                                    : AppColors.primary,
+                              )),
                         ),
                       ),
                   ]),
                 ),
               ),
-
-              // Coupon feedback
               if (_couponError != null) ...[
                 const SizedBox(height: 6),
                 Row(children: [
-                  const Icon(Icons.error_outline,
-                      size: 14, color: Colors.red),
+                  const Icon(Icons.error_outline, size: 14, color: Colors.red),
                   const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(_couponError!,
-                        style: const TextStyle(
-                            fontSize: 12, color: Colors.red)),
-                  ),
+                  Expanded(child: Text(_couponError!,
+                      style: const TextStyle(fontSize: 12, color: Colors.red))),
                 ]),
               ],
               if (_couponApplied && _couponResult != null) ...[
@@ -1017,11 +1107,8 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                   const SizedBox(width: 4),
                   Text(
                     '${_couponResult!.discountLabel} — saved ₹${_couponResult!.discountAmount.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.green,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: const TextStyle(fontSize: 12, color: Colors.green,
+                        fontWeight: FontWeight.w600),
                   ),
                 ]),
               ],
@@ -1030,12 +1117,10 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
               const Divider(height: 1, color: Color(0xFFEEEEEE)),
               const SizedBox(height: 16),
 
-              // ── Amount breakdown ─────────────────────────────────────────
-              _AmountRow(
-                  'Plan price', '₹${baseAmt.toStringAsFixed(2)}'),
+              // Amount breakdown
+              _AmountRow('Plan price', '₹${baseAmt.toStringAsFixed(2)}'),
               const SizedBox(height: 10),
-              _AmountRow(
-                  'GST (18%)', '₹${_gstAmount.toStringAsFixed(2)}'),
+              _AmountRow('GST (18%)', '₹${_gstAmount.toStringAsFixed(2)}'),
               if (_couponApplied && _couponResult != null) ...[
                 const SizedBox(height: 10),
                 _AmountRow(
@@ -1045,52 +1130,23 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                 ),
               ],
               const SizedBox(height: 14),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Total',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 17,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  Text(
-                    '₹${_finalTotal.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 22,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                ],
-              ),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                const Text('Total',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17,
+                        color: AppColors.primary)),
+                Text('₹${_finalTotal.toStringAsFixed(2)}',
+                    style: const TextStyle(fontWeight: FontWeight.w900,
+                        fontSize: 22, color: AppColors.primary)),
+              ]),
 
               const SizedBox(height: 16),
               const Divider(height: 1, color: Color(0xFFEEEEEE)),
               const SizedBox(height: 20),
 
-              // ── Pay via ──────────────────────────────────────────────────
-              const Text(
-                'Pay via',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                  color: AppColors.textDark,
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // ── Pay via ──────────────────────────────────────────────────
-              const Text(
-                'Pay via',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                  color: AppColors.textDark,
-                ),
-              ),
+              // Pay via
+              const Text('Pay via',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15,
+                      color: AppColors.textDark)),
               const SizedBox(height: 12),
 
               // Wallet option
@@ -1113,40 +1169,31 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                     Container(
                       width: 40, height: 40,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFF0F0),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
+                          color: const Color(0xFFFFF0F0),
+                          borderRadius: BorderRadius.circular(10)),
                       child: const Icon(
                           Icons.account_balance_wallet_outlined,
                           color: AppColors.primary, size: 20),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
+                    Expanded(child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text('Wallet Balance',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14,
-                                  color: AppColors.textDark)),
+                              style: TextStyle(fontWeight: FontWeight.w700,
+                                  fontSize: 14, color: AppColors.textDark)),
                           const SizedBox(height: 2),
-                          Text(
-                            '₹${widget.walletBalance.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                                fontSize: 12, color: AppColors.textGrey),
-                          ),
-                        ],
-                      ),
-                    ),
+                          Text('₹${widget.walletBalance.toStringAsFixed(2)}',
+                              style: const TextStyle(fontSize: 12,
+                                  color: AppColors.textGrey)),
+                        ])),
                     _ModeCheckmark(selected: _mode == 'wallet'),
                   ]),
                 ),
               ),
-
               const SizedBox(height: 10),
 
-              // Payment Gateway option
+              // PG option
               GestureDetector(
                 onTap: () => setState(() => _mode = 'pg'),
                 child: Container(
@@ -1166,22 +1213,18 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                     Container(
                       width: 40, height: 40,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFF0F0),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
+                          color: const Color(0xFFFFF0F0),
+                          borderRadius: BorderRadius.circular(10)),
                       child: const Icon(Icons.payment_rounded,
                           color: AppColors.primary, size: 20),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
+                    Expanded(child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text('Payment Gateway',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14,
-                                  color: AppColors.textDark)),
+                              style: TextStyle(fontWeight: FontWeight.w700,
+                                  fontSize: 14, color: AppColors.textDark)),
                           const SizedBox(height: 4),
                           Wrap(
                             spacing: 4,
@@ -1190,49 +1233,36 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF5F5F5),
-                                borderRadius:
-                                BorderRadius.circular(4),
-                              ),
+                                  color: const Color(0xFFF5F5F5),
+                                  borderRadius: BorderRadius.circular(4)),
                               child: Text(m,
-                                  style: const TextStyle(
-                                      fontSize: 9,
+                                  style: const TextStyle(fontSize: 9,
                                       fontWeight: FontWeight.w600,
                                       color: AppColors.textGrey)),
-                            ))
-                                .toList(),
+                            )).toList(),
                           ),
-                        ],
-                      ),
-                    ),
+                        ])),
                     _ModeCheckmark(selected: _mode == 'pg'),
                   ]),
                 ),
               ),
 
-              // Secured badge
               Padding(
                 padding: const EdgeInsets.only(top: 8, bottom: 4),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.shield_outlined,
-                        size: 12, color: AppColors.textGrey),
-                    const SizedBox(width: 4),
-                    const Text(
-                        'Secured by Omniware · PCI-DSS compliant',
-                        style: TextStyle(
-                            fontSize: 10, color: AppColors.textGrey)),
-                  ],
-                ),
+                child: Row(mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.shield_outlined, size: 12, color: AppColors.textGrey),
+                      const SizedBox(width: 4),
+                      const Text('Secured by Omniware · PCI-DSS compliant',
+                          style: TextStyle(fontSize: 10, color: AppColors.textGrey)),
+                    ]),
               ),
 
               const SizedBox(height: 24),
 
-              // ── Pay button ───────────────────────────────────────────────
+              // Pay button
               SizedBox(
-                width: double.infinity,
-                height: 54,
+                width: double.infinity, height: 54,
                 child: ElevatedButton(
                   onPressed: _loading
                       ? null
@@ -1241,34 +1271,25 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                     widget.onConfirm(
                       _mode,
                       _couponApplied
-                          ? _couponController.text
-                          .trim()
-                          .toUpperCase()
+                          ? _couponController.text.trim().toUpperCase()
                           : null,
                       _finalTotal,
                     );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
-                    disabledBackgroundColor:
-                    AppColors.primary.withOpacity(0.6),
+                    disabledBackgroundColor: AppColors.primary.withOpacity(0.6),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
                     elevation: 0,
                   ),
                   child: _loading
-                      ? const SizedBox(
-                      height: 22, width: 22,
+                      ? const SizedBox(height: 22, width: 22,
                       child: CircularProgressIndicator(
                           color: Colors.white, strokeWidth: 2.5))
-                      : Text(
-                    'Pay ₹${_finalTotal.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 17,
-                    ),
-                  ),
+                      : Text('Pay ₹${_finalTotal.toStringAsFixed(2)}',
+                      style: const TextStyle(color: Colors.white,
+                          fontWeight: FontWeight.w700, fontSize: 17)),
                 ),
               ),
             ],
@@ -1279,7 +1300,6 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
   }
 }
 
-// Small reusable checkmark circle for payment mode options
 class _ModeCheckmark extends StatelessWidget {
   final bool selected;
   const _ModeCheckmark({required this.selected});
@@ -1307,27 +1327,20 @@ class _ModeCheckmark extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _AmountRow extends StatelessWidget {
-  final String label;
-  final String value;
+  final String label, value;
   final Color  valueColor;
   const _AmountRow(this.label, this.value,
       {this.valueColor = AppColors.textDark});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label,
-            style: const TextStyle(
-                fontSize: 14, color: AppColors.textGrey)),
-        Text(value,
-            style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: valueColor)),
-      ],
-    );
+    return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+      Text(label,
+          style: const TextStyle(fontSize: 14, color: AppColors.textGrey)),
+      Text(value,
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+              color: valueColor)),
+    ]);
   }
 }
 
@@ -1350,15 +1363,12 @@ class _SuccessDialog extends StatelessWidget {
     final startDate = result['start_date'] != null
         ? DateTime.tryParse(result['start_date'].toString())
         : null;
-    final isQueued =
-        startDate != null && startDate.isAfter(DateTime.now());
-    final discount =
-        (result['discount_applied'] as num?)?.toDouble() ?? 0;
-    final coupon = result['coupon_code'] as String?;
+    final isQueued  = result['is_queued'] == true;
+    final discount  = (result['discount_applied'] as num?)?.toDouble() ?? 0;
+    final coupon    = result['coupon_code'] as String?;
 
     return Dialog(
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -1381,29 +1391,23 @@ class _SuccessDialog extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             isQueued ? 'Plan Queued! 🕐' : 'Plan Activated! 🎉',
-            style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800,
                 color: AppColors.textDark),
           ),
           const SizedBox(height: 8),
           Text(planName,
-              style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600,
                   color: AppColors.primary)),
           const SizedBox(height: 4),
           if (isQueued && startDate != null)
             Text(
               'Starts on ${startDate.day}/${startDate.month}/${startDate.year}',
-              style: const TextStyle(
-                  color: AppColors.textGrey, fontSize: 13),
+              style: const TextStyle(color: AppColors.textGrey, fontSize: 13),
             )
           else if (expiresAt != null)
             Text(
               'Valid until ${expiresAt.day}/${expiresAt.month}/${expiresAt.year}',
-              style: const TextStyle(
-                  color: AppColors.textGrey, fontSize: 13),
+              style: const TextStyle(color: AppColors.textGrey, fontSize: 13),
             ),
           if (discount > 0 && coupon != null) ...[
             const SizedBox(height: 14),
@@ -1413,8 +1417,7 @@ class _SuccessDialog extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFFE8F5E9),
                 borderRadius: BorderRadius.circular(10),
-                border:
-                Border.all(color: Colors.green.shade200),
+                border: Border.all(color: Colors.green.shade200),
               ),
               child: Row(children: [
                 const Icon(Icons.local_offer_rounded,
@@ -1423,13 +1426,9 @@ class _SuccessDialog extends StatelessWidget {
                 Expanded(
                   child: Text(
                     'Coupon $coupon saved you ₹${discount.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Colors.green,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 2,
+                    style: const TextStyle(fontSize: 13, color: Colors.green,
+                        fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis, maxLines: 2,
                   ),
                 ),
               ]),
@@ -1442,14 +1441,12 @@ class _SuccessDialog extends StatelessWidget {
               onPressed: onDone,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
-                padding:
-                const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
               child: const Text('Done',
-                  style: TextStyle(
-                      color: Colors.white,
+                  style: TextStyle(color: Colors.white,
                       fontWeight: FontWeight.w700)),
             ),
           ),
@@ -1477,33 +1474,25 @@ class _QueuedSubBanner extends StatelessWidget {
         border: Border.all(color: Colors.white.withOpacity(0.20)),
       ),
       child: Row(children: [
-        const Icon(Icons.schedule_rounded,
-            color: Colors.white70, size: 24),
+        const Icon(Icons.schedule_rounded, color: Colors.white70, size: 24),
         const SizedBox(width: 12),
         Expanded(
-          child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(sub.planName,
-                    style: const TextStyle(
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13)),
-                const SizedBox(height: 2),
-                Text(
-                  sub.startsAt != null
-                      ? 'Queued · Starts ${sub.startsAt!.day}/${sub.startsAt!.month}/${sub.startsAt!.year}'
-                      : 'Queued · Starts after current plan',
-                  style: const TextStyle(
-                      color: Colors.white54, fontSize: 11),
-                ),
-              ]),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(sub.planName,
+                style: const TextStyle(color: Colors.white70,
+                    fontWeight: FontWeight.w700, fontSize: 13)),
+            const SizedBox(height: 2),
+            Text(
+              sub.startsAt != null
+                  ? 'Queued · Starts ${sub.startsAt!.day}/${sub.startsAt!.month}/${sub.startsAt!.year}'
+                  : 'Queued · Starts after current plan',
+              style: const TextStyle(color: Colors.white54, fontSize: 11),
+            ),
+          ]),
         ),
         Text('${sub.speedMbps} Mbps',
-            style: const TextStyle(
-                color: Colors.white60,
-                fontWeight: FontWeight.w700,
-                fontSize: 13)),
+            style: const TextStyle(color: Colors.white60,
+                fontWeight: FontWeight.w700, fontSize: 13)),
       ]),
     );
   }
