@@ -1,38 +1,33 @@
 // lib/widgets/home_tutorial.dart
-//
-// Defines every coach-mark step for the home screen first-launch tutorial.
-// Uses the `tutorial_coach_mark` package.
-//
-// Usage (from _HomeScreenState):
-//   HomeTutorial(context: context, keys: _tutorialKeys).show(
-//     onFinish: () => TutorialService().markHomeTutorialSeen(),
-//     onSkip:   () => TutorialService().markHomeTutorialSeen(),
-//   );
 
 import 'package:flutter/material.dart';
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 
 // ── Key bag ────────────────────────────────────────────────────────────────────
-// All GlobalKeys the home screen needs to expose to the tutorial.
 
 class HomeTutorialKeys {
-  final GlobalKey menu          = GlobalKey();
-  final GlobalKey notifications = GlobalKey();
-  final GlobalKey wallet        = GlobalKey();
+  final GlobalKey menu           = GlobalKey();
+  final GlobalKey notifications  = GlobalKey();
+  final GlobalKey wallet         = GlobalKey();
   final GlobalKey manageServices = GlobalKey();
-  final GlobalKey payBills      = GlobalKey();
-  final GlobalKey newPlan       = GlobalKey();
-  final GlobalKey kyc           = GlobalKey();
-  final GlobalKey referEarn     = GlobalKey();
+  final GlobalKey payBills       = GlobalKey();
+  final GlobalKey newPlan        = GlobalKey();
+  final GlobalKey kyc            = GlobalKey();
+  final GlobalKey referEarn      = GlobalKey();
 }
 
 // ── Tutorial builder ──────────────────────────────────────────────────────────
 
 class HomeTutorial {
-  final BuildContext context;
+  final BuildContext     context;
   final HomeTutorialKeys keys;
+  final ScrollController scrollController;
 
-  HomeTutorial({required this.context, required this.keys});
+  HomeTutorial({
+    required this.context,
+    required this.keys,
+    required this.scrollController,
+  });
 
   void show({
     required VoidCallback onFinish,
@@ -42,13 +37,13 @@ class HomeTutorial {
     if (targets.isEmpty) return;
 
     TutorialCoachMark(
-      targets:            targets,
-      colorShadow:        const Color(0xFF1A1A2E),
-      opacityShadow:      0.85,
-      paddingFocus:       10,
-      hideSkip:           false,
-      alignSkip:          Alignment.bottomRight,
-      textSkip:           'SKIP',
+      targets:       targets,
+      colorShadow:   const Color(0xFF1A1A2E),
+      opacityShadow: 0.85,
+      paddingFocus:  10,
+      hideSkip:      false,
+      alignSkip:     Alignment.bottomRight,
+      textSkip:      'SKIP',
       textStyleSkip: const TextStyle(
         color:      Colors.white70,
         fontSize:   14,
@@ -59,105 +54,148 @@ class HomeTutorial {
     ).show(context: context);
   }
 
-  // ── Step definitions ────────────────────────────────────────────────────────
+  // ── Scroll helper ─────────────────────────────────────────────────────────
+  //
+  // We scroll to maxScrollExtent - 300 instead of all the way to the bottom.
+  // This leaves the Features section roughly in the center of the screen,
+  // so ContentAlign.top has enough vertical space above it to show the card.
+
+  Future<void> _scrollToFeatures() async {
+    await Future.delayed(const Duration(milliseconds: 400));
+    if (!scrollController.hasClients) return;
+
+    final max    = scrollController.position.maxScrollExtent;
+    final target = (max - 200).clamp(0.0, max);
+
+    await scrollController.animateTo(
+      target,
+      duration: const Duration(milliseconds: 600),
+      curve:    Curves.easeInOut,
+    );
+
+    // Extra frame so the Features widget finishes painting before
+    // tutorial_coach_mark measures its RenderBox.
+    await Future.delayed(const Duration(milliseconds: 300));
+  }
+
+  // ── Step definitions ───────────────────────────────────────────────────────
 
   List<TargetFocus> _buildTargets() => [
-    // 1. Hamburger menu
     _step(
-      key:    keys.menu,
-      shape:  ShapeLightFocus.Circle,
-      title:  'Main Menu',
-      body:   'Tap here to open the side menu — access your profile, plans, refer & earn, and more.',
-      align:  ContentAlign.bottom,
+      key:   keys.menu,
+      shape: ShapeLightFocus.Circle,
+      title: 'Main Menu',
+      body:  'Tap here to open the side menu — access your profile, plans, refer & earn, and more.',
+      align: ContentAlign.bottom,
     ),
-
-    // 2. Notifications
     _step(
-      key:    keys.notifications,
-      shape:  ShapeLightFocus.Circle,
-      title:  'Notifications',
-      body:   'Stay up to date with plan activations, wallet credits, and support updates.',
-      align:  ContentAlign.bottom,
+      key:   keys.notifications,
+      shape: ShapeLightFocus.Circle,
+      title: 'Notifications',
+      body:  'Stay up to date with plan activations, wallet credits, and support updates.',
+      align: ContentAlign.bottom,
     ),
-
-    // 3. Wallet balance
     _step(
-      key:    keys.wallet,
-      shape:  ShapeLightFocus.RRect,
-      title:  'Your Wallet',
-      body:   'Your current wallet balance. Tap to recharge and use it for plan purchases.',
-      align:  ContentAlign.bottom,
+      key:   keys.wallet,
+      shape: ShapeLightFocus.RRect,
+      title: 'Your Wallet',
+      body:  'Your current wallet balance. Tap to recharge and use it for plan purchases.',
+      align: ContentAlign.bottom,
     ),
-
-    // 4. Manage Services card
     _step(
-      key:    keys.manageServices,
-      shape:  ShapeLightFocus.RRect,
-      title:  'Manage Services',
-      body:   'Quick shortcuts to everything you need — bills, plans, KYC, and more.',
-      align:  ContentAlign.bottom,
+      key:   keys.manageServices,
+      shape: ShapeLightFocus.RRect,
+      title: 'Manage Services',
+      body:  'Quick shortcuts to everything you need — bills, plans, KYC, and more.',
+      align: ContentAlign.bottom,
     ),
-
-    // 5. Pay Bills
     _step(
-      key:    keys.payBills,
-      shape:  ShapeLightFocus.Circle,
-      title:  'Pay Bills',
-      body:   'Pay your broadband and utility bills in seconds — right here.',
-      align:  ContentAlign.bottom,
+      key:   keys.payBills,
+      shape: ShapeLightFocus.Circle,
+      title: 'Pay Bills',
+      body:  'Pay your broadband and utility bills in seconds — right here.',
+      align: ContentAlign.bottom,
     ),
-
-    // 6. New Plan
     _step(
-      key:    keys.newPlan,
-      shape:  ShapeLightFocus.Circle,
-      title:  'Browse Plans',
-      body:   'Explore and subscribe to our internet plans — monthly, quarterly, or annual.',
-      align:  ContentAlign.bottom,
+      key:   keys.newPlan,
+      shape: ShapeLightFocus.Circle,
+      title: 'Browse Plans',
+      body:  'Explore and subscribe to internet plans — monthly, quarterly, or annual.',
+      align: ContentAlign.bottom,
     ),
-
-    // 7. KYC
-    _step(
-      key:    keys.kyc,
-      shape:  ShapeLightFocus.Circle,
-      title:  'KYC Verification',
-      body:   'Complete your KYC to unlock all features and get faster support.',
-      align:  ContentAlign.bottom,
+    // KYC step — Next scrolls to Features THEN advances
+    _stepWithBeforeNext(
+      key:        keys.kyc,
+      shape:      ShapeLightFocus.Circle,
+      title:      'KYC',
+      body:       'Complete your KYC to unlock all features and get faster support.',
+      align:      ContentAlign.bottom,
+      beforeNext: _scrollToFeatures,
     ),
-
-    // 8. Refer & Earn (features carousel)
+    // Features section is now mid-screen → card appears above with room to spare
     _step(
-      key:    keys.referEarn,
-      shape:  ShapeLightFocus.RRect,
-      title:  'Refer & Earn',
-      body:   'Share your referral link with friends and earn exciting rewards every time they sign up!',
-      align:  ContentAlign.top,
+      key:   keys.referEarn,
+      shape: ShapeLightFocus.RRect,
+      title: 'Refer & Earn',
+      body:  'Share your referral link with friends and earn exciting rewards every time they sign up!',
+      align: ContentAlign.top, // card sits above the spotlight
     ),
   ];
 
-  // ── Helper ──────────────────────────────────────────────────────────────────
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
   TargetFocus _step({
-    required GlobalKey     key,
-    required String        title,
-    required String        body,
-    required ContentAlign  align,
-    ShapeLightFocus        shape = ShapeLightFocus.RRect,
-    double                 radius = 12,
+    required GlobalKey    key,
+    required String       title,
+    required String       body,
+    required ContentAlign align,
+    ShapeLightFocus       shape  = ShapeLightFocus.RRect,
+    double                radius = 12,
   }) {
     return TargetFocus(
-      identify: title,
-      keyTarget: key,
-      shape:     shape,
-      radius:    radius,
-      enableOverlayTab: true,          // tap anywhere on overlay to advance
+      identify:         title,
+      keyTarget:        key,
+      shape:            shape,
+      radius:           radius,
+      enableOverlayTab: true,
       contents: [
         TargetContent(
-          align: align,
+          align:   align,
           builder: (ctx, controller) => _CoachCard(
-            title:      title,
-            body:       body,
-            onNext:     controller.next,
+            title:  title,
+            body:   body,
+            onNext: controller.next,
+          ),
+        ),
+      ],
+    );
+  }
+
+  TargetFocus _stepWithBeforeNext({
+    required GlobalKey              key,
+    required String                 title,
+    required String                 body,
+    required ContentAlign           align,
+    required Future<void> Function() beforeNext,
+    ShapeLightFocus                 shape  = ShapeLightFocus.RRect,
+    double                          radius = 12,
+  }) {
+    return TargetFocus(
+      identify:         title,
+      keyTarget:        key,
+      shape:            shape,
+      radius:           radius,
+      enableOverlayTab: false, // only the Next button advances
+      contents: [
+        TargetContent(
+          align:   align,
+          builder: (ctx, controller) => _CoachCard(
+            title:  title,
+            body:   body,
+            onNext: () async {
+              await beforeNext();  // scroll completes first
+              controller.next();   // then spotlight advances
+            },
           ),
         ),
       ],
@@ -197,7 +235,6 @@ class _CoachCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize:       MainAxisSize.min,
         children: [
-          // Title row
           Row(children: [
             Container(
               width: 4, height: 20,
@@ -217,8 +254,6 @@ class _CoachCard extends StatelessWidget {
             ),
           ]),
           const SizedBox(height: 10),
-
-          // Body
           Text(
             body,
             style: const TextStyle(
@@ -228,8 +263,6 @@ class _CoachCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-
-          // Next button
           Align(
             alignment: Alignment.centerRight,
             child: GestureDetector(
@@ -256,5 +289,4 @@ class _CoachCard extends StatelessWidget {
       ),
     );
   }
-}
 }

@@ -6,15 +6,18 @@ import '../theme/app_theme.dart';
 class AppHeader extends StatelessWidget {
   final String  userName;
   final double  walletBalance;
-  final String? profileImageUrl;       // data URI or HTTPS URL — null = show logo
+  final String? profileImageUrl;
   final VoidCallback? onNotificationTap;
   final VoidCallback? onMenuTap;
   final VoidCallback? onWalletTap;
   final int unreadNotifications;
 
+  // ── Tutorial keys ─────────────────────────────────────────────────────────
   final GlobalKey? menuKey;
   final GlobalKey? notificationKey;
-  final GlobalKey? walletKey;// opens recharge screen
+  final GlobalKey? walletKey;
+  final GlobalKey? referEarnKey;
+  // ─────────────────────────────────────────────────────────────────────────
 
   const AppHeader({
     super.key,
@@ -25,9 +28,11 @@ class AppHeader extends StatelessWidget {
     this.onMenuTap,
     this.onWalletTap,
     required this.unreadNotifications,
+    // Tutorial keys (all optional — safe to omit when not using tutorial)
     this.menuKey,
     this.notificationKey,
     this.walletKey,
+    this.referEarnKey,
   });
 
   // ── Avatar builder ────────────────────────────────────────────────────────
@@ -38,7 +43,6 @@ class AppHeader extends StatelessWidget {
     final url = profileImageUrl;
     if (url != null && url.isNotEmpty) {
       if (url.startsWith('data:')) {
-        // base64 data URI  →  decode the part after the comma
         final base64Part = url.contains(',') ? url.split(',').last : url;
         try {
           content = Image.memory(
@@ -50,7 +54,6 @@ class AppHeader extends StatelessWidget {
           content = _fallbackIcon();
         }
       } else {
-        // Regular HTTPS URL
         content = Image.network(
           url,
           fit: BoxFit.cover,
@@ -96,9 +99,10 @@ class AppHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
+
           // ── Avatar / hamburger ─────────────────────────────────────────
           GestureDetector(
-            key: menuKey,
+            key:  menuKey,           // ← tutorial spotlight: Menu
             onTap: onMenuTap,
             child: _buildAvatar(),
           ),
@@ -119,7 +123,7 @@ class AppHeader extends StatelessWidget {
 
           // ── Wallet balance chip ────────────────────────────────────────
           GestureDetector(
-            key: walletKey,
+            key:  walletKey,         // ← tutorial spotlight: Wallet
             onTap: onWalletTap,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -155,7 +159,6 @@ class AppHeader extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // "+" hint
                   Container(
                     width:  20,
                     height: 20,
@@ -178,7 +181,7 @@ class AppHeader extends StatelessWidget {
 
           // ── Notifications ──────────────────────────────────────────────
           GestureDetector(
-            key: notificationKey,
+            key:  notificationKey,   // ← tutorial spotlight: Notifications
             onTap: onNotificationTap,
             child: Stack(
               clipBehavior: Clip.none,
@@ -188,32 +191,31 @@ class AppHeader extends StatelessWidget {
                   color: AppColors.white,
                   size: 26,
                 ),
-
                 if (unreadNotifications > 0)
                   Positioned(
                     right: -4,
-                    top: -4,
+                    top:   -4,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 5, vertical: 2),
                       decoration: BoxDecoration(
-                        color: Colors.red,
+                        color:        Colors.red,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.primary, width: 1.5),
+                        border: Border.all(
+                            color: AppColors.primary, width: 1.5),
                       ),
                       constraints: const BoxConstraints(
-                        minWidth: 16,
-                        minHeight: 16,
-                      ),
+                          minWidth: 16, minHeight: 16),
                       child: Text(
                         unreadNotifications > 99
                             ? '99+'
                             : unreadNotifications.toString(),
                         textAlign: TextAlign.center,
                         style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
+                          color:      Colors.white,
+                          fontSize:   10,
                           fontWeight: FontWeight.w700,
-                          height: 1,
+                          height:     1,
                         ),
                       ),
                     ),
@@ -221,6 +223,12 @@ class AppHeader extends StatelessWidget {
               ],
             ),
           ),
+
+          // ── Refer & Earn anchor (invisible — tutorial target only) ──────
+          // This zero-size widget gives the tutorial a stable on-screen
+          // anchor for the "Refer & Earn" step without changing the UI.
+          SizedBox(key: referEarnKey, width: 0, height: 0),
+          // ─────────────────────────────────────────────────────────────
         ],
       ),
     );
