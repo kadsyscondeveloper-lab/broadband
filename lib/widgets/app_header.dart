@@ -10,7 +10,11 @@ class AppHeader extends StatelessWidget {
   final VoidCallback? onNotificationTap;
   final VoidCallback? onMenuTap;
   final VoidCallback? onWalletTap;
-  final int unreadNotifications;// opens recharge screen
+  final int unreadNotifications;
+
+  final GlobalKey? menuKey;
+  final GlobalKey? notificationKey;
+  final GlobalKey? walletKey;// opens recharge screen
 
   const AppHeader({
     super.key,
@@ -21,6 +25,9 @@ class AppHeader extends StatelessWidget {
     this.onMenuTap,
     this.onWalletTap,
     required this.unreadNotifications,
+    this.menuKey,
+    this.notificationKey,
+    this.walletKey,
   });
 
   // ── Avatar builder ────────────────────────────────────────────────────────
@@ -91,6 +98,7 @@ class AppHeader extends StatelessWidget {
         children: [
           // ── Avatar / hamburger ─────────────────────────────────────────
           GestureDetector(
+            key: menuKey,
             onTap: onMenuTap,
             child: _buildAvatar(),
           ),
@@ -111,6 +119,7 @@ class AppHeader extends StatelessWidget {
 
           // ── Wallet balance chip ────────────────────────────────────────
           GestureDetector(
+            key: walletKey,
             onTap: onWalletTap,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -169,6 +178,7 @@ class AppHeader extends StatelessWidget {
 
           // ── Notifications ──────────────────────────────────────────────
           GestureDetector(
+            key: notificationKey,
             onTap: onNotificationTap,
             child: Stack(
               clipBehavior: Clip.none,

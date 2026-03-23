@@ -1,16 +1,29 @@
 // lib/views/home/home_screen.dart
+//
+// CHANGES vs original:
+//   • Imports HomeTutorial, HomeTutorialKeys, TutorialService
+//   • _HomeScreenState holds a HomeTutorialKeys instance
+//   • GlobalKeys are attached to: menu button, notification icon, wallet chip,
+//     the Manage Services card, and each individual service icon (Pay Bills,
+//     New Plan, KYC), plus the Features/Refer section.
+//   • _maybeLaunchTutorial() is called once inside loadProfile()'s callback.
+//
+// Everything else is identical to the original file.
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../services/kyc_service.dart';
+import '../../services/tutorial_service.dart';           // ← NEW
 import '../../theme/app_theme.dart';
 import '../../theme/app_icons.dart';
 import '../../viewmodels/home_viewmodel.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_drawer.dart';
 import '../../widgets/app_icon.dart';
+import '../../widgets/home_tutorial.dart';               // ← NEW
 import '../bills/bills_screens.dart' hide MyBillsScreen;
 import '../about/about_screen.dart';
 import '../kyc/kyc_screen.dart';
@@ -50,21 +63,49 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  // ── Tutorial keys ────────────────────────────────────────────────────────
+  final HomeTutorialKeys _tutorialKeys = HomeTutorialKeys();
+  // ────────────────────────────────────────────────────────────────────────
+
+  @override
+  void initState() {
+    super.initState();
+    // Load profile then, once the frame is rendered, maybe show tutorial.
+    widget.viewModel.loadProfile().then((_) => _maybeLaunchTutorial());
+  }
+
+  // ── Tutorial trigger ──────────────────────────────────────────────────────
+
+  Future<void> _maybeLaunchTutorial() async {
+    final should = await TutorialService().shouldShowHomeTutorial();
+    if (!should || !mounted) return;
+
+    // Wait one extra frame so all widgets with GlobalKeys are laid out.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      HomeTutorial(context: context, keys: _tutorialKeys).show(
+        onFinish: TutorialService().markHomeTutorialSeen,
+        onSkip:   TutorialService().markHomeTutorialSeen,
+      );
+    });
+  }
+
+  // ── Navigation helpers ────────────────────────────────────────────────────
+
   void _openKyc() async {
     await Navigator.push(
         context, MaterialPageRoute(builder: (_) => const KycScreen()));
     widget.viewModel.refreshKycStatus();
   }
 
-  /// Navigate to ReferEarnScreen, passing real referral data from the ViewModel.
   void _openReferEarn() {
     final vm = widget.viewModel;
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => ReferEarnScreen(
-          referralCode: vm.referralCode,   // ← real code from HomeViewModel
-          referralUrl:  vm.referralUrl,    // ← real URL  from HomeViewModel
+          referralCode: vm.referralCode,
+          referralUrl:  vm.referralUrl,
         ),
       ),
     );
@@ -72,9 +113,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final vm           = widget.viewModel;
-    final topPadding   = MediaQuery.of(context).padding.top;
-    final headerHeight = topPadding + 68.0;
+    final vm             = widget.viewModel;
+    final topPadding     = MediaQuery.of(context).padding.top;
+    final headerHeight   = topPadding + 68.0;
     final bottomNavHeight =
         64 + 16 + MediaQuery.of(context).padding.bottom;
 
@@ -106,9 +147,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 widget.onNavigateToPay?.call();
                 break;
               case 'Refer & Earn':
-              // ── FIX 1: pass real referral data from vm ────────────────
                 _openReferEarn();
-                // ─────────────────────────────────────────────────────────
                 break;
               case 'KYC':
                 _openKyc();
@@ -183,6 +222,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   walletBalance:   vm.walletBalance,
                   profileImageUrl: vm.profileImageUrl,
                   unreadNotifications:   vm.unreadNotifications,
+                  // ── Tutorial keys wired into AppHeader ──────────────
+                  menuKey:         _tutorialKeys.menu,
+                  notificationKey: _tutorialKeys.notifications,
+                  walletKey:       _tutorialKeys.wallet,
+                  // ───────────────────────────────────────────────────
                   onMenuTap: () =>
                       _scaffoldKey.currentState?.openDrawer(),
                   onNotificationTap: () async {
@@ -191,7 +235,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       MaterialPageRoute(builder: (_) => const NotificationsScreen()),
                     );
                     vm.refreshUnreadCount();
-
                     if (!mounted) return;
                     if (result == 'wallet') widget.onWalletTap?.call();
                     if (result == 'refer')  _openReferEarn();
@@ -217,10 +260,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       // 2. Manage Services
                       _ManageServicesCard(
-                        services:       vm.services,
+                        services:        vm.services,
                         onNavigateToPay: widget.onNavigateToPay,
                         onKycTap:        _openKyc,
                         homeViewModel:   vm,
+                        // ── Tutorial keys ──────────────────────────────
+                        cardKey:      _tutorialKeys.manageServices,
+                        payBillsKey:  _tutorialKeys.payBills,
+                        newPlanKey:   _tutorialKeys.newPlan,
+                        kycKey:       _tutorialKeys.kyc,
+                        // ──────────────────────────────────────────────
                       ),
                       const SizedBox(height: 16),
 
@@ -237,13 +286,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 16),
 
                       // 5. Features / Refer & Earn
-                      // ── FIX 2: pass onReferTap so the slide uses real data
                       _FeaturesSection(
-                        currentIndex: vm.featureBannerIndex,
+                        currentIndex:  vm.featureBannerIndex,
                         onPageChanged: vm.onFeatureBannerPageChanged,
-                        onReferTap: _openReferEarn,
+                        onReferTap:    _openReferEarn,
+                        // ── Tutorial key ───────────────────────────────
+                        sectionKey: _tutorialKeys.referEarn,
+                        // ──────────────────────────────────────────────
                       ),
-                      // ─────────────────────────────────────────────────
                       const SizedBox(height: 24),
                       const _FooterText(),
                     ],
@@ -259,7 +309,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// KYC STATUS BANNER
+// KYC STATUS BANNER (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _KycStatusBanner extends StatelessWidget {
@@ -270,7 +320,7 @@ class _KycStatusBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = kycStatus;
-    if (s == null || s.isApproved) return const SizedBox.shrink();
+    if (s == null || s.isApproved)  return const SizedBox.shrink();
     if (s.isNotSubmitted) return _NotSubmittedBanner(onTap: onTap);
     if (s.isPending)      return _PendingBanner(onCheckStatus: onTap);
     if (s.isRejected)     return _RejectedBanner(onFix: onTap);
@@ -288,47 +338,35 @@ class _PendingBanner extends StatelessWidget {
     decoration: BoxDecoration(
       color:        AppColors.reviewBg,
       borderRadius: BorderRadius.circular(16),
-      border: Border.all(
-          color: AppColors.reviewBorder.withOpacity(0.4)),
+      border: Border.all(color: AppColors.reviewBorder.withOpacity(0.4)),
     ),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        const AppIcon(AppIcons.info,
-            color: Color(0xFF8B6914), size: 10),
+        const AppIcon(AppIcons.info, color: Color(0xFF8B6914), size: 10),
         const SizedBox(width: 12),
         const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('In Review',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize:   15,
-                      color:      AppColors.textDark)),
-              SizedBox(height: 4),
-              Text(
-                  "Your KYC documents are under review. We'll notify you once complete.",
-                  style: TextStyle(
-                      fontSize: 12, color: AppColors.textGrey)),
-            ],
-          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('In Review',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15,
+                    color: AppColors.textDark)),
+            SizedBox(height: 4),
+            Text("Your KYC documents are under review. We'll notify you once complete.",
+                style: TextStyle(fontSize: 12, color: AppColors.textGrey)),
+          ]),
         ),
         const SizedBox(width: 12),
         GestureDetector(
           onTap: onCheckStatus,
           child: Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 14, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              border:       Border.all(color: const Color(0xFFD4A017)),
+              border: Border.all(color: const Color(0xFFD4A017)),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Text('Check Status',
-                style: TextStyle(
-                    color:      Color(0xFFD4A017),
-                    fontWeight: FontWeight.w700,
-                    fontSize:   12)),
+                style: TextStyle(color: Color(0xFFD4A017),
+                    fontWeight: FontWeight.w700, fontSize: 12)),
           ),
         ),
       ],
@@ -349,41 +387,28 @@ class _RejectedBanner extends StatelessWidget {
       border:       Border.all(color: Colors.red.shade200),
     ),
     child: Row(children: [
-      AppIcon(AppIcons.cancelCircle,
-          color: Colors.red.shade600, size: 26),
+      AppIcon(AppIcons.cancelCircle, color: Colors.red.shade600, size: 26),
       const SizedBox(width: 12),
       Expanded(
-        child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('KYC Rejected',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize:   15,
-                      color:      Colors.red.shade600)),
-              const SizedBox(height: 4),
-              Text('Please re-submit your documents.',
-                  style: TextStyle(
-                      fontSize: 12,
-                      color:    Colors.red.shade600,
-                      height:   1.4)),
-            ]),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('KYC Rejected',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15,
+                  color: Colors.red.shade600)),
+          const SizedBox(height: 4),
+          Text('Please re-submit your documents.',
+              style: TextStyle(fontSize: 12, color: Colors.red.shade600, height: 1.4)),
+        ]),
       ),
       const SizedBox(width: 12),
       GestureDetector(
         onTap: onFix,
         child: Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: 14, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color:        Colors.red.shade600,
-            borderRadius: BorderRadius.circular(8),
-          ),
+              color: Colors.red.shade600, borderRadius: BorderRadius.circular(8)),
           child: const Text('Fix Now',
-              style: TextStyle(
-                  color:      Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize:   12)),
+              style: TextStyle(color: Colors.white,
+                  fontWeight: FontWeight.w700, fontSize: 12)),
         ),
       ),
     ]),
@@ -391,7 +416,7 @@ class _RejectedBanner extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MANAGE SERVICES
+// MANAGE SERVICES — now accepts optional tutorial GlobalKeys
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ManageServicesCard extends StatelessWidget {
@@ -400,11 +425,21 @@ class _ManageServicesCard extends StatelessWidget {
   final VoidCallback?  onKycTap;
   final HomeViewModel? homeViewModel;
 
+  // Tutorial keys (optional so callers that don't use tutorial still compile)
+  final GlobalKey? cardKey;
+  final GlobalKey? payBillsKey;
+  final GlobalKey? newPlanKey;
+  final GlobalKey? kycKey;
+
   const _ManageServicesCard({
     required this.services,
     this.onNavigateToPay,
     this.onKycTap,
     this.homeViewModel,
+    this.cardKey,
+    this.payBillsKey,
+    this.newPlanKey,
+    this.kycKey,
   });
 
   String _getImageAsset(String iconKey) {
@@ -418,50 +453,51 @@ class _ManageServicesCard extends StatelessWidget {
     }
   }
 
+  // Map label → tutorial key so _ServiceItem can self-attach the right key.
+  GlobalKey? _keyForLabel(String label) {
+    switch (label) {
+      case 'Pay Bills': return payBillsKey;
+      case 'New Plan':  return newPlanKey;
+      case 'KYC':       return kycKey;
+      default:          return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
+      key:     cardKey,                      // ← spotlight whole card on step 4
       width:   double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color:        AppColors.cardBg,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(
-              color:      Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset:     const Offset(0, 2))
+          BoxShadow(color: Colors.black.withOpacity(0.05),
+              blurRadius: 8, offset: const Offset(0, 2))
         ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text(
-          'Manage Services',
-          style: TextStyle(
-              fontSize:   17,
-              fontWeight: FontWeight.w700,
-              color:      AppColors.textDark),
-        ),
+        const Text('Manage Services',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700,
+                color: AppColors.textDark)),
         const SizedBox(height: 20),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: services
-              .take(4)
-              .map((s) => _ServiceItem(
+          children: services.take(4).map((s) => _ServiceItem(
             imageAsset:      _getImageAsset(s['icon']!),
             label:           s['label']!,
             screenContext:   context,
             onNavigateToPay: onNavigateToPay,
             onKycTap:        onKycTap,
             homeViewModel:   homeViewModel,
-          ))
-              .toList(),
+            tutorialKey:     _keyForLabel(s['label']!), // ← per-icon key
+          )).toList(),
         ),
         if (services.length > 4) ...[
           const SizedBox(height: 20),
           Row(
-            children: services
-                .skip(4)
-                .map((s) => Padding(
+            children: services.skip(4).map((s) => Padding(
               padding: const EdgeInsets.only(right: 24),
               child: _ServiceItem(
                 imageAsset:      _getImageAsset(s['icon']!),
@@ -470,9 +506,9 @@ class _ManageServicesCard extends StatelessWidget {
                 onNavigateToPay: onNavigateToPay,
                 onKycTap:        onKycTap,
                 homeViewModel:   homeViewModel,
+                tutorialKey:     _keyForLabel(s['label']!),
               ),
-            ))
-                .toList(),
+            )).toList(),
           ),
         ],
       ]),
@@ -487,6 +523,7 @@ class _ServiceItem extends StatelessWidget {
   final VoidCallback?  onNavigateToPay;
   final VoidCallback?  onKycTap;
   final HomeViewModel? homeViewModel;
+  final GlobalKey?     tutorialKey;           // ← NEW (optional)
 
   const _ServiceItem({
     required this.imageAsset,
@@ -495,6 +532,7 @@ class _ServiceItem extends StatelessWidget {
     this.onNavigateToPay,
     this.onKycTap,
     this.homeViewModel,
+    this.tutorialKey,
   });
 
   void _onTap() {
@@ -531,6 +569,7 @@ class _ServiceItem extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(
+          key:    tutorialKey,               // ← spotlight this icon individually
           width:  55,
           height: 55,
           decoration: const BoxDecoration(shape: BoxShape.circle),
@@ -545,12 +584,8 @@ class _ServiceItem extends StatelessWidget {
             child: Text(
               label,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize:   12,
-                color:      AppColors.textDark,
-                fontWeight: FontWeight.w500,
-                height:     1.3,
-              ),
+              style: const TextStyle(fontSize: 12, color: AppColors.textDark,
+                  fontWeight: FontWeight.w500, height: 1.3),
               maxLines: 2,
             ),
           ),
@@ -561,28 +596,22 @@ class _ServiceItem extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SPEEDO CARDS
+// SPEEDO CARDS (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SpeedoCards extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(children: [
-      Expanded(
-          child: _SpeedoCard(
-            title:       'SPEEDO',
-            titleSuffix: 'prime',
-            isTv:        false,
-            subtitle:    'Watch your favourite\nmovies on Speedo Prime',
-          )),
+      Expanded(child: _SpeedoCard(
+        title: 'SPEEDO', titleSuffix: 'prime', isTv: false,
+        subtitle: 'Watch your favourite\nmovies on Speedo Prime',
+      )),
       const SizedBox(width: 12),
-      Expanded(
-          child: _SpeedoCard(
-            title:       'SPEEDO',
-            titleSuffix: 'TV',
-            isTv:        true,
-            subtitle:    'Watch all OTT content\nin one place',
-          )),
+      Expanded(child: _SpeedoCard(
+        title: 'SPEEDO', titleSuffix: 'TV', isTv: true,
+        subtitle: 'Watch all OTT content\nin one place',
+      )),
     ]);
   }
 }
@@ -595,17 +624,15 @@ class _SpeedoCard extends StatelessWidget {
   static const _tvPackage    = 'com.speedotv';
 
   const _SpeedoCard({
-    required this.title,
-    required this.titleSuffix,
-    required this.isTv,
-    required this.subtitle,
+    required this.title, required this.titleSuffix,
+    required this.isTv, required this.subtitle,
   });
 
   Future<void> _launch() async {
-    final package   = isTv ? _tvPackage : _primePacakge;
-    final appUri    = Uri.parse('android-app://$package');
-    final storeUri  = Uri.parse('https://play.google.com/store/apps/details?id=$package');
-
+    final package  = isTv ? _tvPackage : _primePacakge;
+    final appUri   = Uri.parse('android-app://$package');
+    final storeUri = Uri.parse(
+        'https://play.google.com/store/apps/details?id=$package');
     if (await canLaunchUrl(appUri)) {
       await launchUrl(appUri);
     } else {
@@ -623,53 +650,36 @@ class _SpeedoCard extends StatelessWidget {
         decoration: BoxDecoration(
           color:        AppColors.cardBg,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color:      Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset:     const Offset(0, 2),
-            )
-          ],
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
+              blurRadius: 8, offset: const Offset(0, 2))],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset(
-              isTv ? 'assets/images/speedo_tv.png' : 'assets/images/speedo_prime.png',
-              width: 140, height: 50,
-              fit: BoxFit.contain,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              maxLines: 2,
-              style: const TextStyle(
-                fontSize: 13, color: AppColors.textGrey, height: 1.4,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min, children: [
+              Image.asset(
+                isTv ? 'assets/images/speedo_tv.png'
+                    : 'assets/images/speedo_prime.png',
+                width: 140, height: 50, fit: BoxFit.contain,
               ),
-            ),
-            const SizedBox(height: 8),
-            Row(children: [
-              const Text(
-                'Watch Now',
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                ),
-              ),
-              const SizedBox(width: 4),
-              AppIcon(AppIcons.arrowRight, size: 14, color: AppColors.primary),
+              const SizedBox(height: 8),
+              Text(subtitle, maxLines: 2,
+                  style: const TextStyle(fontSize: 13,
+                      color: AppColors.textGrey, height: 1.4)),
+              const SizedBox(height: 8),
+              Row(children: [
+                const Text('Watch Now',
+                    style: TextStyle(color: AppColors.primary,
+                        fontWeight: FontWeight.w700, fontSize: 13)),
+                const SizedBox(width: 4),
+                AppIcon(AppIcons.arrowRight, size: 14, color: AppColors.primary),
+              ]),
             ]),
-          ],
-        ),
       ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROMO BANNER
+// PROMO BANNER (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PromoBanner extends StatefulWidget {
@@ -706,10 +716,8 @@ class _PromoBannerState extends State<_PromoBanner> {
       if (mounted) setState(() => _loading = false);
       return;
     }
-
     try {
       final raw = await widget.viewModel!.getCarousels();
-
       final items = <Map<String, dynamic>>[];
       for (final c in raw) {
         final url = (c['image_url'] as String?) ?? '';
@@ -717,25 +725,16 @@ class _PromoBannerState extends State<_PromoBanner> {
         if (url.startsWith('data:')) {
           try {
             final comma = url.indexOf(',');
-            if (comma != -1) {
-              bytes = base64Decode(url.substring(comma + 1));
-            }
+            if (comma != -1) bytes = base64Decode(url.substring(comma + 1));
           } catch (_) {}
         }
         if (bytes != null) {
-          items.add({
-            'title':    c['title']    ?? '',
-            'subtitle': c['subtitle'] ?? '',
-            'bytes':    bytes,
-          });
+          items.add({'title': c['title'] ?? '', 'subtitle': c['subtitle'] ?? '',
+            'bytes': bytes});
         }
       }
-
       if (mounted) {
-        setState(() {
-          _items   = items;
-          _loading = false;
-        });
+        setState(() { _items = items; _loading = false; });
         if (_items.length > 1) _startAutoScroll();
       }
     } catch (e) {
@@ -749,11 +748,8 @@ class _PromoBannerState extends State<_PromoBanner> {
     _autoScrollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (!mounted || _items.isEmpty) return;
       final next = (_currentIndex + 1) % _items.length;
-      _pageController.animateToPage(
-        next,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOut,
-      );
+      _pageController.animateToPage(next,
+          duration: const Duration(milliseconds: 500), curve: Curves.easeInOut);
     });
   }
 
@@ -769,36 +765,21 @@ class _PromoBannerState extends State<_PromoBanner> {
     if (_loading) {
       return Container(
         height: 176,
-        decoration: BoxDecoration(
-          color:        AppColors.cardBg,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-                color:      Colors.black.withOpacity(0.05),
-                blurRadius: 8,
-                offset:     const Offset(0, 2)),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: const _BannerShimmer(),
-        ),
+        decoration: BoxDecoration(color: AppColors.cardBg,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
+                blurRadius: 8, offset: const Offset(0, 2))]),
+        child: ClipRRect(borderRadius: BorderRadius.circular(16),
+            child: const _BannerShimmer()),
       );
     }
-
     if (_items.isEmpty) return const SizedBox.shrink();
 
     return Container(
-      decoration: BoxDecoration(
-        color:        AppColors.cardBg,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color:      Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset:     const Offset(0, 2)),
-        ],
-      ),
+      decoration: BoxDecoration(color: AppColors.cardBg,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
+              blurRadius: 8, offset: const Offset(0, 2))]),
       child: Column(children: [
         ClipRRect(
           borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
@@ -813,23 +794,16 @@ class _PromoBannerState extends State<_PromoBanner> {
               },
               itemBuilder: (_, i) {
                 final bytes = _items[i]['bytes'] as Uint8List;
-                return Image.memory(
-                  bytes,
-                  fit:   BoxFit.cover,
-                  width: double.infinity,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: Colors.grey.shade200,
-                    child: const Center(
-                      child: Icon(Icons.broken_image,
-                          color: Colors.grey, size: 32),
-                    ),
-                  ),
-                );
+                return Image.memory(bytes, fit: BoxFit.cover,
+                    width: double.infinity,
+                    errorBuilder: (_, __, ___) => Container(
+                        color: Colors.grey.shade200,
+                        child: const Center(child: Icon(Icons.broken_image,
+                            color: Colors.grey, size: 32))));
               },
             ),
           ),
         ),
-
         if (_items.length > 1)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 10),
@@ -843,9 +817,7 @@ class _PromoBannerState extends State<_PromoBanner> {
                   width:  active ? 20 : 8,
                   height: 8,
                   decoration: BoxDecoration(
-                    color: active
-                        ? AppColors.primary
-                        : Colors.grey.shade300,
+                    color: active ? AppColors.primary : Colors.grey.shade300,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 );
@@ -871,56 +843,47 @@ class _BannerShimmerState extends State<_BannerShimmer>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 1200))
-      ..repeat();
+    _ctrl = AnimationController(vsync: this,
+        duration: const Duration(milliseconds: 1200))..repeat();
     _anim = Tween<double>(begin: -1.5, end: 1.5).animate(
         CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
   }
 
   @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
+  void dispose() { _ctrl.dispose(); super.dispose(); }
 
   @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _anim,
-      builder: (_, __) => Container(
-        height: 176,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment(_anim.value - 1, 0),
-            end:   Alignment(_anim.value,      0),
-            colors: [
-              Colors.grey.shade200,
-              Colors.grey.shade100,
-              Colors.grey.shade200,
-            ],
-          ),
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _anim,
+    builder: (_, __) => Container(
+      height: 176,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment(_anim.value - 1, 0),
+          end:   Alignment(_anim.value,      0),
+          colors: [Colors.grey.shade200, Colors.grey.shade100,
+            Colors.grey.shade200],
         ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FEATURES SECTION
-// ── FIX: accepts onReferTap so the slide can use the real referral data
-//    without needing direct access to HomeViewModel.
+// FEATURES SECTION — now accepts optional sectionKey for tutorial
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _FeaturesSection extends StatefulWidget {
   final int          currentIndex;
   final Function(int) onPageChanged;
-  final VoidCallback  onReferTap; // ← NEW
+  final VoidCallback  onReferTap;
+  final GlobalKey?    sectionKey;               // ← NEW
 
   const _FeaturesSection({
     required this.currentIndex,
     required this.onPageChanged,
-    required this.onReferTap,   // ← NEW
+    required this.onReferTap,
+    this.sectionKey,
   });
 
   @override
@@ -932,38 +895,27 @@ class _FeaturesSectionState extends State<_FeaturesSection> {
   int _currentIndex = 0;
 
   @override
-  void initState() {
-    super.initState();
-    _pageController = PageController();
-  }
+  void initState() { super.initState(); _pageController = PageController(); }
 
   @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
+  void dispose() { _pageController.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      key:     widget.sectionKey,              // ← spotlight whole section
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color:        AppColors.cardBg,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color:      Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset:     const Offset(0, 2))
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
+            blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           const Text('Features',
-              style: TextStyle(
-                  fontSize:   17,
-                  fontWeight: FontWeight.w700,
-                  color:      AppColors.textDark)),
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700,
+                  color: AppColors.textDark)),
           Row(
             children: List.generate(2, (i) => Container(
               margin: const EdgeInsets.symmetric(horizontal: 2),
@@ -971,15 +923,13 @@ class _FeaturesSectionState extends State<_FeaturesSection> {
               height: 8,
               decoration: BoxDecoration(
                 color: i == _currentIndex
-                    ? AppColors.primary
-                    : Colors.grey.shade300,
+                    ? AppColors.primary : Colors.grey.shade300,
                 borderRadius: BorderRadius.circular(4),
               ),
             )),
           ),
         ]),
         const SizedBox(height: 16),
-
         SizedBox(
           height: 340,
           child: PageView(
@@ -994,23 +944,15 @@ class _FeaturesSectionState extends State<_FeaturesSection> {
                 title:       'More Refer More Rewards',
                 subtitle:    'Refer your friend and win exciting prizes!',
                 buttonLabel: 'Refer Now',
-                // ── FIX 2: use the callback that carries real data ────────
-                onTap: widget.onReferTap,
-                // ─────────────────────────────────────────────────────────
+                onTap:       widget.onReferTap,
               ),
               _FeatureSlide(
                 imagePath:   'assets/images/support.png',
                 title:       'Do You Have a Question?',
                 subtitle:    'Get 24x7 resolutions to your queries',
                 buttonLabel: 'Chat Now',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => HelpScreen(viewModel: HelpViewModel()),
-                    ),
-                  );
-                },
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => HelpScreen(viewModel: HelpViewModel()))),
               ),
             ],
           ),
@@ -1028,79 +970,54 @@ class _FeatureSlide extends StatelessWidget {
   final VoidCallback onTap;
 
   const _FeatureSlide({
-    required this.imagePath,
-    required this.title,
-    required this.subtitle,
-    required this.buttonLabel,
-    required this.onTap,
+    required this.imagePath, required this.title,
+    required this.subtitle, required this.buttonLabel, required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Image.asset(
-          imagePath,
-          height: 170,
-          fit: BoxFit.contain,
+    return Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Image.asset(imagePath, height: 170, fit: BoxFit.contain),
+      const SizedBox(height: 16),
+      Text(title, textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800,
+              color: AppColors.textDark)),
+      const SizedBox(height: 6),
+      Text(subtitle, textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 13, color: AppColors.textGrey)),
+      const SizedBox(height: 20),
+      ElevatedButton(
+        onPressed: onTap,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 40),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
-        const SizedBox(height: 16),
-        Text(title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-                fontSize:   16,
-                fontWeight: FontWeight.w800,
-                color:      AppColors.textDark)),
-        const SizedBox(height: 6),
-        Text(subtitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-                fontSize: 13, color: AppColors.textGrey)),
-        const SizedBox(height: 20),
-        ElevatedButton(
-          onPressed: onTap,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 40),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
-          ),
-          child: Text(buttonLabel,
-              style: const TextStyle(
-                  color:      AppColors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize:   15)),
-        ),
-      ],
-    );
+        child: Text(buttonLabel,
+            style: const TextStyle(color: AppColors.white,
+                fontWeight: FontWeight.w700, fontSize: 15)),
+      ),
+    ]);
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FOOTER
+// FOOTER (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _FooterText extends StatelessWidget {
   const _FooterText();
   @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
-      child: Text(
-        'With love,\nfrom Speedonet',
-        style: TextStyle(
-            fontSize:   32,
-            fontWeight: FontWeight.w800,
-            color:      Color(0xFFCCCCDD),
-            height:     1.2),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.symmetric(vertical: 8),
+    child: Text('With love,\nfrom Speedonet',
+        style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800,
+            color: Color(0xFFCCCCDD), height: 1.2)),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// KYC NOT SUBMITTED BANNER
+// KYC NOT SUBMITTED BANNER (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _NotSubmittedBanner extends StatelessWidget {
@@ -1132,15 +1049,11 @@ class _NotSubmittedBanner extends StatelessWidget {
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.blue.shade600,
-            borderRadius: BorderRadius.circular(8),
-          ),
+          decoration: BoxDecoration(color: Colors.blue.shade600,
+              borderRadius: BorderRadius.circular(8)),
           child: const Text('Start KYC',
-              style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12)),
+              style: TextStyle(color: Colors.white,
+                  fontWeight: FontWeight.w700, fontSize: 12)),
         ),
       ),
     ]),
