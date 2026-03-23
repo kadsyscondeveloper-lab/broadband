@@ -51,9 +51,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final GlobalKey<ScaffoldState> _scaffoldKey      = GlobalKey<ScaffoldState>();
-  final HomeTutorialKeys         _tutorialKeys      = HomeTutorialKeys();
-  final ScrollController         _scrollController  = ScrollController(); // ← NEW
+  final GlobalKey<ScaffoldState> _scaffoldKey     = GlobalKey<ScaffoldState>();
+  final HomeTutorialKeys         _tutorialKeys     = HomeTutorialKeys();
+  final ScrollController         _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -63,11 +63,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    _scrollController.dispose(); // ← NEW
+    _scrollController.dispose();
     super.dispose();
   }
 
-  // ── Tutorial trigger ──────────────────────────────────────────────────────
+  // ── Tutorial ──────────────────────────────────────────────────────────────
 
   Future<void> _maybeLaunchTutorial() async {
     final should = await TutorialService().shouldShowHomeTutorial();
@@ -78,7 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
       HomeTutorial(
         context:          context,
         keys:             _tutorialKeys,
-        scrollController: _scrollController, // ← NEW
+        scrollController: _scrollController,
       ).show(
         onFinish: TutorialService().markHomeTutorialSeen,
         onSkip:   TutorialService().markHomeTutorialSeen,
@@ -86,11 +86,49 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  // ── Profile completeness check ────────────────────────────────────────────
+
+  /// Returns true only when the loaded profile has all fields KYC requires.
+  /// Uses the already-loaded HomeViewModel profile — no extra API call.
+  bool _isProfileComplete() {
+    final profile = widget.viewModel.profile;
+    if (profile == null) return false;
+    final addr = profile.address;
+    return profile.name.isNotEmpty &&
+        addr.address.isNotEmpty &&
+        addr.city.isNotEmpty &&
+        addr.state.isNotEmpty &&
+        addr.pinCode.isNotEmpty;
+  }
+
+  /// Shows the "complete your profile first" bottom sheet.
+  void _showProfileRequiredSheet() {
+    showModalBottomSheet(
+      context:            context,
+      isScrollControlled: true,
+      backgroundColor:    Colors.transparent,
+      builder: (_) => _ProfileRequiredSheet(
+        onGoToProfile: () {
+          Navigator.pop(context);             // close sheet
+          widget.onNavigateToProfile?.call(); // switch to profile tab
+        },
+      ),
+    );
+  }
+
   // ── Navigation helpers ────────────────────────────────────────────────────
 
+  /// Guards KYC navigation: shows profile-required sheet for new users
+  /// who haven't completed their profile yet.
   void _openKyc() async {
+    if (!_isProfileComplete()) {
+      _showProfileRequiredSheet();
+      return;
+    }
     await Navigator.push(
-        context, MaterialPageRoute(builder: (_) => const KycScreen()));
+      context,
+      MaterialPageRoute(builder: (_) => const KycScreen()),
+    );
     widget.viewModel.refreshKycStatus();
   }
 
@@ -202,7 +240,7 @@ class _HomeScreenState extends State<HomeScreen> {
         listenable: vm,
         builder: (context, _) {
           return CustomScrollView(
-            controller: _scrollController, // ← NEW: wire the controller
+            controller: _scrollController,
             slivers: [
 
               // ── Sticky header ────────────────────────────────────────────
@@ -219,11 +257,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   walletBalance:       vm.walletBalance,
                   profileImageUrl:     vm.profileImageUrl,
                   unreadNotifications: vm.unreadNotifications,
-                  // Tutorial keys
                   menuKey:         _tutorialKeys.menu,
                   notificationKey: _tutorialKeys.notifications,
                   walletKey:       _tutorialKeys.wallet,
-                  // referEarnKey is NOT passed here — target lives in body
                   onMenuTap: () =>
                       _scaffoldKey.currentState?.openDrawer(),
                   onNotificationTap: () async {
@@ -284,12 +320,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 16),
 
                       // 5. Features / Refer & Earn
-                      // sectionKey lives HERE so the scroll brings it on-screen
                       _FeaturesSection(
                         currentIndex:  vm.featureBannerIndex,
                         onPageChanged: vm.onFeatureBannerPageChanged,
                         onReferTap:    _openReferEarn,
-                        sectionKey:    _tutorialKeys.referEarn, // ← key stays here
+                        sectionKey:    _tutorialKeys.referEarn,
                       ),
                       const SizedBox(height: 24),
 
@@ -336,47 +371,35 @@ class _PendingBanner extends StatelessWidget {
     decoration: BoxDecoration(
       color:        AppColors.reviewBg,
       borderRadius: BorderRadius.circular(16),
-      border: Border.all(
-          color: AppColors.reviewBorder.withOpacity(0.4)),
+      border: Border.all(color: AppColors.reviewBorder.withOpacity(0.4)),
     ),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        const AppIcon(AppIcons.info,
-            color: Color(0xFF8B6914), size: 10),
+        const AppIcon(AppIcons.info, color: Color(0xFF8B6914), size: 10),
         const SizedBox(width: 12),
         const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('In Review',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize:   15,
-                      color:      AppColors.textDark)),
-              SizedBox(height: 4),
-              Text(
-                  "Your KYC documents are under review. We'll notify you once complete.",
-                  style: TextStyle(
-                      fontSize: 12, color: AppColors.textGrey)),
-            ],
-          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('In Review',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15,
+                    color: AppColors.textDark)),
+            SizedBox(height: 4),
+            Text("Your KYC documents are under review. We'll notify you once complete.",
+                style: TextStyle(fontSize: 12, color: AppColors.textGrey)),
+          ]),
         ),
         const SizedBox(width: 12),
         GestureDetector(
           onTap: onCheckStatus,
           child: Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 14, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              border:       Border.all(color: const Color(0xFFD4A017)),
+              border: Border.all(color: const Color(0xFFD4A017)),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Text('Check Status',
-                style: TextStyle(
-                    color:      Color(0xFFD4A017),
-                    fontWeight: FontWeight.w700,
-                    fontSize:   12)),
+                style: TextStyle(color: Color(0xFFD4A017),
+                    fontWeight: FontWeight.w700, fontSize: 12)),
           ),
         ),
       ],
@@ -397,41 +420,29 @@ class _RejectedBanner extends StatelessWidget {
       border:       Border.all(color: Colors.red.shade200),
     ),
     child: Row(children: [
-      AppIcon(AppIcons.cancelCircle,
-          color: Colors.red.shade600, size: 26),
+      AppIcon(AppIcons.cancelCircle, color: Colors.red.shade600, size: 26),
       const SizedBox(width: 12),
       Expanded(
-        child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('KYC Rejected',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize:   15,
-                      color:      Colors.red.shade600)),
-              const SizedBox(height: 4),
-              Text('Please re-submit your documents.',
-                  style: TextStyle(
-                      fontSize: 12,
-                      color:    Colors.red.shade600,
-                      height:   1.4)),
-            ]),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('KYC Rejected',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15,
+                  color: Colors.red.shade600)),
+          const SizedBox(height: 4),
+          Text('Please re-submit your documents.',
+              style: TextStyle(fontSize: 12, color: Colors.red.shade600,
+                  height: 1.4)),
+        ]),
       ),
       const SizedBox(width: 12),
       GestureDetector(
         onTap: onFix,
         child: Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: 14, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color:        Colors.red.shade600,
-            borderRadius: BorderRadius.circular(8),
-          ),
+              color: Colors.red.shade600, borderRadius: BorderRadius.circular(8)),
           child: const Text('Fix Now',
-              style: TextStyle(
-                  color:      Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize:   12)),
+              style: TextStyle(color: Colors.white,
+                  fontWeight: FontWeight.w700, fontSize: 12)),
         ),
       ),
     ]),
@@ -493,26 +504,18 @@ class _ManageServicesCard extends StatelessWidget {
         color:        AppColors.cardBg,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(
-              color:      Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset:     const Offset(0, 2))
+          BoxShadow(color: Colors.black.withOpacity(0.05),
+              blurRadius: 8, offset: const Offset(0, 2))
         ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text(
-          'Manage Services',
-          style: TextStyle(
-              fontSize:   17,
-              fontWeight: FontWeight.w700,
-              color:      AppColors.textDark),
-        ),
+        const Text('Manage Services',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700,
+                color: AppColors.textDark)),
         const SizedBox(height: 20),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: services
-              .take(4)
-              .map((s) => _ServiceItem(
+          children: services.take(4).map((s) => _ServiceItem(
             imageAsset:      _getImageAsset(s['icon']!),
             label:           s['label']!,
             screenContext:   context,
@@ -520,15 +523,12 @@ class _ManageServicesCard extends StatelessWidget {
             onKycTap:        onKycTap,
             homeViewModel:   homeViewModel,
             tutorialKey:     _keyForLabel(s['label']!),
-          ))
-              .toList(),
+          )).toList(),
         ),
         if (services.length > 4) ...[
           const SizedBox(height: 20),
           Row(
-            children: services
-                .skip(4)
-                .map((s) => Padding(
+            children: services.skip(4).map((s) => Padding(
               padding: const EdgeInsets.only(right: 24),
               child: _ServiceItem(
                 imageAsset:      _getImageAsset(s['icon']!),
@@ -539,8 +539,7 @@ class _ManageServicesCard extends StatelessWidget {
                 homeViewModel:   homeViewModel,
                 tutorialKey:     _keyForLabel(s['label']!),
               ),
-            ))
-                .toList(),
+            )).toList(),
           ),
         ],
       ]),
@@ -569,29 +568,19 @@ class _ServiceItem extends StatelessWidget {
 
   void _onTap() {
     switch (label) {
-      case 'Pay Bills':
-        onNavigateToPay?.call();
-        break;
-      case 'KYC':
-        onKycTap?.call();
-        break;
+      case 'Pay Bills':  onNavigateToPay?.call(); break;
+      case 'KYC':        onKycTap?.call(); break;
       case 'Outstanding':
         Navigator.push(screenContext,
-            MaterialPageRoute(
-                builder: (_) => const PendingBillsScreen()));
+            MaterialPageRoute(builder: (_) => const PendingBillsScreen()));
         break;
       case 'My Bills':
         Navigator.push(screenContext,
             MaterialPageRoute(builder: (_) => const MyBillsScreen()));
         break;
       case 'New Plan':
-        Navigator.push(
-          screenContext,
-          MaterialPageRoute(
-            builder: (_) =>
-                PlansScreen(homeViewModel: homeViewModel),
-          ),
-        );
+        Navigator.push(screenContext, MaterialPageRoute(
+            builder: (_) => PlansScreen(homeViewModel: homeViewModel)));
         break;
     }
   }
@@ -615,15 +604,10 @@ class _ServiceItem extends StatelessWidget {
           width: 72,
           child: FittedBox(
             fit: BoxFit.scaleDown,
-            child: Text(
-              label,
+            child: Text(label,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize:   12,
-                color:      AppColors.textDark,
-                fontWeight: FontWeight.w500,
-                height:     1.3,
-              ),
+              style: const TextStyle(fontSize: 12, color: AppColors.textDark,
+                  fontWeight: FontWeight.w500, height: 1.3),
               maxLines: 2,
             ),
           ),
@@ -641,21 +625,15 @@ class _SpeedoCards extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(children: [
-      Expanded(
-          child: _SpeedoCard(
-            title:       'SPEEDO',
-            titleSuffix: 'prime',
-            isTv:        false,
-            subtitle:    'Watch your favourite\nmovies on Speedo Prime',
-          )),
+      Expanded(child: _SpeedoCard(
+        title: 'SPEEDO', titleSuffix: 'prime', isTv: false,
+        subtitle: 'Watch your favourite\nmovies on Speedo Prime',
+      )),
       const SizedBox(width: 12),
-      Expanded(
-          child: _SpeedoCard(
-            title:       'SPEEDO',
-            titleSuffix: 'TV',
-            isTv:        true,
-            subtitle:    'Watch all OTT content\nin one place',
-          )),
+      Expanded(child: _SpeedoCard(
+        title: 'SPEEDO', titleSuffix: 'TV', isTv: true,
+        subtitle: 'Watch all OTT content\nin one place',
+      )),
     ]);
   }
 }
@@ -668,10 +646,8 @@ class _SpeedoCard extends StatelessWidget {
   static const _tvPackage    = 'com.speedotv';
 
   const _SpeedoCard({
-    required this.title,
-    required this.titleSuffix,
-    required this.isTv,
-    required this.subtitle,
+    required this.title, required this.titleSuffix,
+    required this.isTv, required this.subtitle,
   });
 
   Future<void> _launch() async {
@@ -696,48 +672,27 @@ class _SpeedoCard extends StatelessWidget {
         decoration: BoxDecoration(
           color:        AppColors.cardBg,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color:      Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset:     const Offset(0, 2),
-            )
-          ],
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
+              blurRadius: 8, offset: const Offset(0, 2))],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset(
-              isTv ? 'assets/images/speedo_tv.png'
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min, children: [
+              Image.asset(isTv ? 'assets/images/speedo_tv.png'
                   : 'assets/images/speedo_prime.png',
-              width: 140, height: 50,
-              fit: BoxFit.contain,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              maxLines: 2,
-              style: const TextStyle(
-                fontSize: 13, color: AppColors.textGrey, height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(children: [
-              const Text(
-                'Watch Now',
-                style: TextStyle(
-                  color:      AppColors.primary,
-                  fontWeight: FontWeight.w700,
-                  fontSize:   13,
-                ),
-              ),
-              const SizedBox(width: 4),
-              AppIcon(AppIcons.arrowRight,
-                  size: 14, color: AppColors.primary),
+                  width: 140, height: 50, fit: BoxFit.contain),
+              const SizedBox(height: 8),
+              Text(subtitle, maxLines: 2,
+                  style: const TextStyle(fontSize: 13, color: AppColors.textGrey,
+                      height: 1.4)),
+              const SizedBox(height: 8),
+              Row(children: [
+                const Text('Watch Now',
+                    style: TextStyle(color: AppColors.primary,
+                        fontWeight: FontWeight.w700, fontSize: 13)),
+                const SizedBox(width: 4),
+                AppIcon(AppIcons.arrowRight, size: 14, color: AppColors.primary),
+              ]),
             ]),
-          ],
-        ),
       ),
     );
   }
@@ -794,11 +749,8 @@ class _PromoBannerState extends State<_PromoBanner> {
           } catch (_) {}
         }
         if (bytes != null) {
-          items.add({
-            'title':    c['title']    ?? '',
-            'subtitle': c['subtitle'] ?? '',
-            'bytes':    bytes,
-          });
+          items.add({'title': c['title'] ?? '', 'subtitle': c['subtitle'] ?? '',
+            'bytes': bytes});
         }
       }
       if (mounted) {
@@ -816,11 +768,8 @@ class _PromoBannerState extends State<_PromoBanner> {
     _autoScrollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (!mounted || _items.isEmpty) return;
       final next = (_currentIndex + 1) % _items.length;
-      _pageController.animateToPage(
-        next,
-        duration: const Duration(milliseconds: 500),
-        curve:    Curves.easeInOut,
-      );
+      _pageController.animateToPage(next,
+          duration: const Duration(milliseconds: 500), curve: Curves.easeInOut);
     });
   }
 
@@ -836,40 +785,24 @@ class _PromoBannerState extends State<_PromoBanner> {
     if (_loading) {
       return Container(
         height: 176,
-        decoration: BoxDecoration(
-          color:        AppColors.cardBg,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-                color:      Colors.black.withOpacity(0.05),
-                blurRadius: 8,
-                offset:     const Offset(0, 2)),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: const _BannerShimmer(),
-        ),
+        decoration: BoxDecoration(color: AppColors.cardBg,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
+                blurRadius: 8, offset: const Offset(0, 2))]),
+        child: ClipRRect(borderRadius: BorderRadius.circular(16),
+            child: const _BannerShimmer()),
       );
     }
-
     if (_items.isEmpty) return const SizedBox.shrink();
 
     return Container(
-      decoration: BoxDecoration(
-        color:        AppColors.cardBg,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color:      Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset:     const Offset(0, 2)),
-        ],
-      ),
+      decoration: BoxDecoration(color: AppColors.cardBg,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
+              blurRadius: 8, offset: const Offset(0, 2))]),
       child: Column(children: [
         ClipRRect(
-          borderRadius:
-          const BorderRadius.vertical(top: Radius.circular(16)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
           child: SizedBox(
             height: 160,
             child: PageView.builder(
@@ -881,18 +814,12 @@ class _PromoBannerState extends State<_PromoBanner> {
               },
               itemBuilder: (_, i) {
                 final bytes = _items[i]['bytes'] as Uint8List;
-                return Image.memory(
-                  bytes,
-                  fit:   BoxFit.cover,
-                  width: double.infinity,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: Colors.grey.shade200,
-                    child: const Center(
-                      child: Icon(Icons.broken_image,
-                          color: Colors.grey, size: 32),
-                    ),
-                  ),
-                );
+                return Image.memory(bytes, fit: BoxFit.cover,
+                    width: double.infinity,
+                    errorBuilder: (_, __, ___) => Container(
+                        color: Colors.grey.shade200,
+                        child: const Center(child: Icon(Icons.broken_image,
+                            color: Colors.grey, size: 32))));
               },
             ),
           ),
@@ -907,12 +834,9 @@ class _PromoBannerState extends State<_PromoBanner> {
                 return AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
                   margin: const EdgeInsets.symmetric(horizontal: 3),
-                  width:  active ? 20 : 8,
-                  height: 8,
+                  width:  active ? 20 : 8, height: 8,
                   decoration: BoxDecoration(
-                    color: active
-                        ? AppColors.primary
-                        : Colors.grey.shade300,
+                    color: active ? AppColors.primary : Colors.grey.shade300,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 );
@@ -938,10 +862,8 @@ class _BannerShimmerState extends State<_BannerShimmer>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 1200))
-      ..repeat();
+    _ctrl = AnimationController(vsync: this,
+        duration: const Duration(milliseconds: 1200))..repeat();
     _anim = Tween<double>(begin: -1.5, end: 1.5).animate(
         CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
   }
@@ -950,25 +872,19 @@ class _BannerShimmerState extends State<_BannerShimmer>
   void dispose() { _ctrl.dispose(); super.dispose(); }
 
   @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _anim,
-      builder: (_, __) => Container(
-        height: 176,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment(_anim.value - 1, 0),
-            end:   Alignment(_anim.value,      0),
-            colors: [
-              Colors.grey.shade200,
-              Colors.grey.shade100,
-              Colors.grey.shade200,
-            ],
-          ),
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _anim,
+    builder: (_, __) => Container(
+      height: 176,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment(_anim.value - 1, 0),
+          end:   Alignment(_anim.value,      0),
+          colors: [Colors.grey.shade200, Colors.grey.shade100, Colors.grey.shade200],
         ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -997,148 +913,102 @@ class _FeaturesSectionState extends State<_FeaturesSection> {
   int _currentIndex = 0;
 
   @override
-  void initState() {
-    super.initState();
-    _pageController = PageController();
-  }
+  void initState() { super.initState(); _pageController = PageController(); }
 
   @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
+  void dispose() { _pageController.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      key:     widget.sectionKey, // ← tutorial spotlights this after scroll
+      key:     widget.sectionKey,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color:        AppColors.cardBg,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color:      Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset:     const Offset(0, 2))
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
+            blurRadius: 8, offset: const Offset(0, 2))],
       ),
-      child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Features',
-                      style: TextStyle(
-                          fontSize:   17,
-                          fontWeight: FontWeight.w700,
-                          color:      AppColors.textDark)),
-                  Row(
-                    children: List.generate(2, (i) => Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 2),
-                      width:  i == _currentIndex ? 20 : 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: i == _currentIndex
-                            ? AppColors.primary
-                            : Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    )),
-                  ),
-                ]),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 340,
-              child: PageView(
-                controller: _pageController,
-                onPageChanged: (index) {
-                  setState(() => _currentIndex = index);
-                  widget.onPageChanged(index);
-                },
-                children: [
-                  _FeatureSlide(
-                    imagePath:   'assets/images/refer_friend.png',
-                    title:       'More Refer More Rewards',
-                    subtitle:    'Refer your friend and win exciting prizes!',
-                    buttonLabel: 'Refer Now',
-                    onTap:       widget.onReferTap,
-                  ),
-                  _FeatureSlide(
-                    imagePath:   'assets/images/support.png',
-                    title:       'Do You Have a Question?',
-                    subtitle:    'Get 24x7 resolutions to your queries',
-                    buttonLabel: 'Chat Now',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              HelpScreen(viewModel: HelpViewModel()),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          const Text('Features',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700,
+                  color: AppColors.textDark)),
+          Row(children: List.generate(2, (i) => Container(
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            width:  i == _currentIndex ? 20 : 8, height: 8,
+            decoration: BoxDecoration(
+              color: i == _currentIndex ? AppColors.primary : Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(4),
             ),
-          ]),
+          ))),
+        ]),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 340,
+          child: PageView(
+            controller: _pageController,
+            onPageChanged: (index) {
+              setState(() => _currentIndex = index);
+              widget.onPageChanged(index);
+            },
+            children: [
+              _FeatureSlide(
+                imagePath:   'assets/images/refer_friend.png',
+                title:       'More Refer More Rewards',
+                subtitle:    'Refer your friend and win exciting prizes!',
+                buttonLabel: 'Refer Now',
+                onTap:       widget.onReferTap,
+              ),
+              _FeatureSlide(
+                imagePath:   'assets/images/support.png',
+                title:       'Do You Have a Question?',
+                subtitle:    'Get 24x7 resolutions to your queries',
+                buttonLabel: 'Chat Now',
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => HelpScreen(viewModel: HelpViewModel()))),
+              ),
+            ],
+          ),
+        ),
+      ]),
     );
   }
 }
 
 class _FeatureSlide extends StatelessWidget {
-  final String       imagePath;
-  final String       title;
-  final String       subtitle;
-  final String       buttonLabel;
+  final String imagePath, title, subtitle, buttonLabel;
   final VoidCallback onTap;
 
   const _FeatureSlide({
-    required this.imagePath,
-    required this.title,
-    required this.subtitle,
-    required this.buttonLabel,
-    required this.onTap,
+    required this.imagePath, required this.title,
+    required this.subtitle, required this.buttonLabel, required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Image.asset(imagePath, height: 170, fit: BoxFit.contain),
-        const SizedBox(height: 16),
-        Text(title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-                fontSize:   16,
-                fontWeight: FontWeight.w800,
-                color:      AppColors.textDark)),
-        const SizedBox(height: 6),
-        Text(subtitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-                fontSize: 13, color: AppColors.textGrey)),
-        const SizedBox(height: 20),
-        ElevatedButton(
-          onPressed: onTap,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            padding: const EdgeInsets.symmetric(
-                vertical: 12, horizontal: 40),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
-          ),
-          child: Text(buttonLabel,
-              style: const TextStyle(
-                  color:      AppColors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize:   15)),
+    return Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Image.asset(imagePath, height: 170, fit: BoxFit.contain),
+      const SizedBox(height: 16),
+      Text(title, textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800,
+              color: AppColors.textDark)),
+      const SizedBox(height: 6),
+      Text(subtitle, textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 13, color: AppColors.textGrey)),
+      const SizedBox(height: 20),
+      ElevatedButton(
+        onPressed: onTap,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 40),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
-      ],
-    );
+        child: Text(buttonLabel,
+            style: const TextStyle(color: AppColors.white,
+                fontWeight: FontWeight.w700, fontSize: 15)),
+      ),
+    ]);
   }
 }
 
@@ -1149,19 +1019,12 @@ class _FeatureSlide extends StatelessWidget {
 class _FooterText extends StatelessWidget {
   const _FooterText();
   @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
-      child: Text(
-        'With love,\nfrom Speedonet',
-        style: TextStyle(
-            fontSize:   32,
-            fontWeight: FontWeight.w800,
-            color:      Color(0xFFCCCCDD),
-            height:     1.2),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.symmetric(vertical: 8),
+    child: Text('With love,\nfrom Speedonet',
+        style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800,
+            color: Color(0xFFCCCCDD), height: 1.2)),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1181,39 +1044,166 @@ class _NotSubmittedBanner extends StatelessWidget {
       border: Border.all(color: Colors.blue.shade200),
     ),
     child: Row(children: [
-      Icon(Icons.verified_user_outlined,
-          color: Colors.blue.shade600, size: 26),
+      Icon(Icons.verified_user_outlined, color: Colors.blue.shade600, size: 26),
       const SizedBox(width: 12),
       const Expanded(
-        child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Complete Your KYC',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 15)),
-              SizedBox(height: 4),
-              Text('Verify your identity to unlock all features.',
-                  style: TextStyle(
-                      fontSize: 12, color: AppColors.textGrey)),
-            ]),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Complete Your KYC',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+          SizedBox(height: 4),
+          Text('Verify your identity to unlock all features.',
+              style: TextStyle(fontSize: 12, color: AppColors.textGrey)),
+        ]),
       ),
       const SizedBox(width: 12),
       GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color:        Colors.blue.shade600,
-            borderRadius: BorderRadius.circular(8),
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(color: Colors.blue.shade600,
+              borderRadius: BorderRadius.circular(8)),
           child: const Text('Start KYC',
-              style: TextStyle(
-                  color:      Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize:   12)),
+              style: TextStyle(color: Colors.white,
+                  fontWeight: FontWeight.w700, fontSize: 12)),
         ),
       ),
     ]),
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROFILE REQUIRED SHEET
+// Shown when a user taps KYC before completing their profile.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ProfileRequiredSheet extends StatelessWidget {
+  final VoidCallback onGoToProfile;
+  const _ProfileRequiredSheet({required this.onGoToProfile});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color:        Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        24, 12, 24,
+        24 + MediaQuery.of(context).padding.bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+
+          // Drag handle
+          Container(
+            width: 36, height: 4,
+            decoration: BoxDecoration(
+              color:        Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Icon
+          Container(
+            width: 72, height: 72,
+            decoration: BoxDecoration(
+              color:  const Color(0xFF1A1A2E).withOpacity(0.07),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.person_outline_rounded,
+                size: 36, color: Color(0xFF1A1A2E)),
+          ),
+          const SizedBox(height: 20),
+
+          // Title
+          const Text(
+            'Complete Your Profile First',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize:   18,
+              fontWeight: FontWeight.w800,
+              color:      Color(0xFF1A1A2E),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Body
+          const Text(
+            'Before submitting KYC documents, please fill in your '
+                'name and address details in your profile. This helps us '
+                'verify your identity accurately.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: Color(0xFF666680), height: 1.6),
+          ),
+          const SizedBox(height: 20),
+
+          // Checklist
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color:        const Color(0xFFF5F5FA),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Required fields:',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
+                      color: Color(0xFF888899)),
+                ),
+                const SizedBox(height: 10),
+                ...['Full name', 'House / flat number', 'Street address',
+                  'City', 'State', 'PIN code'].map(
+                      (field) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(children: [
+                      const Icon(Icons.check_circle_outline_rounded,
+                          size: 16, color: Color(0xFF1A1A2E)),
+                      const SizedBox(width: 8),
+                      Text(field,
+                          style: const TextStyle(fontSize: 13,
+                              color: Color(0xFF1A1A2E))),
+                    ]),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // CTA — Complete Profile
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: onGoToProfile,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1A1A2E),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+              child: const Text(
+                'Complete Profile',
+                style: TextStyle(color: Colors.white,
+                    fontWeight: FontWeight.w700, fontSize: 15),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Dismiss
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Maybe Later',
+                style: TextStyle(color: Color(0xFF999999), fontSize: 13)),
+          ),
+        ],
+      ),
+    );
+  }
 }
