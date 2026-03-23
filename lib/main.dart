@@ -9,9 +9,14 @@ import 'core/storage_service.dart';
 import 'services/auth_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'views/auth/onboarding_screen.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'services/notification_push_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await NotificationPushService().init();
   await StorageService().init();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   SystemChrome.setSystemUIOverlayStyle(

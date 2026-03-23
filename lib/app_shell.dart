@@ -13,6 +13,7 @@ import 'viewmodels/pay_viewmodel.dart';
 import 'viewmodels/profile_viewmodel.dart';
 import 'services/auth_service.dart';
 import 'theme/app_theme.dart';
+import 'services/notification_push_service.dart';
 
 class AppShell extends StatefulWidget {
   final VoidCallback onLogout;
@@ -71,6 +72,7 @@ class _AppShellState extends State<AppShell> {
       ),
     );
     if (confirmed != true) return;
+    await NotificationPushService().clearToken();
     await _auth.logout();
     widget.onLogout();
   }
