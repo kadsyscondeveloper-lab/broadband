@@ -16,8 +16,8 @@ import 'services/notification_push_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await StorageService().init();           // ← initialize FIRST
   await NotificationPushService().init();
-  await StorageService().init();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
