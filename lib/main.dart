@@ -16,8 +16,12 @@ import 'services/notification_push_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await StorageService().init();           // ← initialize FIRST
-  await NotificationPushService().init();
+  await StorageService().init();
+  try {
+    await NotificationPushService().init();
+  } catch (e) {
+    debugPrint('❌ Notification init failed: $e');
+  }
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -200,23 +204,34 @@ class _AuthGateState extends State<_AuthGate> {
   }
 
   Future<void> _checkSession() async {
-    final prefs          = await SharedPreferences.getInstance();
-    final onboardingDone = prefs.getBool(_kOnboardingDone) ?? false;
+    try {
+      final prefs          = await SharedPreferences.getInstance();
+      final onboardingDone = prefs.getBool(_kOnboardingDone) ?? false;
 
-    if (_storage.hasToken) {
-      final user = await _auth.getMe();
-      if (mounted) {
-        setState(() {
-          _isLoggedIn     = user != null;
-          _showOnboarding = !onboardingDone;
-          _isChecking     = false;
-        });
+      if (_storage.hasToken) {
+        final user = await _auth.getMe();
+        if (mounted) {
+          setState(() {
+            _isLoggedIn     = user != null;
+            _showOnboarding = !onboardingDone;
+            _isChecking     = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _isLoggedIn     = false;
+            _showOnboarding = !onboardingDone;
+            _isChecking     = false;
+          });
+        }
       }
-    } else {
+    } catch (e) {
+      debugPrint('❌ _checkSession error: $e');
       if (mounted) {
         setState(() {
           _isLoggedIn     = false;
-          _showOnboarding = !onboardingDone;
+          _showOnboarding = false;
           _isChecking     = false;
         });
       }
