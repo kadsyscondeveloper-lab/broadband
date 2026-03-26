@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "629498338780",
-    "project_id": "messaging-84244",
-    "storage_bucket": "messaging-84244.firebasestorage.app"
+    "project_number": "2651318298",
+    "project_id": "messaging-850a0",
+    "storage_bucket": "messaging-850a0.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:629498338780:android:a2b0906885a9162c99c319",
+        "mobilesdk_app_id": "1:2651318298:android:13567df264d5b7c739c9a3",
         "android_client_info": {
           "package_name": "com.example.app"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBhl3k2ZCEiBBxAGWyPAMWkdjYhViH1_DY"
+          "current_key": "AIzaSyBRt7DhH0lUdhusozee9nbmeGAolRNkFvY"
         }
       ],
       "services": {
