@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import '../core/api_client.dart';
 import '../core/storage_service.dart';
 import '../models/auth_models.dart';
+import 'notification_push_service.dart';
 
 /// AuthResult — same shape as your old stub so ViewModels need zero changes.
 class AuthResult {
@@ -45,6 +46,7 @@ class AuthService {
       phone: authData.user.phone,
       name:  authData.user.name,
     );
+    NotificationPushService().registerTokenAfterLogin();
   }
 
   AuthResult _handleDioError(DioException e) {

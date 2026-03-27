@@ -172,6 +172,11 @@ class NotificationPushService {
     }
   }
 
+
+  Future<void> registerTokenAfterLogin() async {
+    await _registerToken();
+  }
+
   // ── Call on logout to stop receiving notifications ────────────────────────
 
   Future<void> clearToken() async {
