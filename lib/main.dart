@@ -17,11 +17,11 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await StorageService().init();
-  try {
-    await NotificationPushService().init();
-  } catch (e) {
-    debugPrint('❌ Notification init failed: $e');
-  }
+
+  // ✅ Do NOT await NotificationPushService().init() here.
+  // On iOS, the permission dialog blocks the Flutter engine before
+  // runApp() completes → white screen. We call it after login instead.
+
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -216,6 +216,8 @@ class _AuthGateState extends State<_AuthGate> {
             _showOnboarding = !onboardingDone;
             _isChecking     = false;
           });
+          // ✅ Init notifications after app is rendered, not before
+          if (_isLoggedIn) _initNotifications();
         }
       } else {
         if (mounted) {
@@ -238,18 +240,35 @@ class _AuthGateState extends State<_AuthGate> {
     }
   }
 
+  /// ✅ Safe to call AFTER runApp + first frame — permission dialog won't
+  /// block the engine here.
+  void _initNotifications() {
+    Future.delayed(const Duration(milliseconds: 500), () async {
+      try {
+        await NotificationPushService().init();
+      } catch (e) {
+        debugPrint('❌ Notification init failed: $e');
+      }
+    });
+  }
+
   Future<void> _onOnboardingComplete() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kOnboardingDone, true);
     if (mounted) setState(() => _showOnboarding = false);
   }
 
-  void _onLoginSuccess() => setState(() => _isLoggedIn = true);
-  void _onLogout()       => setState(() => _isLoggedIn = false);
+  void _onLoginSuccess() {
+    setState(() => _isLoggedIn = true);
+    // ✅ Also init notifications on fresh login
+    _initNotifications();
+  }
+
+  void _onLogout() => setState(() => _isLoggedIn = false);
 
   @override
   Widget build(BuildContext context) {
-    // ── Splash — GIF fullscreen ───────────────────────────────────────────
+    // ── Splash ────────────────────────────────────────────────────────────
     if (_isChecking) {
       return Scaffold(
         backgroundColor: const Color(0xFFE31E24),
@@ -257,17 +276,23 @@ class _AuthGateState extends State<_AuthGate> {
           child: Image.asset(
             'assets/images/loading_screen.gif',
             fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              debugPrint('❌ loading_screen.gif missing: $error');
+              return const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              );
+            },
           ),
         ),
       );
     }
 
-    // ── Onboarding (first launch only) ───────────────────────────────────
+    // ── Onboarding ────────────────────────────────────────────────────────
     if (_showOnboarding) {
       return OnboardingScreen(onComplete: _onOnboardingComplete);
     }
 
-    // ── Main app ─────────────────────────────────────────────────────────
+    // ── Main app ──────────────────────────────────────────────────────────
     return _isLoggedIn
         ? AppShell(onLogout: _onLogout)
         : LoginScreen(onLoginSuccess: _onLoginSuccess);
