@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:2651318298:android:13567df264d5b7c739c9a3",
+        "mobilesdk_app_id": "1:2651318298:android:9a7b667527418dd739c9a3",
         "android_client_info": {
-          "package_name": "com.example.app"
+          "package_name": "com.speedobroadband.app"
         }
       },
       "oauth_client": [],

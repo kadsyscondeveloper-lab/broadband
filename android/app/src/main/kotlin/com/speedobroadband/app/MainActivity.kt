@@ -1,4 +1,4 @@
-package com.example.app
+package com.speedobroadband.app
 
 import android.os.Bundle
 import android.webkit.WebView

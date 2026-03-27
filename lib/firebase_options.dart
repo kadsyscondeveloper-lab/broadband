@@ -42,17 +42,17 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions web = FirebaseOptions(
     apiKey: 'AIzaSyB4nzSRNxfJXFr8rgZQaBroRT5wb659soU',
-    appId: '1:2651318298:web:cdcee55a6ec5a9ee39c9a3',
+    appId: '1:2651318298:web:c074b02c4f951eb039c9a3',
     messagingSenderId: '2651318298',
     projectId: 'messaging-850a0',
     authDomain: 'messaging-850a0.firebaseapp.com',
     storageBucket: 'messaging-850a0.firebasestorage.app',
-    measurementId: 'G-220HPY5QCZ',
+    measurementId: 'G-6HDH22XZCD',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyBRt7DhH0lUdhusozee9nbmeGAolRNkFvY',
-    appId: '1:2651318298:android:13567df264d5b7c739c9a3',
+    appId: '1:2651318298:android:9a7b667527418dd739c9a3',
     messagingSenderId: '2651318298',
     projectId: 'messaging-850a0',
     storageBucket: 'messaging-850a0.firebasestorage.app',
@@ -60,16 +60,16 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyAcRj-8rVwX0PZ86MZRsf68iifRsKXO7qc',
-    appId: '1:2651318298:ios:5ffe50c36d37ff8539c9a3',
+    appId: '1:2651318298:ios:1c1c185c2148e67f39c9a3',
     messagingSenderId: '2651318298',
     projectId: 'messaging-850a0',
     storageBucket: 'messaging-850a0.firebasestorage.app',
-    iosBundleId: 'com.example.app',
+    iosBundleId: 'com.speedobroadband.app',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyAcRj-8rVwX0PZ86MZRsf68iifRsKXO7qc',
-    appId: '1:2651318298:ios:5ffe50c36d37ff8539c9a3',
+    appId: '1:2651318298:ios:1bbca1173acfde1939c9a3',
     messagingSenderId: '2651318298',
     projectId: 'messaging-850a0',
     storageBucket: 'messaging-850a0.firebasestorage.app',
@@ -78,12 +78,12 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions windows = FirebaseOptions(
     apiKey: 'AIzaSyB4nzSRNxfJXFr8rgZQaBroRT5wb659soU',
-    appId: '1:2651318298:web:b0d3e53c24de743e39c9a3',
+    appId: '1:2651318298:web:6b5ff33630a6ff3239c9a3',
     messagingSenderId: '2651318298',
     projectId: 'messaging-850a0',
     authDomain: 'messaging-850a0.firebaseapp.com',
     storageBucket: 'messaging-850a0.firebasestorage.app',
-    measurementId: 'G-C51ND4G5JL',
+    measurementId: 'G-ZYZKYMB2R0',
   );
 
 }
