@@ -1,7 +1,11 @@
 // lib/views/help/ticket_chat_screen.dart
 
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../services/ticket_service.dart';
 import '../../theme/app_theme.dart';
 
@@ -33,6 +37,12 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
   String  _status       = '';
   String? _error;
   int?    _lastMessageId;
+
+  // ── Attachment state ───────────────────────────────────────────────────────
+  String? _pendingAttachmentData;
+  String? _pendingAttachmentMime;
+  String? _pendingAttachmentName;
+  bool    _pickingAttachment = false;
 
   Timer? _pollTimer;
   static const _pollInterval = Duration(seconds: 5);
@@ -99,45 +109,197 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
     });
   }
 
+  // ── Attachment picking ────────────────────────────────────────────────────
+
+  Future<void> _pickAttachment() async {
+    final source = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _AttachPickerSheet(
+        onCamera:   () => Navigator.pop(ctx, 'camera'),
+        onGallery:  () => Navigator.pop(ctx, 'gallery'),
+        onDocument: () => Navigator.pop(ctx, 'document'),
+      ),
+    );
+
+    if (source == null || !mounted) return;
+    setState(() => _pickingAttachment = true);
+
+    try {
+      Uint8List? bytes;
+      String?    mime;
+      String?    name;
+
+      if (source == 'camera') {
+        final img = await ImagePicker().pickImage(
+          source:       ImageSource.camera,
+          imageQuality: 70,
+          maxWidth:     1200,
+        );
+        if (img != null) {
+          bytes = await img.readAsBytes();
+          mime  = 'image/jpeg';
+          name  = img.name;
+        }
+      } else if (source == 'gallery') {
+        final img = await ImagePicker().pickImage(
+          source:       ImageSource.gallery,
+          imageQuality: 70,
+          maxWidth:     1200,
+        );
+        if (img != null) {
+          bytes = await img.readAsBytes();
+          mime  = img.name.toLowerCase().endsWith('.png')
+              ? 'image/png'
+              : 'image/jpeg';
+          name = img.name;
+        }
+      } else {
+        final result = await FilePicker.platform.pickFiles(
+          type:              FileType.custom,
+          allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+          withData:          true,
+        );
+        if (result != null && result.files.first.bytes != null) {
+          bytes = result.files.first.bytes!;
+          name  = result.files.first.name;
+          final ext = result.files.first.extension?.toLowerCase() ?? '';
+          mime  = ext == 'pdf' ? 'application/pdf'
+              : ext == 'png' ? 'image/png'
+              : 'image/jpeg';
+        }
+      }
+
+      if (bytes == null || !mounted) return;
+
+      if (bytes.lengthInBytes > 5 * 1024 * 1024) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content:         Text('File too large. Maximum size is 5 MB.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      setState(() {
+        _pendingAttachmentData = base64Encode(bytes!);
+        _pendingAttachmentMime = mime;
+        _pendingAttachmentName = name;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not pick file: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _pickingAttachment = false);
+    }
+  }
+
+  void _clearAttachment() {
+    setState(() {
+      _pendingAttachmentData = null;
+      _pendingAttachmentMime = null;
+      _pendingAttachmentName = null;
+    });
+  }
+
   // ── Send ──────────────────────────────────────────────────────────────────
 
   Future<void> _sendMessage() async {
-    final text = _controller.text.trim();
-    if (text.isEmpty || _isSending || !_isActive) return;
+    final text        = _controller.text.trim();
+    final hasText     = text.isNotEmpty;
+    final hasAttach   = _pendingAttachmentData != null;
+
+    if ((!hasText && !hasAttach) || _isSending || !_isActive) return;
 
     setState(() => _isSending = true);
     _controller.clear();
 
+    // Snapshot and clear pending attachment before the async call
+    final attachData = _pendingAttachmentData;
+    final attachMime = _pendingAttachmentMime;
+    _clearAttachment();
+
     final tempId = DateTime.now().millisecondsSinceEpoch;
     setState(() => _messages.add(TicketMessage(
-      id: tempId, senderId: 0, senderType: 'user',
-      message: text, createdAt: DateTime.now(),
+      id:             tempId,
+      senderId:       0,
+      senderType:     'user',
+      message:        text,
+      attachmentData: attachData,
+      attachmentMime: attachMime,
+      createdAt:      DateTime.now(),
     )));
     _scrollToBottom();
 
     try {
-      final sent = await _service.sendMessage(widget.ticketId, text);
+      final sent = await _service.sendMessage(
+        widget.ticketId,
+        text,
+        attachmentData: attachData,
+        attachmentMime: attachMime,
+      );
       if (!mounted) return;
       setState(() {
         final idx = _messages.indexWhere((m) => m.id == tempId);
         if (idx != -1) _messages[idx] = sent;
         _lastMessageId = sent.id;
-        _isSending = false;
+        _isSending     = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _messages.removeWhere((m) => m.id == tempId);
-        _controller.text = text;
-        _isSending = false;
+        _controller.text           = text;
+        _pendingAttachmentData     = attachData;  // restore on failure
+        _pendingAttachmentMime     = attachMime;
+        _isSending                 = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Failed to send. Please try again.'),
+          content:         Text('Failed to send. Please try again.'),
           backgroundColor: AppColors.primary,
         ),
       );
     }
+  }
+
+  // ── Fullscreen image viewer ────────────────────────────────────────────────
+
+  void _openFullscreen(String base64Data) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            iconTheme:       const IconThemeData(color: Colors.white),
+            elevation:       0,
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: Image.memory(
+                base64Decode(base64Data),
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.broken_image_rounded,
+                  color: Colors.white,
+                  size:  64,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   // ── Scroll ────────────────────────────────────────────────────────────────
@@ -150,7 +312,7 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
           ? _scrollCtrl.jumpTo(max)
           : _scrollCtrl.animateTo(max,
           duration: const Duration(milliseconds: 280),
-          curve: Curves.easeOut);
+          curve:    Curves.easeOut);
     });
   }
 
@@ -213,11 +375,10 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
         onPressed: () => Navigator.pop(context),
       ),
       title: Row(children: [
-        // Agent avatar
         Container(
           width: 36, height: 36,
           decoration: BoxDecoration(
-            color:  Colors.white.withOpacity(0.20),
+            color: Colors.white.withOpacity(0.20),
             shape: BoxShape.circle,
           ),
           child: const Icon(Icons.support_agent_rounded,
@@ -231,8 +392,8 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
               Text(
                 widget.subject,
                 style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
+                    color:      Colors.white,
+                    fontSize:   14,
                     fontWeight: FontWeight.w700),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -256,7 +417,7 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
                 decoration: BoxDecoration(
                   color:        Colors.white.withOpacity(0.18),
                   borderRadius: BorderRadius.circular(20),
-                  border:       Border.all(
+                  border: Border.all(
                       color: Colors.white.withOpacity(0.40)),
                 ),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -292,7 +453,7 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
           Container(
             width: 72, height: 72,
             decoration: BoxDecoration(
-              color:  AppColors.primary.withOpacity(0.08),
+              color: AppColors.primary.withOpacity(0.08),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.chat_bubble_outline_rounded,
@@ -328,7 +489,6 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
         final showDate = prev == null ||
             !_isSameDay(prev.createdAt, msg.createdAt);
 
-        // Group messages from same sender
         final isLastInGroup = next == null ||
             next.isFromUser != msg.isFromUser ||
             !_isSameDay(next.createdAt, msg.createdAt);
@@ -336,8 +496,10 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
         return Column(children: [
           if (showDate) _DateDivider(date: msg.createdAt),
           _MessageBubble(
-              message:       msg,
-              isLastInGroup: isLastInGroup),
+            message:       msg,
+            isLastInGroup: isLastInGroup,
+            onImageTap:    _openFullscreen,
+          ),
         ]);
       },
     );
@@ -363,33 +525,26 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
           ],
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          // Greyed-out input row (visual only)
           Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color:        Colors.grey.shade100,
               borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: Colors.grey.shade200),
+              border:       Border.all(color: Colors.grey.shade200),
             ),
             child: Row(children: [
-              Icon(Icons.add_rounded,
-                  color: Colors.grey.shade400, size: 22),
+              Icon(Icons.add_rounded, color: Colors.grey.shade400, size: 22),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   'Type your message...',
-                  style: TextStyle(
-                      color:    Colors.grey.shade400,
-                      fontSize: 14),
+                  style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
                 ),
               ),
               Container(
                 width: 34, height: 34,
                 decoration: BoxDecoration(
-                  color:  Colors.grey.shade300,
-                  shape: BoxShape.circle,
-                ),
+                    color: Colors.grey.shade300, shape: BoxShape.circle),
                 child: Icon(Icons.send_rounded,
                     color: Colors.grey.shade500, size: 16),
               ),
@@ -426,86 +581,177 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
           ),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
 
-          // ── + button (outside the field, left) ───────────────────────
-          GestureDetector(
-            onTap: () {},
-            child: Container(
-              width:  40,
-              height: 40,
-              margin: const EdgeInsets.only(right: 10, bottom: 2),
+          // ── Attachment preview strip ──────────────────────────────────
+          if (_pendingAttachmentData != null) ...[
+            Container(
+              margin:  const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color:        Colors.grey.shade100,
-                shape:        BoxShape.circle,
-                border:       Border.all(color: Colors.grey.shade300),
+                color:        AppColors.primary.withOpacity(0.07),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: AppColors.primary.withOpacity(0.25)),
               ),
-              child: Icon(Icons.add_rounded,
-                  color: Colors.grey.shade500, size: 22),
-            ),
-          ),
-
-          // ── Text field (its own full-width rounded box) ───────────────
-          Expanded(
-            child: Container(
-              constraints: const BoxConstraints(maxHeight: 130),
-              decoration: BoxDecoration(
-                color:        const Color(0xFFF2F3F7),
-                borderRadius: BorderRadius.circular(26),
-                border:       Border.all(color: Colors.grey.shade200),
-              ),
-              child: TextField(
-                controller:         _controller,
-                maxLines:           5,
-                minLines:           1,
-                textCapitalization: TextCapitalization.sentences,
-                style: const TextStyle(
-                    fontSize: 15, color: AppColors.textDark),
-                decoration: const InputDecoration(
-                  hintText:       'Type a message...',
-                  hintStyle:      TextStyle(
-                      color: AppColors.textLight, fontSize: 15),
-                  border:         InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(
-                      horizontal: 18, vertical: 12),
-                ),
-                onSubmitted: (_) => _sendMessage(),
-              ),
-            ),
-          ),
-
-          // ── Send button (outside the field, right) ────────────────────
-          GestureDetector(
-            onTap: _isSending ? null : _sendMessage,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width:  50,
-              height: 50,
-              margin: const EdgeInsets.only(left: 10, bottom: 1),
-              decoration: BoxDecoration(
-                color:  _isSending
-                    ? AppColors.primary.withOpacity(0.55)
-                    : AppColors.primary,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color:      AppColors.primary.withOpacity(0.40),
-                    blurRadius: 10,
-                    offset:     const Offset(0, 4),
+              child: Row(children: [
+                // Thumbnail
+                if (_pendingAttachmentMime?.startsWith('image/') == true)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.memory(
+                      base64Decode(_pendingAttachmentData!),
+                      width:  44,
+                      height: 44,
+                      fit:    BoxFit.cover,
+                    ),
+                  )
+                else
+                  Container(
+                    width: 44, height: 44,
+                    decoration: BoxDecoration(
+                      color:        Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Icon(Icons.picture_as_pdf_rounded,
+                        color: Colors.red.shade400, size: 24),
                   ),
-                ],
-              ),
-              child: _isSending
-                  ? const Padding(
-                padding: EdgeInsets.all(13),
-                child: CircularProgressIndicator(
-                    color: Colors.white, strokeWidth: 2.5),
-              )
-                  : const Icon(Icons.send_rounded,
-                  color: Colors.white, size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _pendingAttachmentName ?? 'Attachment',
+                        style: const TextStyle(
+                          fontSize:   13,
+                          fontWeight: FontWeight.w600,
+                          color:      AppColors.textDark,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _pendingAttachmentMime == 'application/pdf'
+                            ? 'PDF Document'
+                            : 'Image',
+                        style: const TextStyle(
+                            fontSize: 11, color: AppColors.textGrey),
+                      ),
+                    ],
+                  ),
+                ),
+                GestureDetector(
+                  onTap: _clearAttachment,
+                  child: Container(
+                    width: 24, height: 24,
+                    decoration: BoxDecoration(
+                      color:  Colors.grey.shade200,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close_rounded,
+                        size: 14, color: AppColors.textGrey),
+                  ),
+                ),
+              ]),
             ),
+          ],
+
+          // ── Message row ───────────────────────────────────────────────
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+
+              // + button (attachment)
+              GestureDetector(
+                onTap: _pickingAttachment ? null : _pickAttachment,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width:  40,
+                  height: 40,
+                  margin: const EdgeInsets.only(right: 10, bottom: 2),
+                  decoration: BoxDecoration(
+                    color: _pickingAttachment
+                        ? AppColors.primary.withOpacity(0.15)
+                        : Colors.grey.shade100,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: _pickingAttachment
+                      ? Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.primary),
+                  )
+                      : Icon(Icons.add_rounded,
+                      color: Colors.grey.shade500, size: 22),
+                ),
+              ),
+
+              // Text field
+              Expanded(
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 130),
+                  decoration: BoxDecoration(
+                    color:        const Color(0xFFF2F3F7),
+                    borderRadius: BorderRadius.circular(26),
+                    border:       Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: TextField(
+                    controller:         _controller,
+                    maxLines:           5,
+                    minLines:           1,
+                    textCapitalization: TextCapitalization.sentences,
+                    style: const TextStyle(
+                        fontSize: 15, color: AppColors.textDark),
+                    decoration: const InputDecoration(
+                      hintText:       'Type a message...',
+                      hintStyle:      TextStyle(
+                          color: AppColors.textLight, fontSize: 15),
+                      border:         InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 12),
+                    ),
+                    onSubmitted: (_) => _sendMessage(),
+                  ),
+                ),
+              ),
+
+              // Send button
+              GestureDetector(
+                onTap: _isSending ? null : _sendMessage,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width:  50,
+                  height: 50,
+                  margin: const EdgeInsets.only(left: 10, bottom: 1),
+                  decoration: BoxDecoration(
+                    color: _isSending
+                        ? AppColors.primary.withOpacity(0.55)
+                        : AppColors.primary,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color:      AppColors.primary.withOpacity(0.40),
+                        blurRadius: 10,
+                        offset:     const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: _isSending
+                      ? const Padding(
+                    padding: EdgeInsets.all(13),
+                    child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2.5),
+                  )
+                      : const Icon(Icons.send_rounded,
+                      color: Colors.white, size: 22),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -543,16 +789,134 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ATTACHMENT PICKER BOTTOM SHEET
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AttachPickerSheet extends StatelessWidget {
+  final VoidCallback onCamera;
+  final VoidCallback onGallery;
+  final VoidCallback onDocument;
+
+  const _AttachPickerSheet({
+    required this.onCamera,
+    required this.onGallery,
+    required this.onDocument,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 36),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color:        Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Send Attachment',
+              style: TextStyle(
+                  fontSize:   18,
+                  fontWeight: FontWeight.w800,
+                  color:      AppColors.textDark),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'JPG, PNG or PDF · Max 5 MB',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+            ),
+            const SizedBox(height: 28),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _SheetOption(
+                    icon:  Icons.camera_alt_outlined,
+                    label: 'Camera',
+                    onTap: onCamera),
+                _SheetOption(
+                    icon:  Icons.photo_library_outlined,
+                    label: 'Gallery',
+                    onTap: onGallery),
+                _SheetOption(
+                    icon:  Icons.description_outlined,
+                    label: 'Document',
+                    onTap: onDocument),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetOption extends StatelessWidget {
+  final IconData     icon;
+  final String       label;
+  final VoidCallback onTap;
+
+  const _SheetOption({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap:    onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        children: [
+          Container(
+            width: 76, height: 76,
+            decoration: BoxDecoration(
+              color:        AppColors.primary.withOpacity(0.07),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                  color: AppColors.primary.withOpacity(0.18)),
+            ),
+            child: Icon(icon, size: 32, color: AppColors.primary),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize:   13,
+              color:      Colors.grey.shade600,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MESSAGE BUBBLE
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _MessageBubble extends StatelessWidget {
-  final TicketMessage message;
-  final bool          isLastInGroup;
+  final TicketMessage      message;
+  final bool               isLastInGroup;
+  final void Function(String base64Data) onImageTap;
 
   const _MessageBubble({
     required this.message,
     required this.isLastInGroup,
+    required this.onImageTap,
   });
 
   @override
@@ -563,8 +927,8 @@ class _MessageBubble extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(
         bottom: isLastInGroup ? 12 : 3,
-        left:  isUser ? 48 : 0,
-        right: isUser ? 0  : 48,
+        left:   isUser ? 48 : 0,
+        right:  isUser ? 0  : 48,
       ),
       child: Row(
         mainAxisAlignment:
@@ -572,7 +936,7 @@ class _MessageBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
 
-          // ── Agent avatar (only on last in group) ────────────────────────
+          // Agent avatar
           if (!isUser) ...[
             if (isLastInGroup)
               Container(
@@ -586,17 +950,17 @@ class _MessageBubble extends StatelessWidget {
                     size: 16, color: AppColors.primary),
               )
             else
-              const SizedBox(width: 38), // spacer to align messages
+              const SizedBox(width: 38),
           ],
 
-          // ── Bubble ─────────────────────────────────────────────────────
+          // Bubble content
           Flexible(
             child: Column(
               crossAxisAlignment: isUser
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.start,
               children: [
-                // Sender label (first of group only)
+                // Sender label
                 if (isLastInGroup && !isUser)
                   const Padding(
                     padding: EdgeInsets.only(left: 4, bottom: 3),
@@ -622,12 +986,16 @@ class _MessageBubble extends StatelessWidget {
                     ),
                   ),
 
-                // Message box
+                // Bubble box
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
+                  padding: EdgeInsets.fromLTRB(
+                    14,
+                    10,
+                    14,
+                    message.hasAttachment ? 8 : 10,
+                  ),
                   decoration: BoxDecoration(
-                    color:  isUser ? AppColors.primary : Colors.white,
+                    color: isUser ? AppColors.primary : Colors.white,
                     borderRadius: BorderRadius.only(
                       topLeft:     const Radius.circular(18),
                       topRight:    const Radius.circular(18),
@@ -644,34 +1012,46 @@ class _MessageBubble extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: Text(
-                    message.message,
-                    style: TextStyle(
-                        fontSize: 14,
-                        height:   1.45,
-                        color:    isUser
-                            ? Colors.white
-                            : AppColors.textDark),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Text (may be empty if attachment-only)
+                      if (message.message.isNotEmpty)
+                        Text(
+                          message.message,
+                          style: TextStyle(
+                              fontSize: 14,
+                              height:   1.45,
+                              color:    isUser
+                                  ? Colors.white
+                                  : AppColors.textDark),
+                        ),
+
+                      // Attachment
+                      if (message.hasAttachment) ...[
+                        if (message.message.isNotEmpty)
+                          const SizedBox(height: 8),
+                        _buildAttachment(isUser),
+                      ],
+                    ],
                   ),
                 ),
 
-                // Timestamp (only on last in group)
+                // Timestamp
                 if (isLastInGroup)
                   Padding(
-                    padding: const EdgeInsets.only(
-                        top: 4, left: 4, right: 4),
+                    padding: const EdgeInsets.only(top: 4, left: 4, right: 4),
                     child: Text(
                       time,
-                      style: TextStyle(
-                          fontSize: 10,
-                          color:    Colors.grey.shade500),
+                      style:
+                      TextStyle(fontSize: 10, color: Colors.grey.shade500),
                     ),
                   ),
               ],
             ),
           ),
 
-          // ── User avatar (only on last in group) ──────────────────────────
+          // User avatar
           if (isUser && isLastInGroup) ...[
             const SizedBox(width: 8),
             Container(
@@ -688,6 +1068,76 @@ class _MessageBubble extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildAttachment(bool isUser) {
+    final data = message.attachmentData;
+
+    // ── Image attachment ──────────────────────────────────────────────────
+    if (message.isImageAttachment && data != null && data.isNotEmpty) {
+      return GestureDetector(
+        onTap: () => onImageTap(data),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Stack(
+            children: [
+              Image.memory(
+                base64Decode(data),
+                width:            200,
+                height:           150,
+                fit:              BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  width: 200, height: 150,
+                  color: Colors.grey.shade200,
+                  child: const Icon(Icons.broken_image_rounded,
+                      size: 40, color: Colors.grey),
+                ),
+              ),
+              // Tap-to-expand hint
+              Positioned(
+                bottom: 6, right: 6,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color:        Colors.black.withOpacity(0.45),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Icon(Icons.open_in_full_rounded,
+                      color: Colors.white, size: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // ── PDF / Document attachment ──────────────────────────────────────────
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: isUser
+            ? Colors.white.withOpacity(0.18)
+            : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(
+          Icons.picture_as_pdf_rounded,
+          color: isUser ? Colors.white : Colors.red.shade400,
+          size:  20,
+        ),
+        const SizedBox(width: 8),
+        Text(
+          'Document',
+          style: TextStyle(
+            fontSize:   12,
+            fontWeight: FontWeight.w600,
+            color: isUser ? Colors.white : AppColors.textDark,
+          ),
+        ),
+      ]),
     );
   }
 
@@ -715,8 +1165,10 @@ class _DateDivider extends StatelessWidget {
       return 'Today';
     if (d == today.subtract(const Duration(days: 1)))
       return 'Yesterday';
-    const months = ['', 'Jan','Feb','Mar','Apr','May','Jun',
-      'Jul','Aug','Sep','Oct','Nov','Dec'];
+    const months = [
+      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
     return '${date.day} ${months[date.month]} ${date.year}';
   }
 
@@ -725,14 +1177,12 @@ class _DateDivider extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(children: [
-        Expanded(
-            child: Divider(color: Colors.grey.shade300, height: 1)),
+        Expanded(child: Divider(color: Colors.grey.shade300, height: 1)),
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 10),
-          padding: const EdgeInsets.symmetric(
-              horizontal: 12, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           decoration: BoxDecoration(
-            color:        Colors.white,
+            color: Colors.white,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
@@ -750,8 +1200,7 @@ class _DateDivider extends StatelessWidget {
                 fontWeight: FontWeight.w600),
           ),
         ),
-        Expanded(
-            child: Divider(color: Colors.grey.shade300, height: 1)),
+        Expanded(child: Divider(color: Colors.grey.shade300, height: 1)),
       ]),
     );
   }

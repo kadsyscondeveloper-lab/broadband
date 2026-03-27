@@ -11,6 +11,8 @@ class TicketReply {
   final String  senderType;
   final String  message;
   final String? attachmentUrl;
+  final String? attachmentData;
+  final String? attachmentMime;
   final DateTime createdAt;
 
   const TicketReply({
@@ -19,18 +21,31 @@ class TicketReply {
     required this.senderType,
     required this.message,
     this.attachmentUrl,
+    this.attachmentData,
+    this.attachmentMime,
     required this.createdAt,
   });
 
   bool get isAdmin => senderType == 'admin' || senderType == 'agent';
 
+  bool get hasAttachment =>
+      (attachmentData != null && attachmentData!.isNotEmpty) ||
+          (attachmentUrl  != null && attachmentUrl!.isNotEmpty);
+
+  bool get isImageAttachment =>
+      attachmentMime == 'image/jpeg' ||
+          attachmentMime == 'image/jpg'  ||
+          attachmentMime == 'image/png';
+
   factory TicketReply.fromJson(Map<String, dynamic> j) => TicketReply(
-    id:            int.tryParse(j['id'].toString()) ?? 0,
-    senderId:      int.tryParse(j['sender_id'].toString()) ?? 0,
-    senderType:    j['sender_type']    as String? ?? 'user',
-    message:       j['message']        as String? ?? '',
-    attachmentUrl: j['attachment_url'] as String?,
-    createdAt:     DateTime.tryParse(j['created_at'].toString())?.toLocal() ?? DateTime.now(),
+    id:             int.tryParse(j['id'].toString()) ?? 0,
+    senderId:       int.tryParse(j['sender_id'].toString()) ?? 0,
+    senderType:     j['sender_type']     as String? ?? 'user',
+    message:        j['message']         as String? ?? '',
+    attachmentUrl:  j['attachment_url']  as String?,
+    attachmentData: j['attachment_data'] as String?,
+    attachmentMime: j['attachment_mime'] as String?,
+    createdAt: DateTime.tryParse(j['created_at'].toString())?.toLocal() ?? DateTime.now(),
   );
 }
 
@@ -72,9 +87,9 @@ class SupportTicket {
     resolvedAt:   j['resolved_at'] != null
         ? DateTime.tryParse(j['resolved_at'].toString())
         : null,
-    createdAt:    DateTime.tryParse(j['created_at'].toString()) ?? DateTime.now(),
-    updatedAt:    DateTime.tryParse(j['updated_at'].toString()) ?? DateTime.now(),
-    replies:      (j['replies'] as List<dynamic>? ?? [])
+    createdAt: DateTime.tryParse(j['created_at'].toString()) ?? DateTime.now(),
+    updatedAt: DateTime.tryParse(j['updated_at'].toString()) ?? DateTime.now(),
+    replies:   (j['replies'] as List<dynamic>? ?? [])
         .map((r) => TicketReply.fromJson(r as Map<String, dynamic>))
         .toList(),
   );
@@ -98,9 +113,11 @@ class TicketResult {
 class TicketMessage {
   final int     id;
   final int     senderId;
-  final String  senderType; // 'user' | 'agent'
+  final String  senderType;
   final String  message;
-  final String? attachmentUrl;
+  final String? attachmentUrl;   // legacy field kept for backward compat
+  final String? attachmentData;  // base64-encoded file content
+  final String? attachmentMime;  // 'image/jpeg' | 'image/png' | 'application/pdf'
   final DateTime createdAt;
 
   const TicketMessage({
@@ -109,19 +126,34 @@ class TicketMessage {
     required this.senderType,
     required this.message,
     this.attachmentUrl,
+    this.attachmentData,
+    this.attachmentMime,
     required this.createdAt,
   });
 
   bool get isFromUser  => senderType == 'user';
   bool get isFromAgent => senderType == 'agent' || senderType == 'admin';
 
+  bool get hasAttachment =>
+      (attachmentData != null && attachmentData!.isNotEmpty) ||
+          (attachmentUrl  != null && attachmentUrl!.isNotEmpty);
+
+  bool get isImageAttachment =>
+      attachmentMime == 'image/jpeg' ||
+          attachmentMime == 'image/jpg'  ||
+          attachmentMime == 'image/png';
+
+  bool get isPdfAttachment => attachmentMime == 'application/pdf';
+
   factory TicketMessage.fromJson(Map<String, dynamic> j) => TicketMessage(
-    id:            int.tryParse(j['id'].toString()) ?? 0,
-    senderId:      int.tryParse(j['sender_id'].toString()) ?? 0,
-    senderType:    j['sender_type']    as String? ?? 'user',
-    message:       j['message']        as String? ?? '',
-    attachmentUrl: j['attachment_url'] as String?,
-    createdAt:     DateTime.tryParse(j['created_at'].toString())?.toLocal() ?? DateTime.now(),
+    id:             int.tryParse(j['id'].toString()) ?? 0,
+    senderId:       int.tryParse(j['sender_id'].toString()) ?? 0,
+    senderType:     j['sender_type']     as String? ?? 'user',
+    message:        j['message']         as String? ?? '',
+    attachmentUrl:  j['attachment_url']  as String?,
+    attachmentData: j['attachment_data'] as String?,
+    attachmentMime: j['attachment_mime'] as String?,
+    createdAt: DateTime.tryParse(j['created_at'].toString())?.toLocal() ?? DateTime.now(),
   );
 }
 
@@ -130,7 +162,7 @@ class TicketChatState {
   final String ticketNumber;
   final String subject;
   final String status;
-  final bool   isActive; // false when Resolved/Closed → disables input
+  final bool   isActive;
   final List<TicketMessage> messages;
 
   const TicketChatState({
@@ -163,7 +195,6 @@ class TicketService {
 
   final _api = ApiClient();
 
-  // Must stay in sync with backend VALID_CATEGORIES
   static const List<String> categories = [
     'Billing',
     'Technical Issue',
@@ -229,7 +260,6 @@ class TicketService {
   }
 
   // ── GET /tickets/:id/messages?after=<id>  (chat polling) ─────────────────
-  // Pass [afterId] to fetch only new messages since the last poll.
 
   Future<TicketChatState?> getMessages(int ticketId, {int? afterId}) async {
     try {
@@ -247,20 +277,31 @@ class TicketService {
     }
   }
 
-  // ── POST /tickets/:id/replies  (send a chat message) ─────────────────────
+  // ── POST /tickets/:id/replies  (send a chat message, optionally with attachment)
 
-  Future<TicketMessage> sendMessage(int ticketId, String message) async {
+  Future<TicketMessage> sendMessage(
+      int ticketId,
+      String message, {
+        String? attachmentData,
+        String? attachmentMime,
+      }) async {
     final res = await _api.post('/tickets/$ticketId/replies', data: {
       'message': message,
+      if (attachmentData != null && attachmentData.isNotEmpty)
+        'attachment_data': attachmentData,
+      if (attachmentMime != null && attachmentMime.isNotEmpty)
+        'attachment_mime': attachmentMime,
     });
     final reply = res.data['data']['reply'] as Map<String, dynamic>;
     return TicketMessage(
       id: int.tryParse(reply['id'].toString()) ??
           DateTime.now().millisecondsSinceEpoch,
-      senderId:   0,
-      senderType: 'user',
-      message:    message,
-      createdAt:  reply['created_at'] != null
+      senderId:       0,
+      senderType:     'user',
+      message:        message,
+      attachmentData: attachmentData,
+      attachmentMime: attachmentMime,
+      createdAt: reply['created_at'] != null
           ? DateTime.tryParse(reply['created_at'].toString())?.toLocal() ??
           DateTime.now()
           : DateTime.now(),
