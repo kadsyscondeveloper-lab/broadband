@@ -39,6 +39,7 @@ class FullProfile {
   final String  kycStatus;
   final String? referralCode;
   final String? referralUrl;
+  final bool    availabilityConfirmed;
   final ProfileAddress address;
 
   const FullProfile({
@@ -51,6 +52,7 @@ class FullProfile {
     this.kycStatus       = 'not_submitted',
     this.referralCode,
     this.referralUrl,
+    this.availabilityConfirmed = false,
     required this.address,
   });
 
@@ -75,6 +77,7 @@ class FullProfile {
       kycStatus:       j['kyc_status']    as String? ?? 'not_submitted',
       referralCode:    j['referral_code'] as String?,
       referralUrl:     j['referral_url']  as String?,
+      availabilityConfirmed: j['availability_confirmed'] as bool? ?? false,
       address:         ProfileAddress.fromFlatJson(j),
     );
   }
@@ -94,6 +97,7 @@ class FullProfile {
     kycStatus:       kycStatus,
     referralCode:    referralCode,
     referralUrl:     referralUrl,
+    availabilityConfirmed: availabilityConfirmed,
     address:         address         ?? this.address,
   );
 }

@@ -34,6 +34,7 @@ class HomeViewModel extends ChangeNotifier {
 
   String  get userName        => _profile?.name          ?? '';
   double  get walletBalance   => _profile?.walletBalance ?? 0.0;
+  bool get isAvailabilityConfirmed => _profile?.availabilityConfirmed ?? false;
   String? get profileImageUrl => _profile?.profileImageUrl;
   String  get referralCode => _profile?.referralCode ?? '';
   String  get referralUrl  => _profile?.referralUrl  ?? '';

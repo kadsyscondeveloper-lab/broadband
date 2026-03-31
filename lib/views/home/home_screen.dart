@@ -53,9 +53,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final GlobalKey<ScaffoldState> _scaffoldKey     = GlobalKey<ScaffoldState>();
-  final HomeTutorialKeys         _tutorialKeys     = HomeTutorialKeys();
-  final ScrollController         _scrollController = ScrollController();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final HomeTutorialKeys _tutorialKeys = HomeTutorialKeys();
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -78,16 +78,15 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       HomeTutorial(
-        context:          context,
-        keys:             _tutorialKeys,
+        context: context,
+        keys: _tutorialKeys,
         scrollController: _scrollController,
       ).show(
         onFinish: TutorialService().markHomeTutorialSeen,
-        onSkip:   TutorialService().markHomeTutorialSeen,
+        onSkip: TutorialService().markHomeTutorialSeen,
       );
     });
   }
-
 
 
   void _openInstallationTracker() {
@@ -117,15 +116,16 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Shows the "complete your profile first" bottom sheet.
   void _showProfileRequiredSheet() {
     showModalBottomSheet(
-      context:            context,
+      context: context,
       isScrollControlled: true,
-      backgroundColor:    Colors.transparent,
-      builder: (_) => _ProfileRequiredSheet(
-        onGoToProfile: () {
-          Navigator.pop(context);             // close sheet
-          widget.onNavigateToProfile?.call(); // switch to profile tab
-        },
-      ),
+      backgroundColor: Colors.transparent,
+      builder: (_) =>
+          _ProfileRequiredSheet(
+            onGoToProfile: () {
+              Navigator.pop(context); // close sheet
+              widget.onNavigateToProfile?.call(); // switch to profile tab
+            },
+          ),
     );
   }
 
@@ -134,16 +134,20 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Guards KYC navigation: shows profile-required sheet for new users
   /// who haven't completed their profile yet.
   void _openKyc() async {
+    // ── Availability gate ──────────────────────────────────────────────────
+    if (!widget.viewModel.isAvailabilityConfirmed) {
+      _showAvailabilityRequiredSheet();
+      return;
+    }
+    // ──────────────────────────────────────────────────────────────────────
     if (!_isProfileComplete()) {
       _showProfileRequiredSheet();
       return;
     }
-
     await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const KycScreen()),
     );
-
     widget.viewModel.refreshKycStatus();
   }
 
@@ -152,10 +156,11 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ReferEarnScreen(
-          referralCode: vm.referralCode,
-          referralUrl:  vm.referralUrl,
-        ),
+        builder: (_) =>
+            ReferEarnScreen(
+              referralCode: vm.referralCode,
+              referralUrl: vm.referralUrl,
+            ),
       ),
     );
   }
@@ -171,104 +176,114 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final vm              = widget.viewModel;
-    final topPadding      = MediaQuery.of(context).padding.top;
-    final headerHeight    = topPadding + 68.0;
-    final bottomNavHeight = 64 + 16 + MediaQuery.of(context).padding.bottom;
+    final vm = widget.viewModel;
+    final topPadding = MediaQuery
+        .of(context)
+        .padding
+        .top;
+    final headerHeight = topPadding + 68.0;
+    final bottomNavHeight = 64 + 16 + MediaQuery
+        .of(context)
+        .padding
+        .bottom;
 
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: AppColors.background,
       drawer: ListenableBuilder(
         listenable: vm,
-        builder: (context, _) => AppDrawer(
-          userName:        vm.userName,
-          walletBalance:   vm.walletBalance,
-          profileImageUrl: vm.profileImageUrl,
-          onClose: () => _scaffoldKey.currentState?.closeDrawer(),
-          onMenuItemTap: (item) {
-            _scaffoldKey.currentState?.closeDrawer();
-            switch (item) {
-              case 'Profile':
-                widget.onNavigateToProfile?.call();
-                break;
-              case 'New Plans':
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => PlansScreen(homeViewModel: vm),
-                  ),
-                );
-                break;
-
-
-              case 'Check Availability':
-                _openAvailabilityCheck();
-                break;
-
-              case 'Installation Status':
-                _openInstallationTracker();
-                break;
-
-              case 'Pays':
-                widget.onNavigateToPay?.call();
-                break;
-              case 'Refer & Earn':
-                _openReferEarn();
-                break;
-              case 'KYC':
-                _openKyc();
-                break;
-              case 'Transaction History':
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const MyBillsScreen()));
-                break;
-              case 'Support/Chat':
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => HelpScreen(viewModel: HelpViewModel()),
-                  ),
-                );
-                break;
-              case 'About Speedonet':
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AboutScreen()),
-                );
-                break;
-              case 'Change Password':
-                Navigator.push(context,
-                    MaterialPageRoute(
-                        builder: (_) => const ChangePasswordScreen()));
-                break;
-              case 'Logout':
-                showDialog(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title:   const Text('Logout'),
-                    content: const Text('Are you sure you want to logout?'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('Cancel'),
+        builder: (context, _) =>
+            AppDrawer(
+              userName: vm.userName,
+              walletBalance: vm.walletBalance,
+              profileImageUrl: vm.profileImageUrl,
+              onClose: () => _scaffoldKey.currentState?.closeDrawer(),
+              onMenuItemTap: (item) {
+                _scaffoldKey.currentState?.closeDrawer();
+                switch (item) {
+                  case 'Profile':
+                    widget.onNavigateToProfile?.call();
+                    break;
+                  case 'New Plans':
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PlansScreen(homeViewModel: vm),
                       ),
-                      TextButton(
-                        onPressed: () async {
-                          Navigator.pop(ctx);
-                          await AuthService().logout();
-                          widget.onLogout?.call();
-                        },
-                        child: const Text('Logout',
-                            style: TextStyle(color: AppColors.primary)),
+                    );
+                    break;
+
+
+                  case 'Check Availability':
+                    _openAvailabilityCheck();
+                    break;
+
+                  case 'Installation Status':
+                    _openInstallationTracker();
+                    break;
+
+                  case 'Pays':
+                    widget.onNavigateToPay?.call();
+                    break;
+                  case 'Refer & Earn':
+                    _openReferEarn();
+                    break;
+                  case 'KYC':
+                    _openKyc();
+                    break;
+                  case 'Transaction History':
+                    Navigator.push(context,
+                        MaterialPageRoute(
+                            builder: (_) => const MyBillsScreen()));
+                    break;
+                  case 'Support/Chat':
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => HelpScreen(viewModel: HelpViewModel()),
                       ),
-                    ],
-                  ),
-                );
-                break;
-            }
-          },
-        ),
+                    );
+                    break;
+                  case 'About Speedonet':
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AboutScreen()),
+                    );
+                    break;
+                  case 'Change Password':
+                    Navigator.push(context,
+                        MaterialPageRoute(
+                            builder: (_) => const ChangePasswordScreen()));
+                    break;
+                  case 'Logout':
+                    showDialog(
+                      context: context,
+                      builder: (ctx) =>
+                          AlertDialog(
+                            title: const Text('Logout'),
+                            content: const Text(
+                                'Are you sure you want to logout?'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () async {
+                                  Navigator.pop(ctx);
+                                  await AuthService().logout();
+                                  widget.onLogout?.call();
+                                },
+                                child: const Text('Logout',
+                                    style: TextStyle(color: AppColors.primary)),
+                              ),
+                            ],
+                          ),
+                    );
+                    break;
+                }
+              },
+            ),
       ),
       body: ListenableBuilder(
         listenable: vm,
@@ -279,21 +294,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
               // ── Sticky header ────────────────────────────────────────────
               SliverAppBar(
-                pinned:                    true,
+                pinned: true,
                 automaticallyImplyLeading: false,
-                toolbarHeight:   headerHeight,
-                expandedHeight:  headerHeight,
+                toolbarHeight: headerHeight,
+                expandedHeight: headerHeight,
                 collapsedHeight: headerHeight,
-                elevation:       0,
+                elevation: 0,
                 backgroundColor: Colors.transparent,
                 flexibleSpace: AppHeader(
-                  userName:            vm.userName,
-                  walletBalance:       vm.walletBalance,
-                  profileImageUrl:     vm.profileImageUrl,
+                  userName: vm.userName,
+                  walletBalance: vm.walletBalance,
+                  profileImageUrl: vm.profileImageUrl,
                   unreadNotifications: vm.unreadNotifications,
-                  menuKey:         _tutorialKeys.menu,
+                  menuKey: _tutorialKeys.menu,
                   notificationKey: _tutorialKeys.notifications,
-                  walletKey:       _tutorialKeys.wallet,
+                  walletKey: _tutorialKeys.wallet,
                   onMenuTap: () =>
                       _scaffoldKey.currentState?.openDrawer(),
                   onNotificationTap: () async {
@@ -305,7 +320,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     vm.refreshUnreadCount();
                     if (!mounted) return;
                     if (result == 'wallet') widget.onWalletTap?.call();
-                    if (result == 'refer')  _openReferEarn();
+                    if (result == 'refer') _openReferEarn();
                   },
                   onWalletTap: widget.onWalletTap,
                 ),
@@ -330,14 +345,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       // 2. Manage Services
                       _ManageServicesCard(
-                        services:        vm.services,
+                        services: vm.services,
                         onNavigateToPay: widget.onNavigateToPay,
-                        onKycTap:        _openKyc,
-                        homeViewModel:   vm,
-                        cardKey:         _tutorialKeys.manageServices,
-                        payBillsKey:     _tutorialKeys.payBills,
-                        newPlanKey:      _tutorialKeys.newPlan,
-                        kycKey:          _tutorialKeys.kyc,
+                        onKycTap: _openKyc,
+                        homeViewModel: vm,
+                        cardKey: _tutorialKeys.manageServices,
+                        payBillsKey: _tutorialKeys.payBills,
+                        newPlanKey: _tutorialKeys.newPlan,
+                        kycKey: _tutorialKeys.kyc,
+                        onAvailabilityRequired: _showAvailabilityRequiredSheet,
                       ),
                       const SizedBox(height: 16),
 
@@ -347,18 +363,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       // 4. Promo Banner
                       _PromoBanner(
-                        currentIndex:  vm.promoBannerIndex,
+                        currentIndex: vm.promoBannerIndex,
                         onPageChanged: vm.onPromoBannerPageChanged,
-                        viewModel:     vm,
+                        viewModel: vm,
                       ),
                       const SizedBox(height: 16),
 
                       // 5. Features / Refer & Earn
                       _FeaturesSection(
-                        currentIndex:  vm.featureBannerIndex,
+                        currentIndex: vm.featureBannerIndex,
                         onPageChanged: vm.onFeatureBannerPageChanged,
-                        onReferTap:    _openReferEarn,
-                        sectionKey:    _tutorialKeys.referEarn,
+                        onReferTap: _openReferEarn,
+                        sectionKey: _tutorialKeys.referEarn,
                       ),
                       const SizedBox(height: 24),
 
@@ -371,6 +387,67 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         },
       ),
+    );
+  }
+
+  void _showAvailabilityRequiredSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) =>
+          Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: EdgeInsets.fromLTRB(
+              24, 12, 24,
+              24 + MediaQuery
+                  .of(context)
+                  .padding
+                  .bottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                const Text(
+                  'Check Availability First',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                const Text(
+                  'Please check availability before proceeding.',
+                  textAlign: TextAlign.center,
+                ),
+
+                const SizedBox(height: 20),
+
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _openAvailabilityCheck();
+                  },
+                  child: const Text('Check Availability'),
+                ),
+              ],
+            ),
+          ),
     );
   }
 }
@@ -496,6 +573,7 @@ class _ManageServicesCard extends StatelessWidget {
   final GlobalKey?     payBillsKey;
   final GlobalKey?     newPlanKey;
   final GlobalKey?     kycKey;
+  final VoidCallback? onAvailabilityRequired;
 
   const _ManageServicesCard({
     required this.services,
@@ -506,6 +584,7 @@ class _ManageServicesCard extends StatelessWidget {
     this.payBillsKey,
     this.newPlanKey,
     this.kycKey,
+    this.onAvailabilityRequired,
   });
 
   String _getImageAsset(String iconKey) {
@@ -550,13 +629,14 @@ class _ManageServicesCard extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: services.take(4).map((s) => _ServiceItem(
-            imageAsset:      _getImageAsset(s['icon']!),
-            label:           s['label']!,
-            screenContext:   context,
+            imageAsset: _getImageAsset(s['icon']!),
+            label: s['label']!,
+            screenContext: context,
             onNavigateToPay: onNavigateToPay,
-            onKycTap:        onKycTap,
-            homeViewModel:   homeViewModel,
-            tutorialKey:     _keyForLabel(s['label']!),
+            onKycTap: onKycTap,
+            homeViewModel: homeViewModel,
+            tutorialKey: _keyForLabel(s['label']!),
+            onAvailabilityRequired: onAvailabilityRequired,
           )).toList(),
         ),
         if (services.length > 4) ...[
@@ -572,6 +652,7 @@ class _ManageServicesCard extends StatelessWidget {
                 onKycTap:        onKycTap,
                 homeViewModel:   homeViewModel,
                 tutorialKey:     _keyForLabel(s['label']!),
+                onAvailabilityRequired: onAvailabilityRequired,
               ),
             )).toList(),
           ),
@@ -589,6 +670,7 @@ class _ServiceItem extends StatelessWidget {
   final VoidCallback?  onKycTap;
   final HomeViewModel? homeViewModel;
   final GlobalKey?     tutorialKey;
+  final VoidCallback? onAvailabilityRequired;
 
   const _ServiceItem({
     required this.imageAsset,
@@ -598,6 +680,7 @@ class _ServiceItem extends StatelessWidget {
     this.onKycTap,
     this.homeViewModel,
     this.tutorialKey,
+    this.onAvailabilityRequired,
   });
 
   void _onTap() {
@@ -613,21 +696,17 @@ class _ServiceItem extends StatelessWidget {
             MaterialPageRoute(builder: (_) => const MyBillsScreen()));
         break;
       case 'New Plan':
+        if (!(homeViewModel?.isAvailabilityConfirmed ?? false)) {
+          onAvailabilityRequired?.call();
+          return;
+        }
+
         Navigator.push(
           screenContext,
           MaterialPageRoute(
-            builder: (_) => const ServiceAvailabilityScreen(),
+            builder: (_) => PlansScreen(homeViewModel: homeViewModel),
           ),
-        ).then((available) {
-          if (available == true && screenContext.mounted) {
-            Navigator.push(
-              screenContext,
-              MaterialPageRoute(
-                builder: (_) => PlansScreen(homeViewModel: homeViewModel),
-              ),
-            );
-          }
-        });
+        );
         break;
     }
   }
@@ -1254,3 +1333,5 @@ class _ProfileRequiredSheet extends StatelessWidget {
     );
   }
 }
+
+

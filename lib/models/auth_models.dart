@@ -26,6 +26,7 @@ class AuthUser {
   final String? referralCode;
   // ── ADDED: coupon generated when this user signed up via a referral link ──
   final String? referralCoupon;
+  final bool    availabilityConfirmed;
 
   const AuthUser({
     required this.id,
@@ -35,6 +36,7 @@ class AuthUser {
     required this.walletBalance,
     this.referralCode,
     this.referralCoupon,
+    this.availabilityConfirmed = false,
   });
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
@@ -50,7 +52,8 @@ class AuthUser {
       email:          json['email']            as String?,
       walletBalance:  (json['wallet_balance']  ?? 0).toDouble(),
       referralCode:   json['referral_code']    as String?,
-      referralCoupon: json['referral_coupon']  as String?, // ← ADDED
+      referralCoupon: json['referral_coupon']  as String?,
+      availabilityConfirmed: json['availability_confirmed'] as bool? ?? false,
     );
   }
 }
