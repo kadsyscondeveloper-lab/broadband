@@ -8,6 +8,7 @@ import '../../services/coupon_service.dart';
 import '../../theme/app_theme.dart';
 import '../../viewmodels/plans_viewmodel.dart';
 import '../../viewmodels/home_viewmodel.dart';
+import '../installation/installation_address_screen.dart';
 import '../payment/atom_payment_screen.dart';
 
 class PlansScreen extends StatefulWidget {
@@ -153,7 +154,17 @@ class _PlansScreenState extends State<PlansScreen>
       barrierDismissible: false,
       builder: (_) => _SuccessDialog(
         result: result,
-        onDone: () => Navigator.pop(context),
+        onDone: () {
+          Navigator.pop(context); // close dialog
+
+          // ✅ NEW FLOW
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const InstallationAddressScreen(),
+            ),
+          );
+        },
       ),
     );
   }

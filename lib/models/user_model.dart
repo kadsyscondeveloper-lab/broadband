@@ -10,6 +10,7 @@ class UserModel {
   final double walletBalance;
   final String? profileImageUrl;
 
+
   UserModel({
     required this.name,
     required this.phone,

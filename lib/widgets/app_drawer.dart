@@ -78,6 +78,7 @@ class AppDrawer extends StatelessWidget {
       {'asset': 'assets/images/supportandchat.png',         'label': 'Support/Chat'},
       {'asset': 'assets/images/change_password.png',        'label': 'Change Password'},
       {'asset': 'assets/images/about.png',                  'label': 'About Speedonet'},
+      {'asset': 'assets/images/new_plan.png',               'label': 'Installation Status'},
       {'asset': 'assets/images/logout.png',                 'label': 'Logout'},
     ];
 

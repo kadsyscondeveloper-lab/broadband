@@ -18,6 +18,8 @@ import '../bills/bills_screens.dart' hide MyBillsScreen;
 import '../about/about_screen.dart';
 import '../kyc/kyc_screen.dart';
 import '../recharge/wifi_plans_screen.dart';
+import '../availability/service_availability_screen.dart';
+import '../installation/installation_tracker_screen.dart';
 import '../refer/refer_earn_screen.dart';
 import '../bills/my_bills_screen.dart';
 import '../notifications/notifications_screen.dart';
@@ -86,6 +88,17 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+
+
+  void _openInstallationTracker() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const InstallationTrackerScreen(),
+      ),
+    );
+  }
+
   // ── Profile completeness check ────────────────────────────────────────────
 
   /// Returns true only when the loaded profile has all fields KYC requires.
@@ -125,10 +138,12 @@ class _HomeScreenState extends State<HomeScreen> {
       _showProfileRequiredSheet();
       return;
     }
+
     await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const KycScreen()),
     );
+
     widget.viewModel.refreshKycStatus();
   }
 
@@ -141,6 +156,15 @@ class _HomeScreenState extends State<HomeScreen> {
           referralCode: vm.referralCode,
           referralUrl:  vm.referralUrl,
         ),
+      ),
+    );
+  }
+
+  void _openAvailabilityCheck() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const ServiceAvailabilityScreen(),
       ),
     );
   }
@@ -176,6 +200,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 );
                 break;
+
+
+              case 'Check Availability':
+                _openAvailabilityCheck();
+                break;
+
+              case 'Installation Status':
+                _openInstallationTracker();
+                break;
+
               case 'Pays':
                 widget.onNavigateToPay?.call();
                 break;
@@ -579,8 +613,21 @@ class _ServiceItem extends StatelessWidget {
             MaterialPageRoute(builder: (_) => const MyBillsScreen()));
         break;
       case 'New Plan':
-        Navigator.push(screenContext, MaterialPageRoute(
-            builder: (_) => PlansScreen(homeViewModel: homeViewModel)));
+        Navigator.push(
+          screenContext,
+          MaterialPageRoute(
+            builder: (_) => const ServiceAvailabilityScreen(),
+          ),
+        ).then((available) {
+          if (available == true && screenContext.mounted) {
+            Navigator.push(
+              screenContext,
+              MaterialPageRoute(
+                builder: (_) => PlansScreen(homeViewModel: homeViewModel),
+              ),
+            );
+          }
+        });
         break;
     }
   }
