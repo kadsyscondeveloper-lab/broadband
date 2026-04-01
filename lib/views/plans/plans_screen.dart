@@ -41,12 +41,9 @@ class _PlansScreenState extends State<PlansScreen>
 
   // ── KYC check ─────────────────────────────────────────────────────────────
 
-  /// Returns true when the user's KYC is approved.
-  /// Falls back to true (don't block) if homeViewModel hasn't loaded yet,
-  /// so we never accidentally lock out someone whose status just isn't cached.
   bool get _kycApproved {
     final status = widget.homeViewModel?.kycStatus;
-    if (status == null) return true; // not loaded — let backend enforce
+    if (status == null) return true;
     return status.isApproved;
   }
 
@@ -62,9 +59,18 @@ class _PlansScreenState extends State<PlansScreen>
   // ── Purchase entry point ──────────────────────────────────────────────────
 
   void _confirmPurchase(Plan plan) {
-    // Block purchase until KYC is verified.
     if (!_kycApproved) {
       _showKycRequiredSheet();
+      return;
+    }
+
+    // ── New guard: 2-day renewal window / already-queued ──────────────────
+    if (!_vm.canPurchaseNewPlan) {
+      if (_vm.queuedSub != null) {
+        _showAlreadyQueuedSheet(_vm.queuedSub!);
+      } else {
+        _showRenewalWindowSheet();
+      }
       return;
     }
 
@@ -83,6 +89,58 @@ class _PlansScreenState extends State<PlansScreen>
             await _handleWalletPurchase(plan, couponCode);
           }
         },
+      ),
+    );
+  }
+
+  // ── Blocked-purchase sheets ───────────────────────────────────────────────
+
+  void _showAlreadyQueuedSheet(ActiveSubscription queued) {
+    final startDate = queued.startsAt;
+    final dateStr = startDate != null
+        ? '${startDate.day}/${startDate.month}/${startDate.year}'
+        : 'soon';
+
+    showModalBottomSheet(
+      context:            context,
+      isScrollControlled: true,
+      backgroundColor:    Colors.transparent,
+      builder: (_) => _InfoSheet(
+        icon:       Icons.schedule_rounded,
+        iconColor:  Colors.orange.shade700,
+        iconBg:     Colors.orange.shade50,
+        title:      'Plan Already Queued',
+        body:       '${queued.planName} is queued and will start on $dateStr. '
+            'You can only have one plan queued at a time.',
+        buttonLabel: 'Got It',
+      ),
+    );
+  }
+
+  void _showRenewalWindowSheet() {
+    final renewalDate = _vm.renewalAvailableFrom;
+    final expiryDate  = _vm.activeSub?.expiresAt;
+
+    final renewalStr = renewalDate != null
+        ? _fmtDate(renewalDate)
+        : 'soon';
+    final expiryStr = expiryDate != null
+        ? _fmtDate(expiryDate)
+        : 'the expiry date';
+
+    showModalBottomSheet(
+      context:            context,
+      isScrollControlled: true,
+      backgroundColor:    Colors.transparent,
+      builder: (_) => _InfoSheet(
+        icon:       Icons.lock_clock_rounded,
+        iconColor:  AppColors.primary,
+        iconBg:     AppColors.primary.withOpacity(0.08),
+        title:      'Renewal Window Not Open Yet',
+        body:       'Your current plan is active until $expiryStr. '
+            'You can purchase a new plan from $renewalStr '
+            '(2 days before expiry). This ensures a seamless transition.',
+        buttonLabel: 'Got It',
       ),
     );
   }
@@ -156,8 +214,6 @@ class _PlansScreenState extends State<PlansScreen>
         result: result,
         onDone: () {
           Navigator.pop(context); // close dialog
-
-          // ✅ NEW FLOW
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -180,6 +236,24 @@ class _PlansScreenState extends State<PlansScreen>
     );
   }
 
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  static String _fmtDate(DateTime d) {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun',
+      'Jul','Aug','Sep','Oct','Nov','Dec'];
+    return '${d.day} ${months[d.month - 1]} ${d.year}';
+  }
+
+  // Label shown on locked Buy buttons (e.g. "Renew 28 Jun" or "Plan queued")
+  String? get _purchaseBlockLabel {
+    if (!_vm.canPurchaseNewPlan) {
+      if (_vm.queuedSub != null) return 'Plan queued';
+      final from = _vm.renewalAvailableFrom;
+      if (from != null) return 'Renew ${_fmtDate(from)}';
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final canPop = Navigator.canPop(context);
@@ -189,9 +263,13 @@ class _PlansScreenState extends State<PlansScreen>
       body: ListenableBuilder(
         listenable: _vm,
         builder: (context, _) {
+          // Compute once and pass down so all plan cards are consistent.
+          final purchaseAllowed = _vm.canPurchaseNewPlan;
+          final blockLabel      = _purchaseBlockLabel;
+
           return CustomScrollView(
             slivers: [
-              // ── Header ───────────────────────────────────────────────
+              // ── Header ─────────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Container(
                   padding: EdgeInsets.only(
@@ -237,19 +315,25 @@ class _PlansScreenState extends State<PlansScreen>
                         const SizedBox(height: 8),
                         _QueuedSubBanner(sub: _vm.queuedSub!),
                       ],
-                      // ── KYC warning strip ─────────────────────────────
+                      // ── Renewal window notice ──────────────────────────
+                      if (!purchaseAllowed && _vm.queuedSub == null) ...[
+                        const SizedBox(height: 12),
+                        _RenewalWindowStrip(
+                          renewalDate: _vm.renewalAvailableFrom,
+                          onTap: _showRenewalWindowSheet,
+                        ),
+                      ],
+                      // ── KYC warning strip ──────────────────────────────
                       if (!_kycApproved) ...[
                         const SizedBox(height: 12),
-                        _KycWarningStrip(
-                          onTap: _showKycRequiredSheet,
-                        ),
+                        _KycWarningStrip(onTap: _showKycRequiredSheet),
                       ],
                     ],
                   ),
                 ),
               ),
 
-              // ── Tab bar ──────────────────────────────────────────────
+              // ── Tab bar ────────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
@@ -273,8 +357,7 @@ class _PlansScreenState extends State<PlansScreen>
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withOpacity(0.08),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
+                            blurRadius: 6, offset: const Offset(0, 2),
                           ),
                         ],
                       ),
@@ -290,12 +373,11 @@ class _PlansScreenState extends State<PlansScreen>
                 ),
               ),
 
-              // ── Plan list ────────────────────────────────────────────
+              // ── Plan list ──────────────────────────────────────────────
               if (_vm.isLoading)
                 const SliverFillRemaining(
-                  child: Center(
-                      child: CircularProgressIndicator(
-                          color: AppColors.primary)),
+                  child: Center(child: CircularProgressIndicator(
+                      color: AppColors.primary)),
                 )
               else if (_vm.error != null)
                 SliverFillRemaining(
@@ -307,8 +389,7 @@ class _PlansScreenState extends State<PlansScreen>
                               size: 48, color: AppColors.textLight),
                           const SizedBox(height: 12),
                           Text(_vm.error!,
-                              style: const TextStyle(
-                                  color: AppColors.textGrey)),
+                              style: const TextStyle(color: AppColors.textGrey)),
                           const SizedBox(height: 16),
                           ElevatedButton(
                             onPressed: _vm.load,
@@ -330,17 +411,26 @@ class _PlansScreenState extends State<PlansScreen>
                         _PlanList(
                             plans: _vm.monthlyPlans,
                             activeSub: _vm.activeSub,
+                            queuedSub: _vm.queuedSub,
                             kycApproved: _kycApproved,
+                            purchaseAllowed: purchaseAllowed,
+                            purchaseBlockLabel: blockLabel,
                             onSelect: _confirmPurchase),
                         _PlanList(
                             plans: _vm.quarterlyPlans,
                             activeSub: _vm.activeSub,
+                            queuedSub: _vm.queuedSub,
                             kycApproved: _kycApproved,
+                            purchaseAllowed: purchaseAllowed,
+                            purchaseBlockLabel: blockLabel,
                             onSelect: _confirmPurchase),
                         _PlanList(
                             plans: _vm.annualPlans,
                             activeSub: _vm.activeSub,
+                            queuedSub: _vm.queuedSub,
                             kycApproved: _kycApproved,
+                            purchaseAllowed: purchaseAllowed,
+                            purchaseBlockLabel: blockLabel,
                             onSelect: _confirmPurchase),
                       ],
                     ),
@@ -355,7 +445,137 @@ class _PlansScreenState extends State<PlansScreen>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// KYC WARNING STRIP  (shown in header when KYC not approved)
+// RENEWAL WINDOW STRIP  (shown in header when active plan has > 2 days left)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _RenewalWindowStrip extends StatelessWidget {
+  final DateTime?    renewalDate;
+  final VoidCallback onTap;
+  const _RenewalWindowStrip({required this.renewalDate, required this.onTap});
+
+  static String _fmt(DateTime d) {
+    const m = ['Jan','Feb','Mar','Apr','May','Jun',
+      'Jul','Aug','Sep','Oct','Nov','Dec'];
+    return '${d.day} ${m[d.month - 1]}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final label = renewalDate != null
+        ? 'Renewal opens ${_fmt(renewalDate!)} — 2 days before expiry'
+        : 'Renewal available near your plan expiry';
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withOpacity(0.25)),
+        ),
+        child: Row(children: [
+          const Icon(Icons.lock_clock_rounded,
+              color: Colors.white70, size: 17),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(label,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    height: 1.4)),
+          ),
+          const Icon(Icons.info_outline_rounded,
+              color: Colors.white38, size: 14),
+        ]),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GENERIC INFO SHEET  (used for "already queued" and "renewal window" blocks)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _InfoSheet extends StatelessWidget {
+  final IconData icon;
+  final Color    iconColor;
+  final Color    iconBg;
+  final String   title;
+  final String   body;
+  final String   buttonLabel;
+
+  const _InfoSheet({
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+    required this.title,
+    required this.body,
+    required this.buttonLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+          24, 12, 24, 24 + MediaQuery.of(context).padding.bottom),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          width: 36, height: 4,
+          decoration: BoxDecoration(
+              color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+        ),
+        const SizedBox(height: 28),
+        Container(
+          width: 72, height: 72,
+          decoration: BoxDecoration(
+              color: iconBg, shape: BoxShape.circle,
+              border: Border.all(
+                  color: iconColor.withOpacity(0.25), width: 1.5)),
+          child: Icon(icon, size: 36, color: iconColor),
+        ),
+        const SizedBox(height: 20),
+        Text(title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontSize: 18, fontWeight: FontWeight.w800,
+                color: AppColors.textDark)),
+        const SizedBox(height: 12),
+        Text(body,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontSize: 13, color: AppColors.textGrey, height: 1.6)),
+        const SizedBox(height: 28),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
+              elevation: 0,
+            ),
+            child: Text(buttonLabel,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15)),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KYC WARNING STRIP
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _KycWarningStrip extends StatelessWidget {
@@ -374,18 +594,13 @@ class _KycWarningStrip extends StatelessWidget {
           border: Border.all(color: Colors.amber.shade300.withOpacity(0.5)),
         ),
         child: Row(children: [
-          const Icon(Icons.lock_outline_rounded,
-              color: Colors.amber, size: 18),
+          const Icon(Icons.lock_outline_rounded, color: Colors.amber, size: 18),
           const SizedBox(width: 10),
           const Expanded(
             child: Text(
               'KYC required to purchase a plan. Tap to learn more.',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                height: 1.4,
-              ),
+              style: TextStyle(color: Colors.white, fontSize: 12,
+                  fontWeight: FontWeight.w500, height: 1.4),
             ),
           ),
           const Icon(Icons.arrow_forward_ios_rounded,
@@ -407,159 +622,93 @@ class _KycRequiredSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        color:        Colors.white,
+        color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.fromLTRB(
-        24, 12, 24,
-        24 + MediaQuery.of(context).padding.bottom,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-
-          // Drag handle
-          Container(
-            width: 36, height: 4,
-            decoration: BoxDecoration(
-              color:        Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
-            ),
+          24, 12, 24, 24 + MediaQuery.of(context).padding.bottom),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 36, height: 4,
+            decoration: BoxDecoration(color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2))),
+        const SizedBox(height: 24),
+        Container(
+          width: 72, height: 72,
+          decoration: BoxDecoration(
+            color: Colors.amber.shade50, shape: BoxShape.circle,
+            border: Border.all(color: Colors.amber.shade200, width: 1.5),
           ),
-          const SizedBox(height: 24),
-
-          // Lock icon
-          Container(
-            width: 72, height: 72,
-            decoration: BoxDecoration(
-              color:  Colors.amber.shade50,
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.amber.shade200, width: 1.5),
-            ),
-            child: Icon(Icons.verified_user_outlined,
-                size: 36, color: Colors.amber.shade700),
-          ),
-          const SizedBox(height: 20),
-
-          // Title
-          const Text(
-            'KYC Verification Required',
+          child: Icon(Icons.verified_user_outlined,
+              size: 36, color: Colors.amber.shade700),
+        ),
+        const SizedBox(height: 20),
+        const Text('KYC Verification Required',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize:   18,
-              fontWeight: FontWeight.w800,
-              color:      Color(0xFF1A1A2E),
-            ),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800,
+                color: Color(0xFF1A1A2E))),
+        const SizedBox(height: 10),
+        const Text(
+          'To purchase a Speedonet plan, you need to complete your KYC '
+              'verification first. This is a one-time process.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 13, color: Color(0xFF666680), height: 1.6),
+        ),
+        const SizedBox(height: 20),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFFBF0),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.amber.shade100),
           ),
-          const SizedBox(height: 10),
-
-          // Body
-          const Text(
-            'To purchase a Speedonet plan, you need to complete '
-                'your KYC verification first. This is a one-time process '
-                'that ensures your account is secure and compliant.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              color:    Color(0xFF666680),
-              height:   1.6,
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Step list
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color:        const Color(0xFFFFFBF0),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.amber.shade100),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'How to complete KYC:',
-                  style: TextStyle(
-                    fontSize:   12,
-                    fontWeight: FontWeight.w700,
-                    color:      Colors.amber.shade800,
-                  ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('How to complete KYC:',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
+                    color: Colors.amber.shade800)),
+            const SizedBox(height: 10),
+            ...[
+              ('1', 'Go to Home → tap KYC'),
+              ('2', 'Upload your address proof'),
+              ('3', 'Upload your ID proof'),
+              ('4', 'Wait for approval (usually within 24h)'),
+            ].map((step) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Container(
+                  width: 20, height: 20,
+                  decoration: BoxDecoration(
+                      color: Colors.amber.shade700, shape: BoxShape.circle),
+                  child: Center(child: Text(step.$1,
+                      style: const TextStyle(color: Colors.white,
+                          fontSize: 10, fontWeight: FontWeight.w800))),
                 ),
-                const SizedBox(height: 10),
-                ...[
-                  ('1', 'Go to Home → tap KYC'),
-                  ('2', 'Upload your address proof'),
-                  ('3', 'Upload your ID proof'),
-                  ('4', 'Wait for approval (usually within 24h)'),
-                ].map(
-                      (step) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 20, height: 20,
-                          decoration: BoxDecoration(
-                            color:  Colors.amber.shade700,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Center(
-                            child: Text(
-                              step.$1,
-                              style: const TextStyle(
-                                color:      Colors.white,
-                                fontSize:   10,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            step.$2,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color:    Colors.amber.shade900,
-                              height:   1.4,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+                const SizedBox(width: 10),
+                Expanded(child: Text(step.$2,
+                    style: TextStyle(fontSize: 13,
+                        color: Colors.amber.shade900, height: 1.4))),
+              ]),
+            )),
+          ]),
+        ),
+        const SizedBox(height: 24),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1A1A2E),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
+              elevation: 0,
             ),
+            child: const Text('Got It',
+                style: TextStyle(color: Colors.white,
+                    fontWeight: FontWeight.w700, fontSize: 15)),
           ),
-          const SizedBox(height: 24),
-
-          // Dismiss
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1A1A2E),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
-                elevation: 0,
-              ),
-              child: const Text(
-                'Got It',
-                style: TextStyle(
-                  color:      Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize:   15,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ]),
     );
   }
 }
@@ -602,17 +751,14 @@ class _ActiveSubBanner extends StatelessWidget {
           SizedBox(
             width: 72, height: 72,
             child: Stack(alignment: Alignment.center, children: [
-              SizedBox(
-                width: 72, height: 72,
-                child: CustomPaint(
-                    painter: _CircleProgressPainter(progress: progress)),
-              ),
+              SizedBox(width: 72, height: 72,
+                  child: CustomPaint(
+                      painter: _CircleProgressPainter(progress: progress))),
               Container(
                 width: 38, height: 38,
                 decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
-                child: const Icon(Icons.check_rounded,
-                    color: Colors.white, size: 22),
+                child: const Icon(Icons.check_rounded, color: Colors.white, size: 22),
               ),
             ]),
           ),
@@ -642,23 +788,18 @@ class _CircleProgressPainter extends CustomPainter {
     final cy = size.height / 2;
     final radius = (size.width / 2) - 5;
     final rect = Rect.fromCircle(center: Offset(cx, cy), radius: radius);
-
-    canvas.drawCircle(
-      Offset(cx, cy), radius,
-      Paint()
-        ..color = Colors.white.withOpacity(0.25)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4
-        ..strokeCap = StrokeCap.round,
-    );
-    canvas.drawArc(
-      rect, -math.pi / 2, 2 * math.pi * progress, false,
-      Paint()
-        ..color = Colors.white
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4
-        ..strokeCap = StrokeCap.round,
-    );
+    canvas.drawCircle(Offset(cx, cy), radius,
+        Paint()
+          ..color = Colors.white.withOpacity(0.25)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 4
+          ..strokeCap = StrokeCap.round);
+    canvas.drawArc(rect, -math.pi / 2, 2 * math.pi * progress, false,
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 4
+          ..strokeCap = StrokeCap.round);
   }
 
   @override
@@ -670,24 +811,29 @@ class _CircleProgressPainter extends CustomPainter {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PlanList extends StatelessWidget {
-  final List<Plan>         plans;
+  final List<Plan>          plans;
   final ActiveSubscription? activeSub;
-  final bool               kycApproved;
+  final ActiveSubscription? queuedSub;
+  final bool                kycApproved;
+  final bool                purchaseAllowed;
+  final String?             purchaseBlockLabel;
   final void Function(Plan) onSelect;
 
   const _PlanList({
     required this.plans,
     required this.activeSub,
+    required this.queuedSub,
     required this.kycApproved,
+    required this.purchaseAllowed,
+    required this.purchaseBlockLabel,
     required this.onSelect,
   });
 
   @override
   Widget build(BuildContext context) {
     if (plans.isEmpty) {
-      return const Center(
-          child: Text('No plans available',
-              style: TextStyle(color: AppColors.textGrey)));
+      return const Center(child: Text('No plans available',
+          style: TextStyle(color: AppColors.textGrey)));
     }
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
@@ -697,11 +843,16 @@ class _PlanList extends StatelessWidget {
         final plan = plans[i];
         final isCurrent = activeSub?.planId == plan.id &&
             !(activeSub?.startsAt?.isAfter(DateTime.now()) ?? false);
+        // This specific plan is the queued one
+        final isThisPlanQueued = queuedSub?.planId == plan.id;
         return _PlanCard(
-          plan:        plan,
-          isCurrent:   isCurrent,
-          kycApproved: kycApproved,
-          onSelect:    () => onSelect(plan),
+          plan:               plan,
+          isCurrent:          isCurrent,
+          isQueued:           isThisPlanQueued,
+          kycApproved:        kycApproved,
+          purchaseAllowed:    purchaseAllowed,
+          purchaseBlockLabel: purchaseBlockLabel,
+          onSelect:           () => onSelect(plan),
         );
       },
     );
@@ -715,13 +866,19 @@ class _PlanList extends StatelessWidget {
 class _PlanCard extends StatelessWidget {
   final Plan         plan;
   final bool         isCurrent;
+  final bool         isQueued;           // this plan is the queued one
   final bool         kycApproved;
+  final bool         purchaseAllowed;    // global gate (2-day window / queued)
+  final String?      purchaseBlockLabel; // text shown on locked button
   final VoidCallback onSelect;
 
   const _PlanCard({
     required this.plan,
     required this.isCurrent,
+    required this.isQueued,
     required this.kycApproved,
+    required this.purchaseAllowed,
+    required this.purchaseBlockLabel,
     required this.onSelect,
   });
 
@@ -730,9 +887,7 @@ class _PlanCard extends StatelessWidget {
     final isPopular  = plan.speedMbps == 100 && plan.validityDays == 30;
     final badgeColor = isCurrent ? Colors.green : AppColors.primary;
     final badgeBg    = isCurrent ? Colors.green.shade50 : const Color(0xFFFFEBEB);
-
-    // Buy button appearance: locked if KYC not done (and not current plan)
-    final buyLocked = !kycApproved && !isCurrent;
+    final buyLocked  = !kycApproved && !isCurrent && !isQueued;
 
     return Stack(
       clipBehavior: Clip.none,
@@ -745,7 +900,11 @@ class _PlanCard extends StatelessWidget {
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isCurrent ? Colors.green.shade300 : Colors.grey.shade200,
+              color: isCurrent
+                  ? Colors.green.shade300
+                  : isQueued
+                  ? Colors.orange.shade300
+                  : Colors.grey.shade200,
               width: 1.5,
             ),
             boxShadow: [
@@ -769,11 +928,9 @@ class _PlanCard extends StatelessWidget {
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900,
                       color: badgeColor, height: 1.1),
                 ),
-                Text(
-                  plan.speedMbps >= 1000 ? 'Gbps' : 'Mbps',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                      color: badgeColor),
-                ),
+                Text(plan.speedMbps >= 1000 ? 'Gbps' : 'Mbps',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                        color: badgeColor)),
               ]),
             ),
             const SizedBox(width: 14),
@@ -786,7 +943,8 @@ class _PlanCard extends StatelessWidget {
                         fontSize: 15, color: AppColors.textDark)),
                 const SizedBox(height: 5),
                 Text('${plan.dataLabel}  |  ${plan.validityLabel}',
-                    style: const TextStyle(fontSize: 12, color: AppColors.textGrey)),
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textGrey)),
               ]),
             ),
             const SizedBox(width: 12),
@@ -797,49 +955,46 @@ class _PlanCard extends StatelessWidget {
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900,
                       color: AppColors.textDark)),
               const SizedBox(height: 6),
+
+              // ── Action button / badge ──────────────────────────────────
               if (isCurrent)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade50,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.green.shade300),
-                  ),
-                  child: const Text('Active',
-                      style: TextStyle(color: Colors.green, fontSize: 12,
-                          fontWeight: FontWeight.w700)),
-                )
-              else
-                GestureDetector(
-                  onTap: onSelect,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 8),
-                    decoration: BoxDecoration(
-                      // Slightly dimmed when KYC not done
-                      color: buyLocked
-                          ? AppColors.primary.withOpacity(0.45)
-                          : AppColors.primary,
-                      borderRadius: BorderRadius.circular(20),
+                _StatusChip(label: 'Active', color: Colors.green)
+              else if (isQueued)
+                _StatusChip(label: 'Queued ✓', color: Colors.orange.shade700)
+              else if (!purchaseAllowed)
+                // Renewal window / another plan queued
+                  _BlockedChip(label: purchaseBlockLabel ?? 'Locked')
+                else
+                // Normal Buy button (may have KYC lock icon)
+                  GestureDetector(
+                    onTap: onSelect,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: buyLocked
+                            ? AppColors.primary.withOpacity(0.45)
+                            : AppColors.primary,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        if (buyLocked) ...[
+                          const Icon(Icons.lock_rounded,
+                              color: Colors.white, size: 12),
+                          const SizedBox(width: 4),
+                        ],
+                        const Text('Buy',
+                            style: TextStyle(color: Colors.white, fontSize: 13,
+                                fontWeight: FontWeight.w700)),
+                      ]),
                     ),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      if (buyLocked) ...[
-                        const Icon(Icons.lock_rounded,
-                            color: Colors.white, size: 12),
-                        const SizedBox(width: 4),
-                      ],
-                      const Text('Buy',
-                          style: TextStyle(color: Colors.white, fontSize: 13,
-                              fontWeight: FontWeight.w700)),
-                    ]),
                   ),
-                ),
             ]),
           ]),
         ),
 
         // "Most Popular" badge
-        if (isPopular && !isCurrent)
+        if (isPopular && !isCurrent && !isQueued)
           Positioned(
             top: 0, right: 14,
             child: Container(
@@ -857,8 +1012,51 @@ class _PlanCard extends StatelessWidget {
   }
 }
 
+/// Active / Queued pill badge — no tap.
+class _StatusChip extends StatelessWidget {
+  final String label;
+  final Color  color;
+  const _StatusChip({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.10),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: color.withOpacity(0.4)),
+    ),
+    child: Text(label,
+        style: TextStyle(color: color, fontSize: 12,
+            fontWeight: FontWeight.w700)),
+  );
+}
+
+/// Locked-Buy chip — greyed out, shows the reason (e.g. "Renew 28 Jun").
+class _BlockedChip extends StatelessWidget {
+  final String label;
+  const _BlockedChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(
+      color: Colors.grey.shade100,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: Colors.grey.shade300),
+    ),
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(Icons.lock_clock_rounded, color: Colors.grey.shade500, size: 12),
+      const SizedBox(width: 4),
+      Text(label,
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 11,
+              fontWeight: FontWeight.w600)),
+    ]),
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// PURCHASE SHEET
+// PURCHASE SHEET  (unchanged from original)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PurchaseSheet extends StatefulWidget {
@@ -949,8 +1147,7 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
     final baseAmt = plan.price;
 
     return Padding(
-      padding:
-      EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
         decoration: const BoxDecoration(
           color: Colors.white,
@@ -964,12 +1161,9 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Center(
-                child: Container(
-                  width: 40, height: 4,
-                  decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2)),
-                ),
+                child: Container(width: 40, height: 4,
+                    decoration: BoxDecoration(color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2))),
               ),
               const SizedBox(height: 20),
               const Text('Confirm Purchase',
@@ -979,8 +1173,7 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
 
               // Plan summary
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
                     color: const Color(0xFFF5F5F5),
                     borderRadius: BorderRadius.circular(14)),
@@ -992,16 +1185,12 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                           style: const TextStyle(fontWeight: FontWeight.w700,
                               fontSize: 16, color: AppColors.textDark)),
                       const SizedBox(height: 4),
-                      Text(
-                        '${plan.speedLabel} · ${plan.dataLabel} · ${plan.validityLabel}',
-                        style: const TextStyle(
-                            fontSize: 12, color: AppColors.textGrey),
-                      ),
+                      Text('${plan.speedLabel} · ${plan.dataLabel} · ${plan.validityLabel}',
+                          style: const TextStyle(fontSize: 12, color: AppColors.textGrey)),
                     ]),
                     Text('₹${baseAmt.toStringAsFixed(0)}',
                         style: const TextStyle(fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.primary)),
+                            fontWeight: FontWeight.w900, color: AppColors.primary)),
                   ],
                 ),
               ),
@@ -1019,16 +1208,12 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: _couponApplied
-                        ? Colors.green
-                        : _couponError != null
-                        ? Colors.red
+                    color: _couponApplied ? Colors.green
+                        : _couponError != null ? Colors.red
                         : const Color(0xFFDDDDDD),
                     width: 1.5,
                   ),
-                  color: _couponApplied
-                      ? const Color(0xFFEDF7ED)
-                      : Colors.white,
+                  color: _couponApplied ? const Color(0xFFEDF7ED) : Colors.white,
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(11),
@@ -1036,9 +1221,9 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                     const SizedBox(width: 14),
                     Expanded(
                       child: TextField(
-                        controller:       _couponController,
-                        focusNode:        _couponFocus,
-                        enabled:          !_couponApplied,
+                        controller: _couponController,
+                        focusNode: _couponFocus,
+                        enabled: !_couponApplied,
                         textCapitalization: TextCapitalization.characters,
                         onSubmitted: (_) => _applyCoupon(),
                         decoration: InputDecoration(
@@ -1054,23 +1239,19 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                           filled:         false,
                         ),
                         style: TextStyle(
-                          fontSize:   14,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 14, fontWeight: FontWeight.w600,
                           color: _couponApplied
-                              ? Colors.green.shade700
-                              : AppColors.textDark,
+                              ? Colors.green.shade700 : AppColors.textDark,
                         ),
                       ),
                     ),
-                    Container(width: 1, height: 28,
-                        color: const Color(0xFFEEEEEE)),
+                    Container(width: 1, height: 28, color: const Color(0xFFEEEEEE)),
                     if (_couponApplied)
                       GestureDetector(
                         onTap: _removeCoupon,
                         child: const Padding(
                           padding: EdgeInsets.symmetric(horizontal: 14),
-                          child: Icon(Icons.close,
-                              size: 18, color: AppColors.textGrey),
+                          child: Icon(Icons.close, size: 18, color: AppColors.textGrey),
                         ),
                       )
                     else if (_couponLoading)
@@ -1083,15 +1264,12 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                     else
                       GestureDetector(
                         onTap: _couponController.text.trim().isEmpty
-                            ? null
-                            : _applyCoupon,
+                            ? null : _applyCoupon,
                         child: Padding(
-                          padding:
-                          const EdgeInsets.symmetric(horizontal: 16),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Text('Apply',
                               style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14,
+                                fontWeight: FontWeight.w700, fontSize: 14,
                                 color: _couponController.text.trim().isEmpty
                                     ? AppColors.primary.withOpacity(0.4)
                                     : AppColors.primary,
@@ -1160,124 +1338,38 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
                       color: AppColors.textDark)),
               const SizedBox(height: 12),
 
-              // Wallet option
-              GestureDetector(
+              _PayOption(
+                mode: 'wallet', selected: _mode == 'wallet',
+                icon: Icons.account_balance_wallet_outlined,
+                title: 'Wallet Balance',
+                subtitle: '₹${widget.walletBalance.toStringAsFixed(2)}',
                 onTap: () => setState(() => _mode = 'wallet'),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: _mode == 'wallet'
-                          ? AppColors.primary
-                          : const Color(0xFFDDDDDD),
-                      width: _mode == 'wallet' ? 2 : 1.5,
-                    ),
-                  ),
-                  child: Row(children: [
-                    Container(
-                      width: 40, height: 40,
-                      decoration: BoxDecoration(
-                          color: const Color(0xFFFFF0F0),
-                          borderRadius: BorderRadius.circular(10)),
-                      child: const Icon(
-                          Icons.account_balance_wallet_outlined,
-                          color: AppColors.primary, size: 20),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Wallet Balance',
-                              style: TextStyle(fontWeight: FontWeight.w700,
-                                  fontSize: 14, color: AppColors.textDark)),
-                          const SizedBox(height: 2),
-                          Text('₹${widget.walletBalance.toStringAsFixed(2)}',
-                              style: const TextStyle(fontSize: 12,
-                                  color: AppColors.textGrey)),
-                        ])),
-                    _ModeCheckmark(selected: _mode == 'wallet'),
-                  ]),
-                ),
               ),
               const SizedBox(height: 10),
-
-              // PG option
-              GestureDetector(
+              _PayOption(
+                mode: 'pg', selected: _mode == 'pg',
+                icon: Icons.payment_rounded,
+                title: 'Payment Gateway',
+                subtitle: 'UPI · Card · Net Banking',
                 onTap: () => setState(() => _mode = 'pg'),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: _mode == 'pg'
-                          ? AppColors.primary
-                          : const Color(0xFFDDDDDD),
-                      width: _mode == 'pg' ? 2 : 1.5,
-                    ),
-                  ),
-                  child: Row(children: [
-                    Container(
-                      width: 40, height: 40,
-                      decoration: BoxDecoration(
-                          color: const Color(0xFFFFF0F0),
-                          borderRadius: BorderRadius.circular(10)),
-                      child: const Icon(Icons.payment_rounded,
-                          color: AppColors.primary, size: 20),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Payment Gateway',
-                              style: TextStyle(fontWeight: FontWeight.w700,
-                                  fontSize: 14, color: AppColors.textDark)),
-                          const SizedBox(height: 4),
-                          Wrap(
-                            spacing: 4,
-                            children: ['UPI', 'Card', 'Net Banking']
-                                .map((m) => Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                  color: const Color(0xFFF5F5F5),
-                                  borderRadius: BorderRadius.circular(4)),
-                              child: Text(m,
-                                  style: const TextStyle(fontSize: 9,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.textGrey)),
-                            )).toList(),
-                          ),
-                        ])),
-                    _ModeCheckmark(selected: _mode == 'pg'),
-                  ]),
-                ),
               ),
 
               Padding(
                 padding: const EdgeInsets.only(top: 8, bottom: 4),
-                child: Row(mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.shield_outlined, size: 12, color: AppColors.textGrey),
-                      const SizedBox(width: 4),
-                      const Text('Secured by Omniware · PCI-DSS compliant',
-                          style: TextStyle(fontSize: 10, color: AppColors.textGrey)),
-                    ]),
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(Icons.shield_outlined, size: 12, color: AppColors.textGrey),
+                  const SizedBox(width: 4),
+                  const Text('Secured by Omniware · PCI-DSS compliant',
+                      style: TextStyle(fontSize: 10, color: AppColors.textGrey)),
+                ]),
               ),
-
               const SizedBox(height: 24),
 
               // Pay button
               SizedBox(
                 width: double.infinity, height: 54,
                 child: ElevatedButton(
-                  onPressed: _loading
-                      ? null
-                      : () {
+                  onPressed: _loading ? null : () {
                     setState(() => _loading = true);
                     widget.onConfirm(
                       _mode,
@@ -1311,24 +1403,63 @@ class _PurchaseSheetState extends State<_PurchaseSheet> {
   }
 }
 
-class _ModeCheckmark extends StatelessWidget {
+class _PayOption extends StatelessWidget {
+  final String mode, title, subtitle;
   final bool selected;
-  const _ModeCheckmark({required this.selected});
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _PayOption({
+    required this.mode, required this.title, required this.subtitle,
+    required this.selected, required this.icon, required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 32, height: 32,
-      decoration: BoxDecoration(
-        color: selected ? AppColors.primary : Colors.transparent,
-        shape: BoxShape.circle,
-        border: selected
-            ? null
-            : Border.all(color: const Color(0xFFDDDDDD), width: 2),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? AppColors.primary : const Color(0xFFDDDDDD),
+            width: selected ? 2 : 1.5,
+          ),
+        ),
+        child: Row(children: [
+          Container(
+            width: 40, height: 40,
+            decoration: BoxDecoration(
+                color: const Color(0xFFFFF0F0),
+                borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: AppColors.primary, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w700,
+                    fontSize: 14, color: AppColors.textDark)),
+                const SizedBox(height: 2),
+                Text(subtitle, style: const TextStyle(
+                    fontSize: 12, color: AppColors.textGrey)),
+              ])),
+          Container(
+            width: 32, height: 32,
+            decoration: BoxDecoration(
+              color: selected ? AppColors.primary : Colors.transparent,
+              shape: BoxShape.circle,
+              border: selected ? null : Border.all(
+                  color: const Color(0xFFDDDDDD), width: 2),
+            ),
+            child: selected
+                ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
+                : null,
+          ),
+        ]),
       ),
-      child: selected
-          ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
-          : null,
     );
   }
 }
@@ -1346,11 +1477,9 @@ class _AmountRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-      Text(label,
-          style: const TextStyle(fontSize: 14, color: AppColors.textGrey)),
-      Text(value,
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
-              color: valueColor)),
+      Text(label, style: const TextStyle(fontSize: 14, color: AppColors.textGrey)),
+      Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+          color: valueColor)),
     ]);
   }
 }
@@ -1369,11 +1498,9 @@ class _SuccessDialog extends StatelessWidget {
     final planName  =
         (result['plan'] as Map<String, dynamic>?)?['name'] ?? 'Plan';
     final expiresAt = result['expires_at'] != null
-        ? DateTime.tryParse(result['expires_at'].toString())
-        : null;
+        ? DateTime.tryParse(result['expires_at'].toString()) : null;
     final startDate = result['start_date'] != null
-        ? DateTime.tryParse(result['start_date'].toString())
-        : null;
+        ? DateTime.tryParse(result['start_date'].toString()) : null;
     final isQueued  = result['is_queued'] == true;
     final discount  = (result['discount_applied'] as num?)?.toDouble() ?? 0;
     final coupon    = result['coupon_code'] as String?;
@@ -1386,17 +1513,12 @@ class _SuccessDialog extends StatelessWidget {
           Container(
             width: 72, height: 72,
             decoration: BoxDecoration(
-              color: isQueued
-                  ? const Color(0xFFFFF8E1)
-                  : const Color(0xFFE8F5E9),
+              color: isQueued ? const Color(0xFFFFF8E1) : const Color(0xFFE8F5E9),
               shape: BoxShape.circle,
             ),
             child: Icon(
-              isQueued
-                  ? Icons.schedule_rounded
-                  : Icons.check_circle_rounded,
-              color: isQueued ? Colors.orange : Colors.green,
-              size: 44,
+              isQueued ? Icons.schedule_rounded : Icons.check_circle_rounded,
+              color: isQueued ? Colors.orange : Colors.green, size: 44,
             ),
           ),
           const SizedBox(height: 16),
@@ -1411,20 +1533,16 @@ class _SuccessDialog extends StatelessWidget {
                   color: AppColors.primary)),
           const SizedBox(height: 4),
           if (isQueued && startDate != null)
-            Text(
-              'Starts on ${startDate.day}/${startDate.month}/${startDate.year}',
-              style: const TextStyle(color: AppColors.textGrey, fontSize: 13),
-            )
+            Text('Starts on ${startDate.day}/${startDate.month}/${startDate.year}',
+                style: const TextStyle(color: AppColors.textGrey, fontSize: 13))
           else if (expiresAt != null)
             Text(
-              'Valid until ${expiresAt.day}/${expiresAt.month}/${expiresAt.year}',
-              style: const TextStyle(color: AppColors.textGrey, fontSize: 13),
-            ),
+                'Valid until ${expiresAt.day}/${expiresAt.month}/${expiresAt.year}',
+                style: const TextStyle(color: AppColors.textGrey, fontSize: 13)),
           if (discount > 0 && coupon != null) ...[
             const SizedBox(height: 14),
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: const Color(0xFFE8F5E9),
                 borderRadius: BorderRadius.circular(10),
@@ -1434,14 +1552,12 @@ class _SuccessDialog extends StatelessWidget {
                 const Icon(Icons.local_offer_rounded,
                     color: Colors.green, size: 16),
                 const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    'Coupon $coupon saved you ₹${discount.toStringAsFixed(2)}',
-                    style: const TextStyle(fontSize: 13, color: Colors.green,
-                        fontWeight: FontWeight.w600),
-                    overflow: TextOverflow.ellipsis, maxLines: 2,
-                  ),
-                ),
+                Expanded(child: Text(
+                  'Coupon $coupon saved you ₹${discount.toStringAsFixed(2)}',
+                  style: const TextStyle(fontSize: 13, color: Colors.green,
+                      fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis, maxLines: 2,
+                )),
               ]),
             ),
           ],

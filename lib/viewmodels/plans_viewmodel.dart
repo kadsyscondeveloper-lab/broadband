@@ -1,24 +1,4 @@
 // lib/viewmodels/plans_viewmodel.dart
-//
-// BUG FIXES:
-//
-// Bug 1 — First purchase wrongly shows "Plan Queued":
-//   OLD: Flutter compared start_date (server time) with DateTime.now() (device time).
-//        Clock skew of even 1 second between server and device triggered this.
-//   FIX: Server now returns `is_queued: bool` in the purchase response.
-//        Flutter reads that flag — no client-side date comparison at all.
-//
-// Bug 2 — Double plan shown after purchase:
-//   OLD: _activeSub was set from getActiveSubscription() AND _queuedSub was
-//        set from the purchase response for the same plan.
-//   FIX: After purchase, re-fetch BOTH subscriptions from the API.
-//        Since the server sets is_queued correctly, there's never a double.
-//
-// Bug 3 — Queued plan disappears on re-entering the plans screen:
-//   OLD: _queuedSub was only set during purchasePlan() and held in memory.
-//        load() never fetched it, so it was null on every re-entry.
-//   FIX: load() now calls getQueuedSubscription() every time, so the queued
-//        plan persists across screen exits and re-entries.
 
 import 'package:flutter/material.dart';
 import '../models/plan_model.dart';
@@ -54,10 +34,28 @@ class PlansViewModel extends ChangeNotifier {
   List<Plan> get quarterlyPlans => _plans.where((p) => p.validityDays == 90).toList();
   List<Plan> get annualPlans    => _plans.where((p) => p.validityDays == 365).toList();
 
-  // ── Load ─────────────────────────────────────────────────────────────────────
-  // FIX (Bug 3): load() now fetches BOTH the active and queued subscriptions
-  // every time, so the queued plan is always visible on re-entry.
+  // ── Purchase eligibility ─────────────────────────────────────────────────────
+  //
+  // Rules (mirror the backend guards in planService.purchasePlan):
+  //   • If a queued plan already exists → blocked (one queue slot only)
+  //   • If the active plan has > 2 days remaining → blocked (renewal window)
+  //   • Otherwise → allowed
 
+  /// Whether the user is currently allowed to purchase / queue a new plan.
+  bool get canPurchaseNewPlan {
+    if (_queuedSub != null) return false;  // already one plan queued
+    if (_activeSub == null) return true;   // no active plan → can buy freely
+    return _activeSub!.daysRemaining <= 2; // within the 2-day renewal window
+  }
+
+  /// The earliest calendar date the user can renew (active expiry minus 2 days).
+  /// Returns null when there is no active subscription.
+  DateTime? get renewalAvailableFrom {
+    if (_activeSub?.expiresAt == null) return null;
+    return _activeSub!.expiresAt!.subtract(const Duration(days: 2));
+  }
+
+  // ── Load ─────────────────────────────────────────────────────────────────────
   Future<void> load() async {
     _isLoading = true;
     _error     = null;
@@ -67,7 +65,7 @@ class PlansViewModel extends ChangeNotifier {
       final results = await Future.wait([
         _service.getPlans(),
         _service.getActiveSubscription(),
-        _service.getQueuedSubscription(),   // ← FIX: always fetch queued sub
+        _service.getQueuedSubscription(),
       ]);
       _plans     = results[0] as List<Plan>;
       _activeSub = results[1] as ActiveSubscription?;
@@ -81,14 +79,6 @@ class PlansViewModel extends ChangeNotifier {
   }
 
   // ── Purchase ─────────────────────────────────────────────────────────────────
-  // FIX (Bug 1 + Bug 2):
-  //   • No longer uses client-side date comparison to determine is_queued.
-  //     Server returns `is_queued: true/false` — we trust that.
-  //   • After purchase, re-fetches BOTH subscriptions from the API instead of
-  //     constructing _queuedSub from the purchase response. This prevents the
-  //     double-plan bug because the server never returns the same plan in both
-  //     active and queued slots simultaneously.
-
   Future<void> purchasePlan(int planId, {
     String paymentMode = 'wallet',
     String? couponCode,
@@ -106,9 +96,7 @@ class PlansViewModel extends ChangeNotifier {
       );
       _purchaseState = PlanPurchaseState.success;
 
-      // Re-fetch both subscriptions from the server.
-      // Server's is_queued flag (in _purchaseResult) tells the UI what to show,
-      // and the API calls ensure state is correct after leaving and re-entering.
+      // Re-fetch both subscriptions so state is accurate on re-entry.
       final results = await Future.wait([
         _service.getActiveSubscription(),
         _service.getQueuedSubscription(),

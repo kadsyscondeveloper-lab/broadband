@@ -1,8 +1,4 @@
 // lib/views/installation/installation_address_screen.dart
-//
-// Shown after a plan is successfully purchased.
-// Pre-fills the user's profile address, lets them confirm/edit,
-// then creates an installation request and pushes the tracker.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -44,7 +40,6 @@ class _InstallationAddressScreenState
   }
 
   void _syncControllers() {
-    // Only sync when switching to form step (after profile load)
     if (_vm.step == InstallationAddressStep.form) {
       _houseCtrl.text = _vm.houseNo;
       _addrCtrl.text  = _vm.address;
@@ -52,7 +47,6 @@ class _InstallationAddressScreenState
       _stateCtrl.text = _vm.state;
       _pinCtrl.text   = _vm.pinCode;
     }
-    // After success, navigate to tracker
     if (_vm.step == InstallationAddressStep.success &&
         _vm.createdRequest != null) {
       _vm.removeListener(_syncControllers);
@@ -121,15 +115,111 @@ class _InstallationAddressScreenState
       body: ListenableBuilder(
         listenable: _vm,
         builder: (context, _) {
-          if (_vm.step == InstallationAddressStep.loading) {
-            return const Center(child: CircularProgressIndicator(
-                color: AppColors.primary));
+          switch (_vm.step) {
+            case InstallationAddressStep.loading:
+              return const Center(child: CircularProgressIndicator(
+                  color: AppColors.primary));
+            case InstallationAddressStep.alreadyInstalled:
+              return _buildAlreadyInstalledView();
+            default:
+              return _buildForm();
           }
-          return _buildForm();
         },
       ),
     );
   }
+
+  // ── Already installed ──────────────────────────────────────────────────────
+
+  Widget _buildAlreadyInstalledView() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 96, height: 96,
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.green.shade200, width: 2),
+              ),
+              child: Icon(Icons.check_circle_rounded,
+                  color: Colors.green.shade600, size: 52),
+            ),
+            const SizedBox(height: 28),
+            const Text(
+              'Router Already Installed',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textDark),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Your Speedonet router has already been installed at your premises. '
+                  'Installations are a one-time process.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textGrey,
+                  height: 1.6),
+            ),
+            const SizedBox(height: 32),
+
+            // Primary: go back (plan is active, all good)
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+                child: const Text('Great, Go Back',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16)),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Secondary: raise support ticket
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  // Pop back to the shell and let the user navigate to Help
+                  Navigator.pop(context);
+                  // Optionally navigate to support — depends on your nav setup
+                },
+                icon: const Icon(Icons.support_agent_rounded,
+                    color: AppColors.primary, size: 18),
+                label: const Text('Contact Support',
+                    style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600)),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  side: const BorderSide(color: AppColors.primary, width: 1.5),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Address form ───────────────────────────────────────────────────────────
 
   Widget _buildForm() {
     final submitting = _vm.isSubmitting;
@@ -142,14 +232,13 @@ class _InstallationAddressScreenState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
 
-              // ── Info banner ────────────────────────────────────────────
+              // Info banner
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withOpacity(0.06),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                      color: AppColors.primary.withOpacity(0.18)),
+                  border: Border.all(color: AppColors.primary.withOpacity(0.18)),
                 ),
                 child: Row(children: [
                   Icon(Icons.build_circle_rounded,
@@ -159,78 +248,57 @@ class _InstallationAddressScreenState
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                      Text('Almost there!',
-                          style: TextStyle(fontWeight: FontWeight.w800,
-                              fontSize: 15, color: AppColors.textDark)),
-                      SizedBox(height: 3),
-                      Text('Confirm where we should install your connection. We\'ve pre-filled your profile address.',
-                          style: TextStyle(fontSize: 12,
-                              color: AppColors.textGrey, height: 1.4)),
-                    ]),
+                          Text('Almost there!',
+                              style: TextStyle(fontWeight: FontWeight.w800,
+                                  fontSize: 15, color: AppColors.textDark)),
+                          SizedBox(height: 3),
+                          Text(
+                              'Confirm where we should install your connection. '
+                                  "We've pre-filled your profile address.",
+                              style: TextStyle(fontSize: 12,
+                                  color: AppColors.textGrey, height: 1.4)),
+                        ]),
                   ),
                 ]),
               ),
               const SizedBox(height: 24),
 
-              // ── Address fields ─────────────────────────────────────────
               const _SectionLabel('Installation Address'),
               const SizedBox(height: 14),
 
               _FieldRow(
-                label:      'House / Flat No.',
-                controller: _houseCtrl,
-                hint:       'e.g. A-204',
-                onChanged:  _vm.setHouseNo,
-                required:   true,
+                label: 'House / Flat No.', controller: _houseCtrl,
+                hint: 'e.g. A-204', onChanged: _vm.setHouseNo, required: true,
               ),
               const SizedBox(height: 12),
-
               _FieldRow(
-                label:      'Street / Locality',
-                controller: _addrCtrl,
-                hint:       'Building name, street',
-                onChanged:  _vm.setAddress,
-                required:   true,
-                maxLines:   2,
+                label: 'Street / Locality', controller: _addrCtrl,
+                hint: 'Building name, street', onChanged: _vm.setAddress,
+                required: true, maxLines: 2,
               ),
               const SizedBox(height: 12),
-
               Row(children: [
-                Expanded(
-                  child: _FieldRow(
-                    label:      'City',
-                    controller: _cityCtrl,
-                    hint:       'City',
-                    onChanged:  _vm.setCity,
-                    required:   true,
-                  ),
-                ),
+                Expanded(child: _FieldRow(
+                  label: 'City', controller: _cityCtrl,
+                  hint: 'City', onChanged: _vm.setCity, required: true,
+                )),
                 const SizedBox(width: 12),
-                Expanded(
-                  child: _FieldRow(
-                    label:      'State',
-                    controller: _stateCtrl,
-                    hint:       'State',
-                    onChanged:  _vm.setState_,
-                    required:   true,
-                  ),
-                ),
+                Expanded(child: _FieldRow(
+                  label: 'State', controller: _stateCtrl,
+                  hint: 'State', onChanged: _vm.setState_, required: true,
+                )),
               ]),
               const SizedBox(height: 12),
-
               _FieldRow(
-                label:       'PIN Code',
-                controller:  _pinCtrl,
-                hint:        '6-digit PIN code',
-                onChanged:   _vm.setPinCode,
-                required:    true,
-                inputType:   TextInputType.number,
-                formatters:  [FilteringTextInputFormatter.digitsOnly],
-                maxLength:   6,
+                label: 'PIN Code', controller: _pinCtrl,
+                hint: '6-digit PIN code', onChanged: _vm.setPinCode,
+                required: true, inputType: TextInputType.number,
+                formatters: [FilteringTextInputFormatter.digitsOnly],
+                maxLength: 6,
               ),
               const SizedBox(height: 24),
 
-              // ── Preferred date ─────────────────────────────────────────
+              // Preferred date
               const _SectionLabel('Preferred Installation Date'),
               const SizedBox(height: 10),
               GestureDetector(
@@ -239,9 +307,9 @@ class _InstallationAddressScreenState
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 14),
                   decoration: BoxDecoration(
-                    color:        Colors.white,
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    border:       Border.all(color: AppColors.borderColor),
+                    border: Border.all(color: AppColors.borderColor),
                   ),
                   child: Row(children: [
                     Icon(Icons.calendar_today_rounded,
@@ -282,40 +350,40 @@ class _InstallationAddressScreenState
               ),
               const SizedBox(height: 24),
 
-              // ── Notes ──────────────────────────────────────────────────
+              // Notes
               const _SectionLabel('Additional Notes (Optional)'),
               const SizedBox(height: 10),
               Container(
                 decoration: BoxDecoration(
-                  color:        Colors.white,
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border:       Border.all(color: AppColors.borderColor),
+                  border: Border.all(color: AppColors.borderColor),
                 ),
                 child: TextField(
                   controller: _notesCtrl,
-                  maxLines:   3,
-                  onChanged:  _vm.setNotes,
+                  maxLines: 3,
+                  onChanged: _vm.setNotes,
                   style: const TextStyle(
                       fontSize: 14, color: AppColors.textDark),
                   decoration: const InputDecoration(
-                    hintText:       'E.g. call before arriving, gate code, landmark...',
-                    hintStyle:      TextStyle(
+                    hintText: 'E.g. call before arriving, gate code, landmark...',
+                    hintStyle: TextStyle(
                         color: AppColors.textLight, fontSize: 13),
-                    border:         InputBorder.none,
+                    border: InputBorder.none,
                     contentPadding: EdgeInsets.all(14),
                   ),
                 ),
               ),
 
-              // ── Error ──────────────────────────────────────────────────
+              // Error banner
               if (_vm.error != null) ...[
                 const SizedBox(height: 16),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color:        Colors.red.shade50,
+                    color: Colors.red.shade50,
                     borderRadius: BorderRadius.circular(10),
-                    border:       Border.all(color: Colors.red.shade200),
+                    border: Border.all(color: Colors.red.shade200),
                   ),
                   child: Row(children: [
                     Icon(Icons.error_outline_rounded,
@@ -333,7 +401,7 @@ class _InstallationAddressScreenState
         ),
       ),
 
-      // ── Bottom action bar ──────────────────────────────────────────────
+      // Bottom action bar
       Container(
         padding: EdgeInsets.fromLTRB(
             20, 12, 20, MediaQuery.of(context).padding.bottom + 16),
@@ -341,49 +409,42 @@ class _InstallationAddressScreenState
           color: Colors.white,
           boxShadow: [
             BoxShadow(
-              color:      Colors.black.withOpacity(0.06),
-              blurRadius: 12,
-              offset:     const Offset(0, -3),
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 12, offset: const Offset(0, -3),
             ),
           ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Step indicator
-            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              _StepDot(active: true,  label: 'Plan'),
-              _StepLine(),
-              _StepDot(active: true,  label: 'Address'),
-              _StepLine(),
-              _StepDot(active: false, label: 'Installation'),
-            ]),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: (submitting || !_vm.canSubmit)
-                    ? null
-                    : _vm.submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  disabledBackgroundColor: AppColors.primary.withOpacity(0.4),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                  elevation: 0,
-                ),
-                child: submitting
-                    ? const SizedBox(width: 22, height: 22,
-                    child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2.5))
-                    : const Text('Confirm Installation Address',
-                    style: TextStyle(color: Colors.white,
-                        fontWeight: FontWeight.w700, fontSize: 16)),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            _StepDot(active: true,  label: 'Plan'),
+            _StepLine(),
+            _StepDot(active: true,  label: 'Address'),
+            _StepLine(),
+            _StepDot(active: false, label: 'Installation'),
+          ]),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: (submitting || !_vm.canSubmit) ? null : _vm.submit,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                disabledBackgroundColor: AppColors.primary.withOpacity(0.4),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
               ),
+              child: submitting
+                  ? const SizedBox(width: 22, height: 22,
+                  child: CircularProgressIndicator(
+                      color: Colors.white, strokeWidth: 2.5))
+                  : const Text('Confirm Installation Address',
+                  style: TextStyle(color: Colors.white,
+                      fontWeight: FontWeight.w700, fontSize: 16)),
             ),
-          ],
-        ),
+          ),
+        ]),
       ),
     ]);
   }
@@ -407,9 +468,7 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) => Text(
     text,
     style: const TextStyle(
-        fontSize:   15,
-        fontWeight: FontWeight.w700,
-        color:      AppColors.textDark),
+        fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textDark),
   );
 }
 
@@ -443,12 +502,10 @@ class _FieldRow extends StatelessWidget {
         text: TextSpan(
           text:  label,
           style: const TextStyle(
-              fontSize:   13,
-              fontWeight: FontWeight.w600,
-              color:      AppColors.textDark),
+              fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textDark),
           children: required
               ? [const TextSpan(
-              text:  ' *',
+              text: ' *',
               style: TextStyle(color: AppColors.primary))]
               : [],
         ),
@@ -456,9 +513,9 @@ class _FieldRow extends StatelessWidget {
       const SizedBox(height: 6),
       Container(
         decoration: BoxDecoration(
-          color:        Colors.white,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border:       Border.all(color: AppColors.borderColor),
+          border: Border.all(color: AppColors.borderColor),
         ),
         child: TextField(
           controller:         controller,
@@ -494,7 +551,7 @@ class _StepDot extends StatelessWidget {
       Container(
         width: 16, height: 16,
         decoration: BoxDecoration(
-          color:  active ? AppColors.primary : Colors.grey.shade300,
+          color: active ? AppColors.primary : Colors.grey.shade300,
           shape: BoxShape.circle,
         ),
         child: active
@@ -504,7 +561,7 @@ class _StepDot extends StatelessWidget {
       const SizedBox(height: 4),
       Text(label,
           style: TextStyle(
-              fontSize:   9,
+              fontSize: 9,
               fontWeight: FontWeight.w600,
               color: active ? AppColors.primary : AppColors.textLight)),
     ]);

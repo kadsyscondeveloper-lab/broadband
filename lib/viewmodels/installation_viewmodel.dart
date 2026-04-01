@@ -4,7 +4,16 @@ import 'package:flutter/foundation.dart';
 import '../services/installation_service.dart';
 import '../services/user_service.dart';
 
-enum InstallationAddressStep { loading, form, submitting, success, error }
+// Added `alreadyInstalled` — shown when the backend returns a 409 because
+// the user's router is already installed.
+enum InstallationAddressStep {
+  loading,
+  form,
+  submitting,
+  success,
+  error,
+  alreadyInstalled,
+}
 
 // ── Address Confirmation ViewModel ───────────────────────────────────────────
 
@@ -44,8 +53,8 @@ class InstallationAddressViewModel extends ChangeNotifier {
   bool get isSubmitting => _step == InstallationAddressStep.submitting;
   bool get canSubmit    =>
       _houseNo.isNotEmpty && _address.isNotEmpty &&
-      _city.isNotEmpty    && _state.isNotEmpty &&
-      _pinCode.length == 6;
+          _city.isNotEmpty    && _state.isNotEmpty &&
+          _pinCode.length == 6;
 
   // ── Setters ───────────────────────────────────────────────────────────────
   void setHouseNo(String v)  { _houseNo  = v; notifyListeners(); }
@@ -97,10 +106,27 @@ class InstallationAddressViewModel extends ChangeNotifier {
       _createdRequest = result.request;
       _step           = InstallationAddressStep.success;
     } else {
-      _error = result.error;
-      _step  = InstallationAddressStep.form;
+      final msg = result.error ?? '';
+
+      // Backend returns 409 with this message when the router is already
+      // installed. Surface a dedicated screen instead of a form-level error.
+      if (_isAlreadyInstalledError(msg)) {
+        _step = InstallationAddressStep.alreadyInstalled;
+      } else {
+        _error = msg;
+        _step  = InstallationAddressStep.form;
+      }
     }
     notifyListeners();
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  static bool _isAlreadyInstalledError(String msg) {
+    final lower = msg.toLowerCase();
+    return lower.contains('already been installed') ||
+        lower.contains('already installed') ||
+        lower.contains('installations are done only once');
   }
 }
 
