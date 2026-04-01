@@ -23,7 +23,7 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   int _currentIndex = 0;
 
   final _homeVM     = HomeViewModel();
@@ -36,10 +36,21 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _homeVM.loadProfile();
     });
     _profileVM.addListener(_onProfileVMChanged);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // When the user taps a notification from the system tray, the app
+    // resumes here. Re-fetching the profile picks up availability_confirmed
+    // (or any other server-side change) so the UI gates update immediately.
+    if (state == AppLifecycleState.resumed) {
+      _homeVM.loadProfile();
+    }
   }
 
   void _onProfileVMChanged() {
@@ -137,6 +148,7 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _profileVM.removeListener(_onProfileVMChanged);
     _homeVM.dispose();
     _paymentsVM.dispose();
