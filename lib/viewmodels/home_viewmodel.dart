@@ -6,6 +6,7 @@ import '../services/user_service.dart';
 import '../services/kyc_service.dart';
 import '../widgets/dashboard_section.dart';
 import '../services/notification_service.dart';
+import '../services/notification_push_service.dart';
 
 class HomeViewModel extends ChangeNotifier {
   final _service    = UserService();
@@ -42,6 +43,9 @@ class HomeViewModel extends ChangeNotifier {
   // ── Load ──────────────────────────────────────────────────────────────────
 
   Future<void> loadProfile() async {
+    NotificationPushService.onAvailabilityConfirmed = () {
+      loadProfile();
+    };
     _isLoading = true;
     notifyListeners();
 
@@ -95,6 +99,12 @@ class HomeViewModel extends ChangeNotifier {
   Future<void> refreshKycStatus() async {
     _kycStatus = await _kycService.getStatus();
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    NotificationPushService.onAvailabilityConfirmed = null;
+    super.dispose();
   }
 
   // ── Banner callbacks ──────────────────────────────────────────────────────

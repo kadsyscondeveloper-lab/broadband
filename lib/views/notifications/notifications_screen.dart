@@ -91,6 +91,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         Navigator.pop(context, 'refer');
         break;
 
+      case 'availability':
+        Navigator.pop(context);
+        break;
+
       default:
       // No navigation for general/unknown types
         break;
@@ -254,6 +258,7 @@ class _NotificationTile extends StatelessWidget {
       case 'offer':             return const Color(0xFFDB2777);
       case 'referral_rewarded':
       case 'referral':          return const Color(0xFFF59E0B);
+      case 'availability':      return const Color(0xFF16A34A);
       default:                  return AppColors.primary;
     }
   }
@@ -269,6 +274,7 @@ class _NotificationTile extends StatelessWidget {
       case 'offer':             return Icons.local_offer_rounded;
       case 'referral_rewarded':
       case 'referral':          return Icons.card_giftcard_rounded;
+      case 'availability':      return Icons.wifi_find_rounded;
       default:                  return Icons.notifications_rounded;
     }
   }
@@ -276,6 +282,7 @@ class _NotificationTile extends StatelessWidget {
   /// Whether this notification type has a destination screen to navigate to
   bool _isTappable(String type) {
     const tappableTypes = {
+      'availability'
       'kyc',
       'kyc_status',
       'support_ticket',
@@ -297,6 +304,7 @@ class _NotificationTile extends StatelessWidget {
       case 'wallet_recharge':   return 'View Wallet';
       case 'referral_rewarded':
       case 'referral':          return 'View Referrals';
+      case 'availability':      return 'View Status';
       default:                  return null;
     }
   }

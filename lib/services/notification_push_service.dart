@@ -18,6 +18,7 @@ class NotificationPushService {
   factory NotificationPushService() => _i;
   NotificationPushService._();
 
+  static void Function()? onAvailabilityConfirmed;
   final _fcm   = FirebaseMessaging.instance;
   final _local = FlutterLocalNotificationsPlugin();
   final _api   = ApiClient();
@@ -95,6 +96,12 @@ class NotificationPushService {
 
   Future<void> _onForegroundMessage(RemoteMessage message) async {
     final n = message.notification;
+
+    final type = message.data['inquiry_status'] ?? message.data['type'];
+
+    if (type == 'available' || message.data['inquiry_status'] == 'available') {
+      onAvailabilityConfirmed?.call();
+    }
     if (n == null) return;
 
     await _local.show(
