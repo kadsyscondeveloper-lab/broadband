@@ -1,12 +1,4 @@
 // lib/views/installation/installation_tracker_screen.dart
-//
-// Can be pushed with an already-loaded request (right after address confirmation)
-// OR loaded fresh from the API (from home screen shortcut).
-//
-// Usage:
-//   Navigator.push(context, MaterialPageRoute(
-//     builder: (_) => const InstallationTrackerScreen(),
-//   ));
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -88,15 +80,12 @@ class _InstallationTrackerScreenState
                     color: AppColors.primary,
                     child: SafeArea(
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(
-                            20, 60, 20, 16),
+                        padding: const EdgeInsets.fromLTRB(20, 60, 20, 16),
                         child: ListenableBuilder(
                           listenable: _vm,
                           builder: (_, __) {
                             final req = _vm.request;
-                            if (req == null) {
-                              return const SizedBox.shrink();
-                            }
+                            if (req == null) return const SizedBox.shrink();
                             return Row(children: [
                               Container(
                                 width: 44, height: 44,
@@ -108,12 +97,8 @@ class _InstallationTrackerScreenState
                                     color: Colors.white, size: 22),
                               ),
                               const SizedBox(width: 12),
-                              Expanded(child: Column(
-                                  crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                GestureDetector(
+                              Expanded(
+                                child: GestureDetector(
                                   onTap: () {
                                     Clipboard.setData(ClipboardData(
                                         text: req.requestNumber));
@@ -126,22 +111,23 @@ class _InstallationTrackerScreenState
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Text(req.requestNumber,
-                                          style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 13,
-                                              fontWeight:
-                                              FontWeight.w700)),
+                                      Flexible(
+                                        child: Text(req.requestNumber,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700)),
+                                      ),
                                       const SizedBox(width: 4),
                                       Icon(Icons.copy_rounded,
-                                          color: Colors.white
-                                              .withOpacity(0.6),
+                                          color: Colors.white.withOpacity(0.6),
                                           size: 12),
                                     ],
                                   ),
                                 ),
-                              ])),
-                              // Status chip in header
+                              ),
+                              const SizedBox(width: 8),
                               _StatusChip(
                                 status: req.status,
                                 inHeader: true,
@@ -167,35 +153,34 @@ class _InstallationTrackerScreenState
                   onRetry: () => _vm.load(requestId: widget.requestId),
                 ))
               else if (!_vm.hasRequest)
-                const SliverFillRemaining(child: _NoRequestView())
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      _StatusTimeline(request: _vm.request!),
-                      const SizedBox(height: 20),
-                      if (_vm.request!.technician != null) ...[
-                        _TechnicianCard(
-                            technician: _vm.request!.technician!),
+                  const SliverFillRemaining(child: _NoRequestView())
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate([
+                        _StatusTimeline(request: _vm.request!),
+                        const SizedBox(height: 20),
+                        if (_vm.request!.technician != null) ...[
+                          _TechnicianCard(technician: _vm.request!.technician!),
+                          const SizedBox(height: 16),
+                        ],
+                        _AddressCard(request: _vm.request!),
                         const SizedBox(height: 16),
-                      ],
-                      _AddressCard(request: _vm.request!),
-                      const SizedBox(height: 16),
-                      if (_vm.request!.scheduledAt != null) ...[
-                        _ScheduledDateCard(
-                            scheduledAt: _vm.request!.scheduledAt!),
-                        const SizedBox(height: 16),
-                      ],
-                      if (_vm.request!.notes != null &&
-                          _vm.request!.notes!.isNotEmpty) ...[
-                        _NotesCard(notes: _vm.request!.notes!),
-                        const SizedBox(height: 16),
-                      ],
-                      _InfoCard(),
-                    ]),
+                        if (_vm.request!.scheduledAt != null) ...[
+                          _ScheduledDateCard(
+                              scheduledAt: _vm.request!.scheduledAt!),
+                          const SizedBox(height: 16),
+                        ],
+                        if (_vm.request!.notes != null &&
+                            _vm.request!.notes!.isNotEmpty) ...[
+                          _NotesCard(notes: _vm.request!.notes!),
+                          const SizedBox(height: 16),
+                        ],
+                        _InfoCard(),
+                      ]),
+                    ),
                   ),
-                ),
             ],
           );
         },
@@ -213,11 +198,11 @@ class _StatusTimeline extends StatelessWidget {
   const _StatusTimeline({required this.request});
 
   static const _steps = [
-    (InstallationStatus.pending,    'Request\nSubmitted',  Icons.assignment_turned_in_rounded),
-    (InstallationStatus.assigned,   'Agent\nAssigned',     Icons.person_pin_circle_rounded),
-    (InstallationStatus.scheduled,  'Visit\nScheduled',    Icons.calendar_month_rounded),
-    (InstallationStatus.inProgress, 'Installation\nStarted', Icons.construction_rounded),
-    (InstallationStatus.completed,  'Connection\nActive',  Icons.wifi_rounded),
+    (InstallationStatus.pending,    'Request\nSubmitted',     Icons.assignment_turned_in_rounded),
+    (InstallationStatus.assigned,   'Agent\nAssigned',        Icons.person_pin_circle_rounded),
+    (InstallationStatus.scheduled,  'Visit\nScheduled',       Icons.calendar_month_rounded),
+    (InstallationStatus.inProgress, 'Installation\nStarted',  Icons.construction_rounded),
+    (InstallationStatus.completed,  'Connection\nActive',     Icons.wifi_rounded),
   ];
 
   @override
@@ -239,6 +224,10 @@ class _StatusTimeline extends StatelessWidget {
         ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+
+        // ── Timeline header row ───────────────────────────────────────────
+        // Fix: use Flexible on the title text so it can shrink on narrow
+        // screens instead of pushing the status chip off-screen.
         Row(children: [
           Container(
             width: 32, height: 32,
@@ -250,10 +239,18 @@ class _StatusTimeline extends StatelessWidget {
                 color: AppColors.primary, size: 18),
           ),
           const SizedBox(width: 10),
-          const Text('Installation Progress',
-              style: TextStyle(fontWeight: FontWeight.w700,
-                  fontSize: 15, color: AppColors.textDark)),
-          const Spacer(),
+          const Flexible(                                         // ← FIXED
+            child: Text(
+              'Installation Progress',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize:   15,
+                color:      AppColors.textDark,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),                              // ← replaces Spacer
           _StatusChip(status: request.status, inHeader: false),
         ]),
         const SizedBox(height: 24),
@@ -271,9 +268,12 @@ class _StatusTimeline extends StatelessWidget {
                   color: Colors.red.shade600, size: 22),
               const SizedBox(width: 10),
               const Expanded(
-                child: Text('This installation request has been cancelled.\nPlease contact support if you need help.',
-                    style: TextStyle(
-                        fontSize: 13, color: AppColors.textGrey, height: 1.4)),
+                child: Text(
+                  'This installation request has been cancelled.\n'
+                      'Please contact support if you need help.',
+                  style: TextStyle(
+                      fontSize: 13, color: AppColors.textGrey, height: 1.4),
+                ),
               ),
             ]),
           ),
@@ -288,7 +288,7 @@ class _StatusTimeline extends StatelessWidget {
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Left: dot + connector
+                // Left: dot + connector line
                 Column(children: [
                   Container(
                     width:  36,
@@ -322,7 +322,7 @@ class _StatusTimeline extends StatelessWidget {
                 ]),
                 const SizedBox(width: 14),
 
-                // Right: label
+                // Right: label + subtitle
                 Expanded(
                   child: Padding(
                     padding: EdgeInsets.only(
@@ -330,29 +330,29 @@ class _StatusTimeline extends StatelessWidget {
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                      Text(
-                        label.replaceAll('\n', ' '),
-                        style: TextStyle(
-                          fontWeight: isActive
-                              ? FontWeight.w800
-                              : FontWeight.w600,
-                          fontSize: 14,
-                          color: isDone
-                              ? AppColors.textDark
-                              : AppColors.textLight,
-                        ),
-                      ),
-                      if (isActive) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          _activeSubtitle(request),
-                          style: const TextStyle(
-                              fontSize: 12,
-                              color:    AppColors.primary,
-                              fontWeight: FontWeight.w500),
-                        ),
-                      ],
-                    ]),
+                          Text(
+                            label.replaceAll('\n', ' '),
+                            style: TextStyle(
+                              fontWeight: isActive
+                                  ? FontWeight.w800
+                                  : FontWeight.w600,
+                              fontSize: 14,
+                              color: isDone
+                                  ? AppColors.textDark
+                                  : AppColors.textLight,
+                            ),
+                          ),
+                          if (isActive) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              _activeSubtitle(request),
+                              style: const TextStyle(
+                                  fontSize:   12,
+                                  color:      AppColors.primary,
+                                  fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ]),
                   ),
                 ),
               ],
@@ -416,7 +416,7 @@ class _TechnicianCard extends StatelessWidget {
           width:  54,
           height: 54,
           decoration: BoxDecoration(
-            color:  AppColors.primary.withOpacity(0.08),
+            color: AppColors.primary.withOpacity(0.08),
             shape: BoxShape.circle,
           ),
           child: const Icon(Icons.support_agent_rounded,
@@ -426,25 +426,24 @@ class _TechnicianCard extends StatelessWidget {
         Expanded(child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-          const Text('Assigned Technician',
-              style: TextStyle(fontSize: 11,
-                  color: AppColors.textGrey, fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5)),
-          const SizedBox(height: 4),
-          Text(technician.name,
-              style: const TextStyle(fontWeight: FontWeight.w800,
-                  fontSize: 16, color: AppColors.textDark)),
-          if (technician.employeeId != null) ...[
-            const SizedBox(height: 2),
-            Text('ID: ${technician.employeeId}',
-                style: const TextStyle(
-                    fontSize: 12, color: AppColors.textGrey)),
-          ],
-        ])),
+              const Text('Assigned Technician',
+                  style: TextStyle(fontSize: 11,
+                      color: AppColors.textGrey, fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5)),
+              const SizedBox(height: 4),
+              Text(technician.name,
+                  style: const TextStyle(fontWeight: FontWeight.w800,
+                      fontSize: 16, color: AppColors.textDark)),
+              if (technician.employeeId != null) ...[
+                const SizedBox(height: 2),
+                Text('ID: ${technician.employeeId}',
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.textGrey)),
+              ],
+            ])),
         if (technician.phone != null)
           GestureDetector(
             onTap: () {
-              // Launch phone dialer
               // launchUrl(Uri(scheme: 'tel', path: technician.phone));
             },
             child: Container(
@@ -535,7 +534,7 @@ class _NotesCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// INFO CARD  (help strip at bottom)
+// INFO CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _InfoCard extends StatelessWidget {
@@ -546,18 +545,17 @@ class _InfoCard extends StatelessWidget {
       decoration: BoxDecoration(
         color:        AppColors.primary.withOpacity(0.05),
         borderRadius: BorderRadius.circular(14),
-        border:       Border.all(
-            color: AppColors.primary.withOpacity(0.15)),
+        border:       Border.all(color: AppColors.primary.withOpacity(0.15)),
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(Icons.info_outline_rounded,
-            color: AppColors.primary, size: 20),
+        Icon(Icons.info_outline_rounded, color: AppColors.primary, size: 20),
         const SizedBox(width: 12),
         const Expanded(
           child: Text(
-            'Our technician will call you before arriving. If you need to reschedule or have questions, please contact our support team.',
-            style: TextStyle(fontSize: 13,
-                color: AppColors.textGrey, height: 1.5),
+            'Our technician will call you before arriving. If you need to '
+                'reschedule or have questions, please contact our support team.',
+            style: TextStyle(
+                fontSize: 13, color: AppColors.textGrey, height: 1.5),
           ),
         ),
       ]),
@@ -600,24 +598,25 @@ class _InfoTile extends StatelessWidget {
         Container(
           width:  40,
           height: 40,
-          decoration: BoxDecoration(color: iconBg,
-              borderRadius: BorderRadius.circular(10)),
+          decoration: BoxDecoration(
+              color: iconBg, borderRadius: BorderRadius.circular(10)),
           child: Icon(icon, color: iconColor, size: 20),
         ),
         const SizedBox(width: 14),
         Expanded(child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-          Text(title,
-              style: const TextStyle(fontSize: 12,
-                  color:      AppColors.textGrey,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.3)),
-          const SizedBox(height: 5),
-          Text(body,
-              style: const TextStyle(fontSize: 14,
-                  color: AppColors.textDark, height: 1.4)),
-        ])),
+              Text(title,
+                  style: const TextStyle(
+                      fontSize:      12,
+                      color:         AppColors.textGrey,
+                      fontWeight:    FontWeight.w600,
+                      letterSpacing: 0.3)),
+              const SizedBox(height: 5),
+              Text(body,
+                  style: const TextStyle(
+                      fontSize: 14, color: AppColors.textDark, height: 1.4)),
+            ])),
       ]),
     );
   }
@@ -632,34 +631,34 @@ class _StatusChip extends StatelessWidget {
     switch (status) {
       case InstallationStatus.completed:
         return _ChipStyle(
-            bg:    inHeader ? Colors.white.withOpacity(0.2) : Colors.green.shade50,
-            fg:    inHeader ? Colors.white : Colors.green.shade700,
-            dot:   inHeader ? Colors.white : Colors.green.shade500);
+            bg:  inHeader ? Colors.white.withOpacity(0.2) : Colors.green.shade50,
+            fg:  inHeader ? Colors.white : Colors.green.shade700,
+            dot: inHeader ? Colors.white : Colors.green.shade500);
       case InstallationStatus.inProgress:
         return _ChipStyle(
-            bg:    inHeader ? Colors.white.withOpacity(0.2) : Colors.blue.shade50,
-            fg:    inHeader ? Colors.white : Colors.blue.shade700,
-            dot:   inHeader ? Colors.white : Colors.blue.shade400);
+            bg:  inHeader ? Colors.white.withOpacity(0.2) : Colors.blue.shade50,
+            fg:  inHeader ? Colors.white : Colors.blue.shade700,
+            dot: inHeader ? Colors.white : Colors.blue.shade400);
       case InstallationStatus.scheduled:
         return _ChipStyle(
-            bg:    inHeader ? Colors.white.withOpacity(0.2) : const Color(0xFFEDF2FF),
-            fg:    inHeader ? Colors.white : const Color(0xFF1A4BA0),
-            dot:   inHeader ? Colors.white : const Color(0xFF378ADD));
+            bg:  inHeader ? Colors.white.withOpacity(0.2) : const Color(0xFFEDF2FF),
+            fg:  inHeader ? Colors.white : const Color(0xFF1A4BA0),
+            dot: inHeader ? Colors.white : const Color(0xFF378ADD));
       case InstallationStatus.assigned:
         return _ChipStyle(
-            bg:    inHeader ? Colors.white.withOpacity(0.2) : Colors.purple.shade50,
-            fg:    inHeader ? Colors.white : Colors.purple.shade700,
-            dot:   inHeader ? Colors.white : Colors.purple.shade400);
+            bg:  inHeader ? Colors.white.withOpacity(0.2) : Colors.purple.shade50,
+            fg:  inHeader ? Colors.white : Colors.purple.shade700,
+            dot: inHeader ? Colors.white : Colors.purple.shade400);
       case InstallationStatus.cancelled:
         return _ChipStyle(
-            bg:    inHeader ? Colors.white.withOpacity(0.2) : Colors.red.shade50,
-            fg:    inHeader ? Colors.white : Colors.red.shade700,
-            dot:   inHeader ? Colors.white : Colors.red.shade400);
+            bg:  inHeader ? Colors.white.withOpacity(0.2) : Colors.red.shade50,
+            fg:  inHeader ? Colors.white : Colors.red.shade700,
+            dot: inHeader ? Colors.white : Colors.red.shade400);
       default: // pending
         return _ChipStyle(
-            bg:    inHeader ? Colors.white.withOpacity(0.2) : Colors.orange.shade50,
-            fg:    inHeader ? Colors.white : Colors.orange.shade700,
-            dot:   inHeader ? Colors.white : Colors.orange.shade400);
+            bg:  inHeader ? Colors.white.withOpacity(0.2) : Colors.orange.shade50,
+            fg:  inHeader ? Colors.white : Colors.orange.shade700,
+            dot: inHeader ? Colors.white : Colors.orange.shade400);
     }
   }
 
@@ -681,8 +680,8 @@ class _StatusChip extends StatelessWidget {
             decoration: BoxDecoration(color: s.dot, shape: BoxShape.circle)),
         const SizedBox(width: 5),
         Text(status.label,
-            style: TextStyle(color: s.fg, fontSize: 11,
-                fontWeight: FontWeight.w700)),
+            style: TextStyle(
+                color: s.fg, fontSize: 11, fontWeight: FontWeight.w700)),
       ]),
     );
   }
@@ -720,9 +719,11 @@ class _NoRequestView extends StatelessWidget {
                   color: AppColors.textDark)),
           const SizedBox(height: 10),
           const Text(
-            "You don't have any pending installation requests. Purchase a plan to get started.",
+            "You don't have any pending installation requests. "
+                "Purchase a plan to get started.",
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: AppColors.textGrey, height: 1.6),
+            style: TextStyle(
+                fontSize: 13, color: AppColors.textGrey, height: 1.6),
           ),
           const SizedBox(height: 28),
           ElevatedButton(
@@ -736,8 +737,8 @@ class _NoRequestView extends StatelessWidget {
               elevation: 0,
             ),
             child: const Text('Go Back',
-                style: TextStyle(color: Colors.white,
-                    fontWeight: FontWeight.w700)),
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w700)),
           ),
         ]),
       ),

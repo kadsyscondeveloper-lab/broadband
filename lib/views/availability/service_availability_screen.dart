@@ -1,10 +1,4 @@
 // lib/views/availability/service_availability_screen.dart
-//
-// Usage (standalone — no longer returns a bool gate):
-//   Navigator.push(
-//     context,
-//     MaterialPageRoute(builder: (_) => const ServiceAvailabilityScreen()),
-//   );
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -109,7 +103,7 @@ class _InquiryFormView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
 
-          // ── Hero ────────────────────────────────────────────────────────
+          // ── Hero ──────────────────────────────────────────────────────
           Center(
             child: Container(
               width:  100,
@@ -153,7 +147,7 @@ class _InquiryFormView extends StatelessWidget {
           ),
           const SizedBox(height: 32),
 
-          // ── Form card ────────────────────────────────────────────────────
+          // ── Form card ─────────────────────────────────────────────────
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -365,7 +359,8 @@ class _InquiryFormView extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SUCCESS VIEW
+// SUCCESS VIEW  — fix: SingleChildScrollView replaces the bare Padding so the
+// content can scroll on small screens instead of overflowing.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SuccessView extends StatelessWidget {
@@ -376,10 +371,10 @@ class _SuccessView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 48, 24, 40),
+    return SingleChildScrollView(                          // ← was bare Padding
+      padding: const EdgeInsets.fromLTRB(24, 40, 24, 40),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
 
           Container(
@@ -399,6 +394,7 @@ class _SuccessView extends StatelessWidget {
 
           const Text(
             "Inquiry Submitted! 🎉",
+            textAlign: TextAlign.center,
             style: TextStyle(
               fontSize:   24,
               fontWeight: FontWeight.w800,
@@ -422,6 +418,7 @@ class _SuccessView extends StatelessWidget {
           if (referenceId != null) ...[
             const SizedBox(height: 24),
             Container(
+              width: double.infinity,
               padding: const EdgeInsets.symmetric(
                 horizontal: 20,
                 vertical:   14,
@@ -461,10 +458,11 @@ class _SuccessView extends StatelessWidget {
             ),
           ],
 
-          const SizedBox(height: 32),
+          const SizedBox(height: 28),
 
           // What happens next
           Container(
+            width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color:        Colors.green.shade50,
@@ -504,7 +502,7 @@ class _SuccessView extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: 40),
+          const SizedBox(height: 32),
 
           SizedBox(
             width: double.infinity,
