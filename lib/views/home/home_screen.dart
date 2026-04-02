@@ -17,7 +17,7 @@ import '../../widgets/home_tutorial.dart';
 import '../bills/bills_screens.dart' hide MyBillsScreen;
 import '../about/about_screen.dart';
 import '../kyc/kyc_screen.dart';
-import '../recharge/wifi_plans_screen.dart';
+import '../../widgets/installation_status_card.dart';
 import '../availability/service_availability_screen.dart';
 import '../installation/installation_tracker_screen.dart';
 import '../refer/refer_earn_screen.dart';
@@ -330,7 +330,7 @@ class _HomeScreenState extends State<HomeScreen> {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(
-                      16, 8, 16, bottomNavHeight + 16),
+                      16, 0, 16, bottomNavHeight + 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -342,6 +342,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             kycStatus: vm.kycStatus, onTap: _openKyc),
                         const SizedBox(height: 8),
                       ],
+
+                      const InstallationStatusCard(),
+                      const SizedBox(height: 12),
 
                       // 2. Manage Services
                       _ManageServicesCard(

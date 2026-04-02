@@ -2,6 +2,7 @@
 
 import 'package:dio/dio.dart';
 import '../core/api_client.dart';
+import '../models/installation_status.dart';
 
 // ── Models ────────────────────────────────────────────────────────────────────
 
@@ -212,4 +213,23 @@ class InstallationService {
       return null;
     }
   }
+
+  /// Combined status: latest installation + any plan waiting for it.
+  /// Returns null when there is nothing to show (all done or not started).
+  Future<InstallStatusData?> getInstallationStatus() async {
+    try {
+      final res = await _api.get('/installations/status');
+      final data = res.data['data'] as Map<String, dynamic>? ?? {};
+
+      if (data['installation'] == null && data['pending_plan'] == null) {
+        return null;
+      }
+
+      return InstallStatusData.fromJson(data);
+    } catch (e) {
+      return null;
+    }
+  }
+
+
 }
