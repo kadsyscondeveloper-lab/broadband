@@ -289,8 +289,10 @@ class _BillCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       bill.isOverdue
-                          ? _fmt(bill.dueDate)
-                          : '${_fmt(bill.billingPeriodStart)} – ${_fmt(bill.billingPeriodEnd)}',
+                          ? (bill.dueDate != null ? _fmt(bill.dueDate!) : 'Overdue')
+                          : bill.billingPeriodStart != null && bill.billingPeriodEnd != null
+                          ? '${_fmt(bill.billingPeriodStart!)} – ${_fmt(bill.billingPeriodEnd!)}'
+                          : 'Pending Installation',
                       style: TextStyle(
                           fontSize: 13, fontWeight: FontWeight.w600,
                           color: bill.isOverdue ? AppColors.primary
@@ -640,14 +642,19 @@ class _BillDetailScreen extends StatelessWidget {
                     ]),
                     const SizedBox(height: 24),
                     _Timeline(items: [
-                      _TItem(label: 'BILLING PERIOD',
-                          value: '${_fmt(bill.billingPeriodStart)} – ${_fmt(bill.billingPeriodEnd)}',
-                          dotColor: Colors.grey.shade400, filled: false),
-                      _TItem(label: 'DUE DATE',
-                          value: _fmt(bill.dueDate),
-                          dotColor: AppColors.primary.withOpacity(0.7),
-                          filled: false,
-                          labelColor: AppColors.primary),
+                      _TItem(
+                        label: 'BILLING PERIOD',
+                        value: bill.billingPeriodStart != null && bill.billingPeriodEnd != null
+                            ? '${_fmt(bill.billingPeriodStart!)} – ${_fmt(bill.billingPeriodEnd!)}'
+                            : 'Activates after installation',
+                        dotColor: Colors.grey.shade400, filled: false,
+                      ),
+                      _TItem(
+                        label: 'DUE DATE',
+                        value: bill.dueDate != null ? _fmt(bill.dueDate!) : 'Pending',
+                        dotColor: AppColors.primary.withOpacity(0.7), filled: false,
+                        labelColor: AppColors.primary,
+                      ),
                       if (bill.paidAt != null)
                         _TItem(label: 'PAID ON',
                             value: _fmt(bill.paidAt!),

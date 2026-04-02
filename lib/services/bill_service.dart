@@ -5,31 +5,31 @@ class Bill {
   final int     id;
   final String  billNumber;
   final String? planName;
-  final DateTime billingPeriodStart;
-  final DateTime billingPeriodEnd;
+  final DateTime? billingPeriodStart;   // ← nullable
+  final DateTime? billingPeriodEnd;     // ← nullable
   final double  baseAmount;
   final double  gstAmount;
-  final double  discountAmount;   // ← NEW
+  final double  discountAmount;
   final double  totalAmount;
-  final DateTime dueDate;
-  final String  status;           // 'paid' | 'unpaid' | 'overdue'
+  final DateTime? dueDate;             // ← nullable
+  final String  status;
   final DateTime? paidAt;
   final DateTime createdAt;
   final String? orderRef;
   final String? paymentMethod;
-  final String? couponCode;       // ← NEW
+  final String? couponCode;      // ← NEW
 
   const Bill({
     required this.id,
     required this.billNumber,
     this.planName,
-    required this.billingPeriodStart,
-    required this.billingPeriodEnd,
+    this.billingPeriodStart,           // ← no longer required
+    this.billingPeriodEnd,
     required this.baseAmount,
     required this.gstAmount,
     this.discountAmount = 0,
     required this.totalAmount,
-    required this.dueDate,
+    this.dueDate,
     required this.status,
     this.paidAt,
     required this.createdAt,
@@ -49,18 +49,26 @@ class Bill {
     id:                   int.tryParse(j['id'].toString()) ?? 0,
     billNumber:           j['bill_number']           as String? ?? '',
     planName:             j['plan_name']             as String?,
-    billingPeriodStart:   DateTime.parse(j['billing_period_start'].toString()),
-    billingPeriodEnd:     DateTime.parse(j['billing_period_end'].toString()),
+    billingPeriodStart: j['billing_period_start'] != null
+        ? DateTime.tryParse(j['billing_period_start'].toString())
+        : null,
+
+    billingPeriodEnd: j['billing_period_end'] != null
+        ? DateTime.tryParse(j['billing_period_end'].toString())
+        : null,
+
+    dueDate: j['due_date'] != null
+        ? DateTime.tryParse(j['due_date'].toString())
+        : null,
     baseAmount:           (j['base_amount']    as num).toDouble(),
     gstAmount:            (j['gst_amount']     as num).toDouble(),
     discountAmount:       (j['discount_amount'] as num?)?.toDouble() ?? 0,
     totalAmount:          (j['total_amount']   as num).toDouble(),
-    dueDate:              DateTime.parse(j['due_date'].toString()),
     status:               j['status']               as String? ?? 'unpaid',
     paidAt:               j['paid_at'] != null
         ? DateTime.tryParse(j['paid_at'].toString())
         : null,
-    createdAt:            DateTime.parse(j['created_at'].toString()),
+    createdAt: DateTime.tryParse(j['created_at'].toString()) ?? DateTime.now(),
     orderRef:             j['order_ref']       as String?,
     paymentMethod:        j['payment_method']  as String?,
     couponCode:           j['coupon_code']     as String?,
