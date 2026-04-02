@@ -268,12 +268,12 @@ class _HeroSection extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
                       const Text(
                         'Welcome\nBack!',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 36,
+                          fontSize: 34,
                           fontWeight: FontWeight.w900,
                           height: 1.15,
                           letterSpacing: 0.5,
