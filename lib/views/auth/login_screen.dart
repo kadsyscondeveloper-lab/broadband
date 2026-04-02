@@ -38,7 +38,8 @@ class _LoginScreenState extends State<LoginScreen>
     _slideAnim = Tween<Offset>(
       begin: const Offset(0, 0.18),
       end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
+    ).animate(
+        CurvedAnimation(parent: _animController, curve: Curves.easeOut));
     _animController.forward();
   }
 
@@ -113,10 +114,10 @@ class _LoginScreenState extends State<LoginScreen>
           builder: (context, _) {
             return Column(
               children: [
-                // ── Red hero section ─────────────────────────────────────
+                // ── Red hero section ────────────────────────────────────
                 _HeroSection(),
 
-                // ── White card ───────────────────────────────────────────
+                // ── White card ──────────────────────────────────────────
                 Expanded(
                   child: FadeTransition(
                     opacity: _fadeAnim,
@@ -136,28 +137,29 @@ class _LoginScreenState extends State<LoginScreen>
                             left: 24,
                             right: 24,
                             top: 28,
-                            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+                            bottom:
+                            MediaQuery.of(context).viewInsets.bottom + 24,
                           ),
                           child: _vm.mode == AuthMode.password
                               ? _PasswordForm(
-                                  vm: _vm,
-                                  phoneController: _phoneController,
-                                  passwordController: _passwordController,
-                                  onLogin: _handleLogin,
-                                  onForgotPassword: _showForgotPassword,
-                                  onSignUp: _showSignUp,
-                                  onSwitchToOtp: () =>
-                                      _vm.switchMode(AuthMode.otp),
-                                )
+                            vm: _vm,
+                            phoneController: _phoneController,
+                            passwordController: _passwordController,
+                            onLogin: _handleLogin,
+                            onForgotPassword: _showForgotPassword,
+                            onSignUp: _showSignUp,
+                            onSwitchToOtp: () =>
+                                _vm.switchMode(AuthMode.otp),
+                          )
                               : _OtpForm(
-                                  vm: _vm,
-                                  phoneController: _phoneController,
-                                  otpController: _otpController,
-                                  onAction: _handleOtpAction,
-                                  onSignUp: _showSignUp,
-                                  onSwitchToPassword: () =>
-                                      _vm.switchMode(AuthMode.password),
-                                ),
+                            vm: _vm,
+                            phoneController: _phoneController,
+                            otpController: _otpController,
+                            onAction: _handleOtpAction,
+                            onSignUp: _showSignUp,
+                            onSwitchToPassword: () =>
+                                _vm.switchMode(AuthMode.password),
+                          ),
                         ),
                       ),
                     ),
@@ -172,7 +174,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 }
 
-// ── Hero section (red area with illustration) ────────────────────────────────
+// ── Hero section ─────────────────────────────────────────────────────────────
 
 class _HeroSection extends StatelessWidget {
   @override
@@ -220,7 +222,7 @@ class _HeroSection extends StatelessWidget {
             child: _CloudShape(width: 32, height: 16, opacity: 0.18),
           ),
 
-          // Content
+          // Content row
           Padding(
             padding: EdgeInsets.only(
               top: MediaQuery.of(context).padding.top + 20,
@@ -230,55 +232,59 @@ class _HeroSection extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Text side
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // "Hi" speech bubble
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(12),
-                          topRight: Radius.circular(12),
-                          bottomRight: Radius.circular(12),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+                // ── Text side — Expanded so it owns all space left of
+                //    the image, preventing sub-pixel overflow from the
+                //    natural Column width + Spacer + fixed Image(160)
+                //    exceeding the available row width on some devices.
+                Expanded(                                          // ← FIXED
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // "Hi" speech bubble
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 18, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(12),
+                            topRight: Radius.circular(12),
+                            bottomRight: Radius.circular(12),
                           ),
-                        ],
-                      ),
-                      child: const Text(
-                        'Hi',
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 22,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Text(
+                          'Hi',
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 22,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'Welcome\nBack!',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 36,
-                        fontWeight: FontWeight.w900,
-                        height: 1.15,
-                        letterSpacing: 0.5,
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Welcome\nBack!',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 36,
+                          fontWeight: FontWeight.w900,
+                          height: 1.15,
+                          letterSpacing: 0.5,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+                // Spacer removed — Expanded on the Column handles spacing
 
-                const Spacer(),
-
-                // Illustration (person on rocket)
+                // Illustration
                 Image.asset(
                   'assets/images/login_rocket.png',
                   width: 160,
@@ -311,8 +317,6 @@ class _CloudShape extends StatelessWidget {
     );
   }
 }
-
-
 
 // ── Password login form ───────────────────────────────────────────────────────
 
@@ -426,7 +430,8 @@ class _PasswordForm extends StatelessWidget {
             onTap: onSignUp,
             child: RichText(
               text: TextSpan(
-                style: const TextStyle(fontSize: 14, color: AppColors.textGrey),
+                style:
+                const TextStyle(fontSize: 14, color: AppColors.textGrey),
                 children: [
                   const TextSpan(text: "Don't have an account? "),
                   TextSpan(
@@ -557,7 +562,7 @@ class _OtpForm extends StatelessWidget {
           const SizedBox(height: 10),
           Container(
             padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: Colors.green.shade50,
               borderRadius: BorderRadius.circular(10),
@@ -599,7 +604,7 @@ class _OtpForm extends StatelessWidget {
             child: RichText(
               text: TextSpan(
                 style:
-                    const TextStyle(fontSize: 14, color: AppColors.textGrey),
+                const TextStyle(fontSize: 14, color: AppColors.textGrey),
                 children: [
                   const TextSpan(text: "Don't have an account? "),
                   TextSpan(
@@ -722,7 +727,8 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
           const SizedBox(height: 6),
           const Text(
             "Enter your registered mobile number and we'll send a reset link.",
-            style: TextStyle(fontSize: 13, color: AppColors.textGrey, height: 1.5),
+            style: TextStyle(
+                fontSize: 13, color: AppColors.textGrey, height: 1.5),
           ),
           const SizedBox(height: 24),
 
@@ -757,7 +763,8 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.check_circle, color: Colors.green.shade600, size: 28),
+                  Icon(Icons.check_circle,
+                      color: Colors.green.shade600, size: 28),
                   const SizedBox(width: 14),
                   const Expanded(
                     child: Text(
@@ -836,12 +843,12 @@ class _AuthTextField extends StatelessWidget {
         border: Border.all(color: AppColors.borderColor, width: 1.2),
         boxShadow: enabled
             ? [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ]
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ]
             : null,
       ),
       child: TextField(
@@ -859,12 +866,13 @@ class _AuthTextField extends StatelessWidget {
         ),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(color: AppColors.textLight, fontSize: 14),
+          hintStyle:
+          const TextStyle(color: AppColors.textLight, fontSize: 14),
           suffixIcon: suffixIcon,
           border: InputBorder.none,
           counterText: '',
           contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         ),
       ),
     );
@@ -892,28 +900,29 @@ class _PrimaryButton extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           disabledBackgroundColor: AppColors.primary.withOpacity(0.6),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           elevation: 2,
           shadowColor: AppColors.primary.withOpacity(0.35),
         ),
         child: isLoading
             ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2.5,
-                ),
-              )
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(
+            color: Colors.white,
+            strokeWidth: 2.5,
+          ),
+        )
             : Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 16,
-                  letterSpacing: 0.3,
-                ),
-              ),
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+            fontSize: 16,
+            letterSpacing: 0.3,
+          ),
+        ),
       ),
     );
   }
