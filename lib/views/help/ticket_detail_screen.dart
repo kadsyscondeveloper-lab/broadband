@@ -3,9 +3,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../theme/app_theme.dart';
 import '../../viewmodels/help_viewmodel.dart';
 import '../../services/ticket_service.dart';
+import '../../services/ticket_job_service.dart';
+import '../../models/ticket_job_model.dart';
+import 'ticket_tracking_screen.dart';
 import 'ticket_chat_screen.dart';
 
 class TicketDetailScreen extends StatefulWidget {
@@ -23,10 +27,25 @@ class TicketDetailScreen extends StatefulWidget {
 }
 
 class _TicketDetailScreenState extends State<TicketDetailScreen> {
+  TicketJobStatus? _jobStatus;
+  bool _loadingJob = false;
+
   @override
   void initState() {
     super.initState();
-    widget.viewModel.loadTicketDetail(widget.ticketId);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.viewModel.loadTicketDetail(widget.ticketId);
+      _loadJobStatus();
+    });
+  }
+
+  Future<void> _loadJobStatus() async {
+    setState(() => _loadingJob = true);
+    try {
+      _jobStatus = await TicketJobService().getJobStatus(widget.ticketId);
+    } catch (_) {}
+    if (mounted) setState(() => _loadingJob = false);
   }
 
   String _fmt(DateTime dt) {
@@ -54,6 +73,19 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           ticketId:     ticket.id,
           ticketNumber: ticket.ticketNumber,
           subject:      ticket.subject,
+        ),
+      ),
+    );
+  }
+
+
+  void _openTracking(SupportTicket ticket) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TicketTrackingScreen(
+          ticketId: ticket.id,
+          subject:  ticket.subject,
         ),
       ),
     );
@@ -463,6 +495,167 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                         ),
                         const SizedBox(height: 8),
                       ],
+                      if (_loadingJob) ...[
+                        const SizedBox(height: 8),
+                        const Center(
+                          child: SizedBox(
+                            height: 20, width: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: AppColors.primary),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                      ] else if (_jobStatus != null && _jobStatus!.requiresTechnician) ...[
+                        // ── Technician info card ──────────────────────────
+                        _Card(
+                          child: Column(children: [
+                            Row(children: [
+                              Container(
+                                width: 34, height: 34,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withOpacity(0.10),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(Icons.engineering_rounded,
+                                    color: AppColors.primary, size: 18),
+                              ),
+                              const SizedBox(width: 12),
+                              const Text('TECHNICIAN',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textGrey,
+                                    letterSpacing: 0.8,
+                                  )),
+                            ]),
+                            const SizedBox(height: 12),
+                            Row(children: [
+                              const SizedBox(width: 46),
+                              const Text('Status',
+                                  style: TextStyle(
+                                      fontSize: 13, color: AppColors.textGrey)),
+                              const Spacer(),
+                              _TechStatusChip(_jobStatus!.techJobStatus),
+                            ]),
+                            if (_jobStatus!.technician != null) ...[
+                              const Padding(
+                                padding: EdgeInsets.only(left: 46),
+                                child: Divider(height: 18, color: Color(0xFFEEEEF4)),
+                              ),
+                              Row(children: [
+                                const SizedBox(width: 46),
+                                const Text('Assigned To',
+                                    style: TextStyle(
+                                        fontSize: 13, color: AppColors.textGrey)),
+                                const Spacer(),
+                                Text(_jobStatus!.technician!.name,
+                                    style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.textDark)),
+                              ]),
+                              if (_jobStatus!.technician!.phone.isNotEmpty) ...[
+                                const Padding(
+                                  padding: EdgeInsets.only(left: 46),
+                                  child: Divider(height: 18, color: Color(0xFFEEEEF4)),
+                                ),
+                                Row(children: [
+                                  const SizedBox(width: 46),
+                                  const Text('Phone',
+                                      style: TextStyle(
+                                          fontSize: 13, color: AppColors.textGrey)),
+                                  const Spacer(),
+                                  GestureDetector(
+                                    onTap: () async {
+                                      final uri = Uri.parse(
+                                          'tel:\${_jobStatus!.technician!.phone}');
+                                      if (await canLaunchUrl(uri)) launchUrl(uri);
+                                    },
+                                    child: Row(mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(_jobStatus!.technician!.phone,
+                                              style: const TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: AppColors.info)),
+                                          const SizedBox(width: 4),
+                                          const Icon(Icons.phone_rounded,
+                                              size: 14, color: AppColors.info),
+                                        ]),
+                                  ),
+                                ]),
+                              ],
+                            ],
+                          ]),
+                        ),
+                        const SizedBox(height: 12),
+                        // ── Track button (only when actively assigned) ────
+                        if (_jobStatus!.isAssigned)
+                          GestureDetector(
+                            onTap: () => _openTracking(ticket),
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF1565C0), Color(0xFF1976D2)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF1565C0).withOpacity(0.35),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Row(children: [
+                                Container(
+                                  width: 44, height: 44,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.18),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.location_on_rounded,
+                                      color: Colors.white, size: 22),
+                                ),
+                                const SizedBox(width: 14),
+                                const Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Track Technician',
+                                          style: TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 15)),
+                                      SizedBox(height: 2),
+                                      Text('See live location on map',
+                                          style: TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 12)),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: const Text('Track',
+                                      style: TextStyle(
+                                          color: Color(0xFF1565C0),
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13)),
+                                ),
+                              ]),
+                            ),
+                          ),
+                      ],
 
                       // ── Live chat CTA ────────────────────────────────
                       if (chatActive)
@@ -862,4 +1055,41 @@ class _CatStyle {
     required this.color,
     required this.bg,
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TECH STATUS CHIP
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _TechStatusChip extends StatelessWidget {
+  final String? status;
+  const _TechStatusChip(this.status);
+
+  @override
+  Widget build(BuildContext context) {
+    Color bg, fg;
+    String label;
+    switch (status) {
+      case 'assigned':
+        bg = const Color(0xFFEAF4FC); fg = const Color(0xFF1A5276);
+        label = 'Technician On The Way'; break;
+      case 'open':
+        bg = const Color(0xFFFEF3E7); fg = const Color(0xFFD35400);
+        label = 'Finding Technician'; break;
+      case 'completed':
+        bg = const Color(0xFFE9F7EF); fg = const Color(0xFF1E8449);
+        label = 'Completed'; break;
+      default:
+        bg = Colors.grey.shade100; fg = Colors.grey.shade600;
+        label = status ?? 'Unknown';
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+          color: bg, borderRadius: BorderRadius.circular(20)),
+      child: Text(label,
+          style: TextStyle(
+              fontSize: 12, fontWeight: FontWeight.w700, color: fg)),
+    );
+  }
 }

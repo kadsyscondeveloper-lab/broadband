@@ -23,6 +23,7 @@ class TicketReply {
     this.attachmentUrl,
     this.attachmentData,
     this.attachmentMime,
+
     required this.createdAt,
   });
 
@@ -61,6 +62,7 @@ class SupportTicket {
   final DateTime   createdAt;
   final DateTime   updatedAt;
   final List<TicketReply> replies;
+  final String? techJobStatus;
 
   const SupportTicket({
     required this.id,
@@ -74,6 +76,7 @@ class SupportTicket {
     required this.createdAt,
     required this.updatedAt,
     this.replies = const [],
+    this.techJobStatus,
   });
 
   factory SupportTicket.fromJson(Map<String, dynamic> j) => SupportTicket(
@@ -82,6 +85,7 @@ class SupportTicket {
     category:     j['category']      as String? ?? '',
     subject:      j['subject']       as String? ?? '',
     description:  j['description']   as String? ?? '',
+    techJobStatus: j['tech_job_status'] as String?,
     status:       j['status']        as String? ?? 'open',
     priority:     j['priority']      as String? ?? 'medium',
     resolvedAt:   j['resolved_at'] != null
@@ -99,6 +103,7 @@ class SupportTicket {
   bool get isResolved   =>
       status == 'resolved' || status == 'closed' ||
           status == 'Resolved'  || status == 'Closed';
+  bool get hasTechnicianAssigned => techJobStatus == 'assigned';
 }
 
 class TicketResult {

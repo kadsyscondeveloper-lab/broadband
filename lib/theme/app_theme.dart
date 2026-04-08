@@ -14,6 +14,7 @@ class AppColors {
   static const Color reviewBg     = Color(0xFFFFF8E7);
   static const Color reviewBorder = Color(0xFFF5C842);
   static const Color walletBg     = Color(0xFF8B0000);
+  static const Color info = Color(0xFF007AFF);
 }
 
 class AppTheme {
