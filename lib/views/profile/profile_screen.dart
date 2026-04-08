@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../services/location_service.dart';   // ← NEW
 import '../../theme/app_theme.dart';
 import '../../viewmodels/profile_viewmodel.dart';
 
@@ -27,6 +28,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late final TextEditingController _pinCodeController;
 
   bool _controllersInitialized = false;
+  bool _locationLoading = false;   // ← NEW
 
   @override
   void initState() {
@@ -37,13 +39,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _addressController = TextEditingController();
     _pinCodeController = TextEditingController();
 
-    // Load profile then populate controllers
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await widget.viewModel.loadProfile();
       _populateControllers();
     });
 
-    // Listen for image upload errors and show them as snackbars
     widget.viewModel.addListener(_onViewModelChange);
   }
 
@@ -81,7 +81,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
-  // ── Image source picker bottom sheet ──────────────────────────────────────
+  // ── Auto-fill from GPS ────────────────────────────────────────────────────
+
+  Future<void> _autoFillLocation() async {
+    setState(() => _locationLoading = true);
+
+    try {
+      final result = await LocationService.fetchCurrentLocation();
+
+      // Update text controllers
+      if (result.address.isNotEmpty) _addressController.text = result.address;
+      if (result.pinCode.isNotEmpty) _pinCodeController.text = result.pinCode;
+
+      // Push into view-model (handles state/city dropdowns)
+      if (result.state.isNotEmpty) widget.viewModel.updateState(result.state);
+      if (result.city.isNotEmpty)  widget.viewModel.updateCity(result.city);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
+                SizedBox(width: 8),
+                Text('Location auto-filled successfully!'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _locationLoading = false);
+    }
+  }
+
+  // ── Image source picker ───────────────────────────────────────────────────
 
   void _showImageSourcePicker() {
     showModalBottomSheet(
@@ -96,7 +142,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Handle bar
               Container(
                 width: 40, height: 4,
                 decoration: BoxDecoration(
@@ -159,7 +204,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ── Avatar builder ────────────────────────────────────────────────────────
+  // ── Avatar ────────────────────────────────────────────────────────────────
 
   Widget _buildAvatar(ProfileViewModel vm) {
     Widget image;
@@ -184,7 +229,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final imgUrl = vm.profileImageUrl;
       if (imgUrl != null && imgUrl.isNotEmpty) {
         if (imgUrl.startsWith('data:')) {
-          final base64Part = imgUrl.contains(',') ? imgUrl.split(',').last : imgUrl;
+          final base64Part =
+              imgUrl.contains(',') ? imgUrl.split(',').last : imgUrl;
           image = Image.memory(
             base64Decode(base64Part),
             fit: BoxFit.cover,
@@ -196,8 +242,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             fit: BoxFit.cover,
             loadingBuilder: (_, child, progress) => progress == null
                 ? child
-                : const Center(child: CircularProgressIndicator(
-                color: AppColors.primary, strokeWidth: 2)),
+                : const Center(
+                    child: CircularProgressIndicator(
+                        color: AppColors.primary, strokeWidth: 2)),
             errorBuilder: (_, __, ___) => _defaultAvatarContent(vm),
           );
         }
@@ -209,8 +256,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Stack(
       children: [
         Container(
-          width: 100,
-          height: 100,
+          width: 100, height: 100,
           decoration: const BoxDecoration(
             color: Colors.black,
             shape: BoxShape.circle,
@@ -219,13 +265,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: image,
         ),
         Positioned(
-          bottom: 0,
-          right: 0,
+          bottom: 0, right: 0,
           child: GestureDetector(
             onTap: vm.imageUploading ? null : _showImageSourcePicker,
             child: Container(
-              width: 32,
-              height: 32,
+              width: 32, height: 32,
               decoration: BoxDecoration(
                 color: vm.imageUploading
                     ? AppColors.primary.withOpacity(0.5)
@@ -240,7 +284,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ],
               ),
-              child: const Icon(Icons.camera_alt, size: 15, color: Colors.white),
+              child: const Icon(Icons.camera_alt,
+                  size: 15, color: Colors.white),
             ),
           ),
         ),
@@ -250,7 +295,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _defaultAvatarContent(ProfileViewModel vm) {
     final initials = vm.name.trim().isNotEmpty
-        ? vm.name.trim().split(' ').map((w) => w.isNotEmpty ? w[0] : '').take(2).join().toUpperCase()
+        ? vm.name
+            .trim()
+            .split(' ')
+            .map((w) => w.isNotEmpty ? w[0] : '')
+            .take(2)
+            .join()
+            .toUpperCase()
         : '';
 
     if (initials.isNotEmpty) {
@@ -332,14 +383,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         builder: (context, _) {
           final vm = widget.viewModel;
 
-          // Loading state
           if (vm.isLoading) {
             return const Center(
               child: CircularProgressIndicator(color: AppColors.primary),
             );
           }
 
-          // Error state
           if (vm.loadError != null && vm.profile == null) {
             return Center(
               child: Padding(
@@ -372,12 +421,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             );
           }
 
-          // Populate controllers once after load
           if (!_controllersInitialized && vm.profile != null) {
             _populateControllers();
           }
 
-          // ── Single scrollable body with button at the bottom ─────────
           return SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             child: Column(
@@ -393,9 +440,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ? 'Uploading photo…'
                         : 'Tap the camera icon to change photo',
                     style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textGrey,
-                    ),
+                        fontSize: 12, color: AppColors.textGrey),
                   ),
                 ),
                 const SizedBox(height: 28),
@@ -423,18 +468,58 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // ── Primary Address section ─────────────────────────────
-                const Text(
-                  'Primary Address',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primary,
-                  ),
+                // ── Primary Address header + GPS button ─────────────────
+                Row(
+                  children: [
+                    const Text(
+                      'Primary Address',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    const Spacer(),
+                    // ── USE MY LOCATION BUTTON ──────────────────────────
+                    _locationLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.primary,
+                            ),
+                          )
+                        : TextButton.icon(
+                            onPressed: _autoFillLocation,
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppColors.primary,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 6),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(
+                                  color: AppColors.primary.withOpacity(0.4),
+                                ),
+                              ),
+                              backgroundColor:
+                                  AppColors.primary.withOpacity(0.06),
+                            ),
+                            icon: const Icon(Icons.my_location_rounded,
+                                size: 15),
+                            label: const Text(
+                              'Use My Location',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                  ],
                 ),
                 const SizedBox(height: 16),
 
-                // State dropdown
+                // ── State dropdown ──────────────────────────────────────
                 const _FieldLabel(text: 'State'),
                 const SizedBox(height: 8),
                 _DropdownField(
@@ -446,7 +531,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // City dropdown
+                // ── City dropdown ───────────────────────────────────────
                 const _FieldLabel(text: 'City'),
                 const SizedBox(height: 8),
                 _DropdownField(
@@ -458,21 +543,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // House No
+                // ── House No ────────────────────────────────────────────
                 _ProfileField(
                   label: 'House/Flat No.',
                   controller: _houseNoController,
                 ),
                 const SizedBox(height: 16),
 
-                // Address
+                // ── Address ─────────────────────────────────────────────
                 _ProfileField(
                   label: 'Address',
                   controller: _addressController,
                 ),
                 const SizedBox(height: 16),
 
-                // PIN Code
+                // ── PIN Code ────────────────────────────────────────────
                 _ProfileField(
                   label: 'PIN Code',
                   controller: _pinCodeController,
@@ -487,7 +572,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onPressed: vm.isUpdating ? null : _update,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
-                      disabledBackgroundColor: AppColors.primary.withOpacity(0.6),
+                      disabledBackgroundColor:
+                          AppColors.primary.withOpacity(0.6),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -496,23 +582,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     child: vm.isUpdating
                         ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2),
-                    )
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2),
+                          )
                         : const Text(
-                      'Update Profile',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                      ),
-                    ),
+                            'Update Profile',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                            ),
+                          ),
                   ),
                 ),
 
-                // Extra bottom padding so button clears the nav bar
                 SizedBox(height: MediaQuery.of(context).padding.bottom + 80),
               ],
             ),
@@ -531,13 +616,13 @@ class _FieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Text(
-    text,
-    style: const TextStyle(
-      fontSize: 13,
-      fontWeight: FontWeight.w500,
-      color: AppColors.textGrey,
-    ),
-  );
+        text,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: AppColors.textGrey,
+        ),
+      );
 }
 
 class _ProfileField extends StatelessWidget {
@@ -585,7 +670,7 @@ class _ProfileField extends StatelessWidget {
             decoration: const InputDecoration(
               border: InputBorder.none,
               contentPadding:
-              EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             ),
           ),
         ),
@@ -611,7 +696,6 @@ class _DropdownField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // null when list is empty or value isn't in the list yet
     final effectiveValue = items.contains(value) ? value : null;
 
     return Container(
@@ -624,57 +708,44 @@ class _DropdownField extends StatelessWidget {
       child: DropdownButtonHideUnderline(
         child: isLoading
             ? const SizedBox(
-          height: 48,
-          child: Row(
-            children: [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: AppColors.primary,
+                height: 48,
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 16, height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: AppColors.primary),
+                    ),
+                    SizedBox(width: 12),
+                    Text('Loading…',
+                        style: TextStyle(
+                            fontSize: 15, color: AppColors.textGrey)),
+                  ],
                 ),
-              ),
-              SizedBox(width: 12),
-              Text(
-                'Loading...',
-                style: TextStyle(
-                  fontSize: 15,
-                  color: AppColors.textGrey,
-                ),
-              ),
-            ],
-          ),
-        )
+              )
             : DropdownButton<String>(
-          value: effectiveValue,
-          isExpanded: true,
-          hint: Text(
-            hint,
-            style: const TextStyle(
-              fontSize: 15,
-              color: AppColors.textGrey,
-            ),
-          ),
-          icon: const Icon(Icons.keyboard_arrow_down,
-              color: AppColors.textGrey),
-          items: items
-              .map((item) => DropdownMenuItem(
-            value: item,
-            child: Text(
-              item,
-              style: const TextStyle(
-                fontSize: 15,
-                color: AppColors.textDark,
-                fontWeight: FontWeight.w500,
+                value: effectiveValue,
+                isExpanded: true,
+                hint: Text(hint,
+                    style: const TextStyle(
+                        fontSize: 15, color: AppColors.textGrey)),
+                icon: const Icon(Icons.keyboard_arrow_down,
+                    color: AppColors.textGrey),
+                items: items
+                    .map((item) => DropdownMenuItem(
+                          value: item,
+                          child: Text(item,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                color: AppColors.textDark,
+                                fontWeight: FontWeight.w500,
+                              )),
+                        ))
+                    .toList(),
+                onChanged: items.isEmpty
+                    ? null
+                    : (v) => v != null ? onChanged(v) : null,
               ),
-            ),
-          ))
-              .toList(),
-          onChanged: items.isEmpty
-              ? null
-              : (v) => v != null ? onChanged(v) : null,
-        ),
       ),
     );
   }
