@@ -14,8 +14,11 @@ dependencies:
   socket_io_client: ^2.0.3+1
   google_maps_flutter: ^2.6.0
 
-  geolocator: ^12.0.0
+  geolocator: ^13.0.0
   http: ^1.2.0
+  flutter_map: ^7.0.2
+  latlong2:    ^0.9.1
+
 
   #icons
   hugeicons: ^1.1.5
