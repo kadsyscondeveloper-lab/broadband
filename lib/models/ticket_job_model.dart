@@ -47,6 +47,7 @@ class TicketJobStatus {
   final DateTime?          jobCompletedAt;
   final TechnicianInfo?    technician;
   final TechnicianLocation? location;
+  final String? customerAddress;
 
   const TicketJobStatus({
     required this.requiresTechnician,
@@ -56,6 +57,7 @@ class TicketJobStatus {
     this.jobCompletedAt,
     this.technician,
     this.location,
+    this.customerAddress,
   });
 
   bool get isOpen       => techJobStatus == 'open';
@@ -64,7 +66,7 @@ class TicketJobStatus {
 
   factory TicketJobStatus.fromJson(Map<String, dynamic> j) => TicketJobStatus(
     requiresTechnician: j['requires_technician'] as bool? ?? false,
-    techJobStatus:      j['tech_job_status'] as String?,
+    techJobStatus: j['tech_job_status'] as String?,
     jobOpenedAt: j['job_opened_at'] != null
         ? DateTime.tryParse(j['job_opened_at'].toString())?.toLocal()
         : null,
@@ -75,10 +77,29 @@ class TicketJobStatus {
         ? DateTime.tryParse(j['job_completed_at'].toString())?.toLocal()
         : null,
     technician: j['technician'] != null
-        ? TechnicianInfo.fromJson(j['technician'] as Map<String, dynamic>)
+        ? TechnicianInfo.fromJson(j['technician'])
         : null,
     location: j['location'] != null
-        ? TechnicianLocation.fromJson(j['location'] as Map<String, dynamic>)
+        ? TechnicianLocation.fromJson(j['location'])
+        : null,
+
+    customerAddress: j['address'] != null
+        ? _buildAddress(j['address'] as Map<String, dynamic>)
         : null,
   );
+
+  static String? _buildAddress(Map<String, dynamic>? a) {
+    if (a == null) return null;
+
+    final parts = [
+      a['house_no'],
+      a['address'],
+      a['city'],
+      a['state'],
+      a['pin_code'],
+      'India'
+    ].whereType<String>().where((e) => e.isNotEmpty).toList();
+
+    return parts.isEmpty ? null : parts.join(', ');
+  }
 }

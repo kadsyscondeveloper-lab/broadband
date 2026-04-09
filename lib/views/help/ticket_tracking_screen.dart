@@ -64,7 +64,7 @@ class _TicketTrackingScreenState extends State<TicketTrackingScreen> {
     super.initState();
     _vm.addListener(_onVmChange);
     _vm.load(widget.ticketId);
-    _fetchMyLocation();
+
   }
 
   @override
@@ -75,43 +75,63 @@ class _TicketTrackingScreenState extends State<TicketTrackingScreen> {
     super.dispose();
   }
 
-  // ── Location ──────────────────────────────────────────────────────────────
 
-  Future<void> _fetchMyLocation() async {
+  Future<void> _geocodeJobAddress(String address) async {
     try {
-      LocationPermission perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        perm = await Geolocator.requestPermission();
-      }
-      if (perm == LocationPermission.deniedForever) return;
-
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 10),
-        ),
+      final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/search'
+            '?q=${Uri.encodeComponent(address)}&format=json&limit=1',
       );
-      if (mounted) {
-        setState(() => _myLocation = LatLng(pos.latitude, pos.longitude));
-        _maybeRefreshRoute();
+
+      final res = await http.get(uri, headers: {
+        'User-Agent': 'com.yourapp.app',
+      });
+
+      if (res.statusCode == 200) {
+        final list = jsonDecode(res.body) as List;
+
+        if (list.isNotEmpty) {
+          final lat = double.tryParse(list[0]['lat']);
+          final lng = double.tryParse(list[0]['lon']);
+
+          if (lat != null && lng != null && mounted) {
+            setState(() {
+              _myLocation = LatLng(lat, lng);
+            });
+
+            _maybeRefreshRoute();
+          }
+        }
       }
-    } catch (_) {}
+    } catch (e) {
+      print("Geocode error: $e");
+    }
   }
+
 
   // ── ViewModel listener ────────────────────────────────────────────────────
 
   void _onVmChange() {
+    final job = _vm.jobStatus;
+
+    // ✅ SET JOB LOCATION (BLUE DOT)
+    if (_myLocation == null) {
+      final addr = job?.customerAddress;
+      if (addr != null) {
+        _geocodeJobAddress(addr);
+      }
+    }
+
+    // existing technician logic
     final loc = _vm.liveLocation;
     if (loc == null) return;
 
     final techLatLng = LatLng(loc.lat, loc.lng);
 
-    // Animate camera to keep technician centred (only after map is ready)
     if (_mapReady) {
       _mapCtrl.move(techLatLng, _mapCtrl.camera.zoom);
     }
 
-    // Re-fetch route only if tech has moved > ~50 m
     final prev = _lastRoutedTechLoc;
     if (prev == null ||
         const Distance().as(LengthUnit.Meter, prev, techLatLng) > 50) {
