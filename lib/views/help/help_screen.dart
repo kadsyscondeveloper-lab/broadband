@@ -6,6 +6,7 @@ import '../../theme/app_theme.dart';
 import '../../viewmodels/help_viewmodel.dart';
 import '../../services/ticket_service.dart';
 import 'create_ticket_screen.dart';
+import 'ai_support_screen.dart';
 import 'ticket_detail_screen.dart';
 
 class HelpScreen extends StatefulWidget {
@@ -42,7 +43,7 @@ class _HelpScreenState extends State<HelpScreen> {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => CreateTicketScreen(viewModel: widget.viewModel),
+        builder: (_) => const AiSupportScreen(),
       ),
     );
     if (mounted) widget.viewModel.loadTickets();
