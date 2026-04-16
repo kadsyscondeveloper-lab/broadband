@@ -370,7 +370,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         onPageChanged: vm.onPromoBannerPageChanged,
                         viewModel: vm,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 30),
 
                       // 5. Features / Refer & Earn
                       _FeaturesSection(
@@ -913,7 +913,7 @@ class _PromoBannerState extends State<_PromoBanner> {
   Widget build(BuildContext context) {
     if (_loading) {
       return Container(
-        height: 176,
+        height: 300,
         decoration: BoxDecoration(color: AppColors.cardBg,
             borderRadius: BorderRadius.circular(16),
             boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
