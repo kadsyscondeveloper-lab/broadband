@@ -11,11 +11,13 @@ import '../../viewmodels/profile_viewmodel.dart';
 class ProfileScreen extends StatefulWidget {
   final ProfileViewModel viewModel;
   final VoidCallback? onNavigateToHome;
+  final VoidCallback? onLogout;
 
   const ProfileScreen({
     super.key,
     required this.viewModel,
     this.onNavigateToHome,
+    this.onLogout,
   });
 
   @override
@@ -606,8 +608,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                 _DeleteAccountButton(
                   onDeleted: () {
-                    Navigator.of(context)
-                        .pushNamedAndRemoveUntil('/login', (_) => false);
+                    widget.onLogout?.call();
                   },
                 ),
 

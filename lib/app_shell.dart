@@ -126,8 +126,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         return HelpScreen(viewModel: _helpVM);
       case 4:
         return ProfileScreen(
-          viewModel:        _profileVM,
+          viewModel: _profileVM,
           onNavigateToHome: _navigateToHome,
+          onLogout: widget.onLogout,
         );
       default:
         return HomeScreen(viewModel: _homeVM);

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'contact_support_screen.dart';
 import 'package:speedonet/views/auth/signup_screen.dart';
 import '../../theme/app_theme.dart';
 import '../../viewmodels/auth_viewmodel.dart';
@@ -97,6 +98,20 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
+
+  void _showContactSupport() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ContactSupportScreen(
+          prefillPhone: _phoneController.text.trim().isNotEmpty
+              ? _phoneController.text.trim()
+              : null,
+        ),
+      ),
+    );
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
@@ -148,8 +163,8 @@ class _LoginScreenState extends State<LoginScreen>
                             onLogin: _handleLogin,
                             onForgotPassword: _showForgotPassword,
                             onSignUp: _showSignUp,
-                            onSwitchToOtp: () =>
-                                _vm.switchMode(AuthMode.otp),
+                            onSwitchToOtp: () => _vm.switchMode(AuthMode.otp),
+                            onContactSupport: _showContactSupport,
                           )
                               : _OtpForm(
                             vm: _vm,
@@ -157,8 +172,8 @@ class _LoginScreenState extends State<LoginScreen>
                             otpController: _otpController,
                             onAction: _handleOtpAction,
                             onSignUp: _showSignUp,
-                            onSwitchToPassword: () =>
-                                _vm.switchMode(AuthMode.password),
+                            onSwitchToPassword: () => _vm.switchMode(AuthMode.password),
+                            onContactSupport: _showContactSupport,
                           ),
                         ),
                       ),
@@ -328,6 +343,7 @@ class _PasswordForm extends StatelessWidget {
   final VoidCallback onForgotPassword;
   final VoidCallback onSignUp;
   final VoidCallback onSwitchToOtp;
+  final VoidCallback onContactSupport;
 
   const _PasswordForm({
     required this.vm,
@@ -337,6 +353,7 @@ class _PasswordForm extends StatelessWidget {
     required this.onForgotPassword,
     required this.onSignUp,
     required this.onSwitchToOtp,
+    required this.onContactSupport,
   });
 
   @override
@@ -467,6 +484,11 @@ class _PasswordForm extends StatelessWidget {
             ),
           ),
         ),
+
+        const SizedBox(height: 8),
+        const _Divider(label: 'NEED HELP?'),
+        const SizedBox(height: 16),
+        _ContactSupportButton(onTap: onContactSupport),
         const SizedBox(height: 8),
       ],
     );
@@ -482,6 +504,7 @@ class _OtpForm extends StatelessWidget {
   final VoidCallback onAction;
   final VoidCallback onSignUp;
   final VoidCallback onSwitchToPassword;
+  final VoidCallback onContactSupport;
 
   const _OtpForm({
     required this.vm,
@@ -490,6 +513,7 @@ class _OtpForm extends StatelessWidget {
     required this.onAction,
     required this.onSignUp,
     required this.onSwitchToPassword,
+    required this.onContactSupport,
   });
 
   @override
@@ -575,7 +599,7 @@ class _OtpForm extends StatelessWidget {
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
-                    'OTP sent! Use 123456 for demo.',
+                    'OTP sent! Use 111116 for demo.',
                     style: TextStyle(
                         fontSize: 13,
                         color: Colors.green,
@@ -640,6 +664,11 @@ class _OtpForm extends StatelessWidget {
             ),
           ),
         ),
+
+        const SizedBox(height: 8),
+        const _Divider(label: 'NEED HELP?'),
+        const SizedBox(height: 16),
+        _ContactSupportButton(onTap: onContactSupport),
         const SizedBox(height: 8),
       ],
     );
@@ -983,6 +1012,49 @@ class _Divider extends StatelessWidget {
         ),
         Expanded(child: Divider(color: AppColors.borderColor, height: 1)),
       ],
+    );
+  }
+}
+
+class _ContactSupportButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _ContactSupportButton({
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.orange.shade50,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.orange.shade200),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.support_agent_rounded,
+              color: Colors.orange.shade700,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Contact Support',
+              style: TextStyle(
+                color: Colors.orange.shade800,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
