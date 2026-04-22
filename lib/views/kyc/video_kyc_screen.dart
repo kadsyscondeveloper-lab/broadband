@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../theme/app_theme.dart';
 import '../../services/video_kyc_service.dart';
+import 'video_call_screen.dart';
 
 class VideoKycScreen extends StatefulWidget {
   /// Pass the doc KYC status so we can show the right gate message.
@@ -111,6 +112,43 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
     }
   }
 
+
+  Future<void> _joinCall() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    final result = await _service.getCallToken();
+
+    if (!mounted) return;
+
+    setState(() => _isLoading = false);
+
+    if (!result.success) {
+      setState(() => _error = result.error);
+      return;
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => VideoCallScreen(
+          credentials: VideoCallCredentials(
+            appId: result.appId!,
+            channel: result.channel!,
+            token: result.token!,
+            uid: result.uid!,
+            requestId: result.requestId!,
+          ),
+        ),
+        fullscreenDialog: true,
+      ),
+    );
+
+    _load();
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
@@ -138,36 +176,24 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
   }
 
   Widget _buildBody() {
-    // Gate: require doc KYC to be at least submitted first
     final docStatus = widget.docKycStatus;
+
     if (docStatus == 'not_submitted') {
       return _GateBanner(
         icon: Icons.lock_outline_rounded,
         color: Colors.orange,
         title: 'Complete Document KYC First',
-        message: 'Please upload your address proof and ID proof documents before scheduling a video KYC call.',
+        message:
+        'Please upload your address proof and ID proof documents before scheduling a video KYC call.',
         buttonLabel: 'Go to Documents',
         onTap: () => Navigator.pop(context),
       );
     }
 
-    // Completed state
     if (_existing?.isCompleted == true) {
       return _CompletedView(request: _existing!);
     }
 
-    // Pending state (scheduled or confirmed)
-    if (_existing?.isPending == true) {
-      return _PendingView(
-        request:    _existing!,
-        isCancelling: _isCancelling,
-        error:      _error,
-        onCancel:   _cancel,
-        onRefresh:  _load,
-      );
-    }
-
-    // Failed state — allow rescheduling
     if (_existing?.isFailed == true) {
       return _FailedView(
         request: _existing!,
@@ -175,17 +201,39 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
       );
     }
 
-    // Schedule form (fresh or after cancellation/failure)
+    if (_existing?.isCallReady == true) {
+      return _CallReadyView(
+        request: _existing!,
+        isJoining: _isLoading,
+        error: _error,
+        onJoin: _joinCall,
+        onRefresh: _load,
+      );
+    }
+
+    if (_existing?.isPending == true) {
+      return _PendingView(
+        request: _existing!,
+        isCancelling: _isCancelling,
+        error: _error,
+        onCancel: _cancel,
+        onRefresh: _load,
+      );
+    }
+
     return _ScheduleForm(
-      docKycStatus:   docStatus,
-      phoneCtrl:      _phoneCtrl,
-      selectedDate:   _selectedDate,
-      selectedSlot:   _selectedSlot,
-      isSubmitting:   _isSubmitting,
-      error:          _error,
-      onDateChanged:  (d) => setState(() { _selectedDate = d; _error = null; }),
-      onSlotChanged:  (s) => setState(() => _selectedSlot = s),
-      onSubmit:       _submit,
+      docKycStatus: docStatus,
+      phoneCtrl: _phoneCtrl,
+      selectedDate: _selectedDate,
+      selectedSlot: _selectedSlot,
+      isSubmitting: _isSubmitting,
+      error: _error,
+      onDateChanged: (d) => setState(() {
+        _selectedDate = d;
+        _error = null;
+      }),
+      onSlotChanged: (s) => setState(() => _selectedSlot = s),
+      onSubmit: _submit,
     );
   }
 }
@@ -691,6 +739,166 @@ class _PendingView extends StatelessWidget {
           ]),
           const SizedBox(height: 32),
         ],
+      ),
+    );
+  }
+}
+
+
+
+class _CallReadyView extends StatelessWidget {
+  final VideoKycRequest request;
+  final bool isJoining;
+  final String? error;
+  final VoidCallback onJoin;
+  final VoidCallback onRefresh;
+
+  const _CallReadyView({
+    required this.request,
+    required this.isJoining,
+    required this.onJoin,
+    required this.onRefresh,
+    this.error,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          const SizedBox(height: 20),
+          const _PulsingCallIcon(),
+          const SizedBox(height: 28),
+
+          const Text(
+            'Agent is Ready!',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              color: AppColors.textDark,
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          const Text(
+            'Your verification agent has joined.\nTap below to start your KYC video call.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              color: AppColors.textGrey,
+              height: 1.6,
+            ),
+          ),
+
+          const SizedBox(height: 28),
+
+          if (error != null) ...[
+            _ErrorBanner(message: error!),
+            const SizedBox(height: 16),
+          ],
+
+          SizedBox(
+            width: double.infinity,
+            height: 58,
+            child: ElevatedButton.icon(
+              onPressed: isJoining ? null : onJoin,
+              icon: isJoining
+                  ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2.5,
+                ),
+              )
+                  : const Icon(Icons.videocam_rounded),
+              label: Text(
+                isJoining ? 'Connecting...' : 'Join Video Call',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 17,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
+          TextButton.icon(
+            onPressed: onRefresh,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Refresh status'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PulsingCallIcon extends StatefulWidget {
+  const _PulsingCallIcon();
+
+  @override
+  State<_PulsingCallIcon> createState() => _PulsingCallIconState();
+}
+
+class _PulsingCallIconState extends State<_PulsingCallIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+
+    _scale = Tween<double>(begin: 0.92, end: 1.08).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scale,
+      child: Container(
+        width: 110,
+        height: 110,
+        decoration: BoxDecoration(
+          color: Colors.green,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.green.withOpacity(0.35),
+              blurRadius: 22,
+              spreadRadius: 4,
+            ),
+          ],
+        ),
+        child: const Icon(
+          Icons.videocam_rounded,
+          color: Colors.white,
+          size: 52,
+        ),
       ),
     );
   }

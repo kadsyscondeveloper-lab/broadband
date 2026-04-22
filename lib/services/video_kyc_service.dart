@@ -86,10 +86,35 @@ class VideoKycRequest {
 
   bool get isScheduled  => status == 'scheduled';
   bool get isConfirmed  => status == 'confirmed';
+  bool get isCallReady  => status == 'call_ready';
   bool get isCompleted  => status == 'completed';
   bool get isFailed     => status == 'failed';
   bool get isCancelled  => status == 'cancelled';
-  bool get isPending    => isScheduled || isConfirmed;
+
+  bool get isPending =>
+      isScheduled ||
+          isConfirmed ||
+          isCallReady;
+}
+
+class VideoCallTokenResult {
+  final bool success;
+  final String? error;
+  final String? appId;
+  final String? channel;
+  final String? token;
+  final int? uid;
+  final int? requestId;
+
+  const VideoCallTokenResult({
+    required this.success,
+    this.error,
+    this.appId,
+    this.channel,
+    this.token,
+    this.uid,
+    this.requestId,
+  });
 }
 
 class VideoKycResult {
@@ -153,6 +178,44 @@ class VideoKycService {
       return VideoKycResult(success: false, error: msg);
     } catch (e) {
       return VideoKycResult(success: false, error: e.toString());
+    }
+  }
+
+  Future<VideoCallTokenResult> getCallToken() async {
+    try {
+      final res = await _api.get('/user/kyc/video/call-token');
+
+      final data = res.data['data'] as Map<String, dynamic>?;
+
+      if (data == null) {
+        return const VideoCallTokenResult(
+          success: false,
+          error: 'No call active',
+        );
+      }
+
+      return VideoCallTokenResult(
+        success: true,
+        appId: data['agora_app_id'] as String,
+        channel: data['channel'] as String,
+        token: data['token'] as String,
+        uid: (data['uid'] as num).toInt(),
+        requestId: (data['request_id'] as num).toInt(),
+      );
+    } on DioException catch (e) {
+      final msg =
+          e.response?.data?['message'] as String? ??
+              'No active call found';
+
+      return VideoCallTokenResult(
+        success: false,
+        error: msg,
+      );
+    } catch (e) {
+      return VideoCallTokenResult(
+        success: false,
+        error: e.toString(),
+      );
     }
   }
 }
