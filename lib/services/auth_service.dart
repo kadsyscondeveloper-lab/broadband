@@ -1,28 +1,53 @@
+// lib/services/auth_service.dart
+// Full replacement — adds pendingDeletion fields to AuthResult and
+// parses the PENDING_DELETION:<isoDate> error from the backend.
+
 import 'package:dio/dio.dart';
 import '../core/api_client.dart';
 import '../core/storage_service.dart';
 import '../models/auth_models.dart';
 import 'notification_push_service.dart';
 
-/// AuthResult — same shape as your old stub so ViewModels need zero changes.
+/// AuthResult — same shape as before + optional pendingDeletion fields.
 class AuthResult {
   final bool    success;
-  final String? token;   // kept for backward compat (access token)
+  final String? token;
   final String? error;
   final AuthData? data;
+
+  // ── Account pending deletion ──────────────────────────────────────────────
+  /// True when the server returned PENDING_DELETION:<date>
+  final bool    pendingDeletion;
+  /// The date the account will be permanently deleted (if pendingDeletion == true)
+  final DateTime? deletionDate;
 
   const AuthResult({
     required this.success,
     this.token,
     this.error,
     this.data,
+    this.pendingDeletion = false,
+    this.deletionDate,
   });
+
+  /// Parse the raw error string from the backend.
+  /// If it starts with "PENDING_DELETION:<iso>" return a special result.
+  factory AuthResult.fromError(String rawError) {
+    if (rawError.startsWith('PENDING_DELETION:')) {
+      final dateStr = rawError.replaceFirst('PENDING_DELETION:', '');
+      final date    = DateTime.tryParse(dateStr);
+      return AuthResult(
+        success:         false,
+        pendingDeletion: true,
+        deletionDate:    date,
+        error:           null,
+      );
+    }
+    return AuthResult(success: false, error: rawError);
+  }
 }
 
-/// AuthService — real HTTP calls to your Node.js backend.
-/// ViewModels call the same method names as before — no ViewModel changes needed.
 class AuthService {
-  // Singleton
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
   AuthService._internal();
@@ -30,12 +55,9 @@ class AuthService {
   final _api     = ApiClient();
   final _storage = StorageService();
 
-  bool get isLoggedIn => _storage.hasToken;
-  String? get sessionToken => _storage.accessToken;
+  bool    get isLoggedIn    => _storage.hasToken;
+  String? get sessionToken  => _storage.accessToken;
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-
-  /// Saves tokens + user info to storage after a successful auth response.
   Future<void> _persist(AuthData authData) async {
     await _storage.saveTokens(
       accessToken:  authData.tokens.accessToken,
@@ -50,8 +72,8 @@ class AuthService {
   }
 
   AuthResult _handleDioError(DioException e) {
-    final ex = ApiException.fromDio(e);
-    return AuthResult(success: false, error: ex.message);
+    final ex  = ApiException.fromDio(e);
+    return AuthResult.fromError(ex.message);
   }
 
   // ── Login with password ───────────────────────────────────────────────────
@@ -65,19 +87,13 @@ class AuthService {
         'phone':    phone,
         'password': password,
       });
-
       final authData = AuthData.fromJson(res.data['data'] ?? {});
       await _persist(authData);
-
-      return AuthResult(
-        success: true,
-        token:   authData.tokens.accessToken,
-        data:    authData,
-      );
+      return AuthResult(success: true, token: authData.tokens.accessToken, data: authData);
     } on DioException catch (e) {
       return _handleDioError(e);
     } catch (e) {
-      return AuthResult(success: false, error: e.toString());
+      return AuthResult.fromError(e.toString());
     }
   }
 
@@ -92,30 +108,24 @@ class AuthService {
   }) async {
     try {
       final res = await _api.post('/auth/signup', data: {
-        'name':          name,
-        'phone':         phone,
-        'password':      password,
+        'name':     name,
+        'phone':    phone,
+        'password': password,
         if (email != null) 'email': email,
         if (referralCode != null && referralCode.isNotEmpty)
           'referral_code': referralCode,
       });
-
       final authData = AuthData.fromJson(res.data['data'] ?? {});
       await _persist(authData);
-
-      return AuthResult(
-        success: true,
-        token:   authData.tokens.accessToken,
-        data:    authData,
-      );
+      return AuthResult(success: true, token: authData.tokens.accessToken, data: authData);
     } on DioException catch (e) {
       return _handleDioError(e);
     } catch (e) {
-      return AuthResult(success: false, error: e.toString());
+      return AuthResult.fromError(e.toString());
     }
   }
 
-  // ── Send OTP ─────────────────────────────────────────────────────────────
+  // ── Send OTP ──────────────────────────────────────────────────────────────
 
   Future<AuthResult> sendOtp({
     required String phone,
@@ -126,17 +136,12 @@ class AuthService {
         'phone':   phone,
         'purpose': purpose,
       });
-
-      // Surface the dev OTP in the result so the ViewModel can show it
       final devOtp = res.data['data']?['_dev_otp'] as String?;
-      return AuthResult(
-        success: true,
-        token:   devOtp, // reusing 'token' field to pass dev OTP (ViewModel shows it)
-      );
+      return AuthResult(success: true, token: devOtp);
     } on DioException catch (e) {
       return _handleDioError(e);
     } catch (e) {
-      return AuthResult(success: false, error: e.toString());
+      return AuthResult.fromError(e.toString());
     }
   }
 
@@ -151,19 +156,13 @@ class AuthService {
         'phone': phone,
         'otp':   otp,
       });
-
       final authData = AuthData.fromJson(res.data['data'] ?? {});
       await _persist(authData);
-
-      return AuthResult(
-        success: true,
-        token:   authData.tokens.accessToken,
-        data:    authData,
-      );
+      return AuthResult(success: true, token: authData.tokens.accessToken, data: authData);
     } on DioException catch (e) {
       return _handleDioError(e);
     } catch (e) {
-      return AuthResult(success: false, error: e.toString());
+      return AuthResult.fromError(e.toString());
     }
   }
 
@@ -176,7 +175,7 @@ class AuthService {
     } on DioException catch (e) {
       return _handleDioError(e);
     } catch (e) {
-      return AuthResult(success: false, error: e.toString());
+      return AuthResult.fromError(e.toString());
     }
   }
 
@@ -197,11 +196,11 @@ class AuthService {
     } on DioException catch (e) {
       return _handleDioError(e);
     } catch (e) {
-      return AuthResult(success: false, error: e.toString());
+      return AuthResult.fromError(e.toString());
     }
   }
 
-  // ── Get current user (me) ─────────────────────────────────────────────────
+  // ── Get current user ──────────────────────────────────────────────────────
 
   Future<AuthUser?> getMe() async {
     try {
@@ -212,21 +211,32 @@ class AuthService {
     }
   }
 
+  // ── Delete account ────────────────────────────────────────────────────────
+
+  /// Schedules the account for deletion.
+  /// Returns [success=true] with the scheduled deletion date on success.
+  Future<AuthResult> deleteAccount({String? password}) async {
+    try {
+      await _api.delete('/user/account');
+      // Backend revokes all sessions; clear local storage too
+      await _storage.clearAll();
+      return const AuthResult(success: true);
+    } on DioException catch (e) {
+      return _handleDioError(e);
+    } catch (e) {
+      return AuthResult.fromError(e.toString());
+    }
+  }
+
   // ── Logout ────────────────────────────────────────────────────────────────
 
   Future<void> logout() async {
-    try {
-      await _api.post('/auth/logout');
-    } catch (_) {
-      // Even if server call fails, clear local storage
-    }
+    try { await _api.post('/auth/logout'); } catch (_) {}
     await _storage.clearAll();
   }
 
   Future<void> logoutAll() async {
-    try {
-      await _api.post('/auth/logout-all');
-    } catch (_) {}
+    try { await _api.post('/auth/logout-all'); } catch (_) {}
     await _storage.clearAll();
   }
 }

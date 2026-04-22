@@ -2,7 +2,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../services/location_service.dart';   // ← NEW
+import '../../services/location_service.dart';
+import '../profile/delete_account_sheet.dart';
+import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../viewmodels/profile_viewmodel.dart';
 
@@ -598,6 +600,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
 
+                const SizedBox(height: 16),
+                const _DangerZoneDivider(),
+                const SizedBox(height: 16),
+
+                _DeleteAccountButton(
+                  onDeleted: () {
+                    Navigator.of(context)
+                        .pushNamedAndRemoveUntil('/login', (_) => false);
+                  },
+                ),
+
                 SizedBox(height: MediaQuery.of(context).padding.bottom + 80),
               ],
             ),
@@ -746,6 +759,81 @@ class _DropdownField extends StatelessWidget {
                     ? null
                     : (v) => v != null ? onChanged(v) : null,
               ),
+      ),
+    );
+  }
+}
+
+
+// ── Danger zone divider ─────────────────────────────────────────────
+
+class _DangerZoneDivider extends StatelessWidget {
+  const _DangerZoneDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: Divider(color: Colors.red.shade100)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            'Danger Zone',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.red.shade300,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+        Expanded(child: Divider(color: Colors.red.shade100)),
+      ],
+    );
+  }
+}
+
+// ── Delete account button ───────────────────────────────────────────
+
+class _DeleteAccountButton extends StatelessWidget {
+  final VoidCallback onDeleted;
+
+  const _DeleteAccountButton({
+    required this.onDeleted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () {
+          DeleteAccountSheet.show(
+            context,
+            onDeleted: onDeleted,
+          );
+        },
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          foregroundColor: Colors.red.shade600,
+          side: BorderSide(color: Colors.red.shade200),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        icon: Icon(
+          Icons.delete_forever_rounded,
+          size: 20,
+          color: Colors.red.shade600,
+        ),
+        label: Text(
+          'Delete Account',
+          style: TextStyle(
+            color: Colors.red.shade600,
+            fontWeight: FontWeight.w700,
+            fontSize: 15,
+          ),
+        ),
       ),
     );
   }
