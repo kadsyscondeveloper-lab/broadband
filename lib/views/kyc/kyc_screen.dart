@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../viewmodels/kyc_viewmodel.dart';
 import '../../theme/app_theme.dart';
+import 'video_kyc_screen.dart';
 import '../../services/kyc_service.dart';
 
 class KycScreen extends StatefulWidget {
@@ -30,36 +31,116 @@ class _KycScreenState extends State<KycScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        title: const Text(
-          'KYC Verification',
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          title: const Text(
+            'KYC Verification',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+            ),
+          ),
+          centerTitle: true,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              size: 20,
+            ),
+            onPressed: () => Navigator.pop(context),
+          ),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(46),
+            child: Container(
+              color: AppColors.primary,
+              child: TabBar(
+                indicatorColor: Colors.white,
+                indicatorWeight: 3,
+                labelColor: Colors.white,
+                unselectedLabelColor:
+                Colors.white.withOpacity(0.65),
+                labelStyle: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+                unselectedLabelStyle: const TextStyle(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+                tabs: const [
+                  Tab(
+                    icon: Icon(
+                      Icons.description_outlined,
+                      size: 18,
+                    ),
+                    text: 'Documents',
+                  ),
+                  Tab(
+                    icon: Icon(
+                      Icons.videocam_outlined,
+                      size: 18,
+                    ),
+                    text: 'Video KYC',
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
-        centerTitle: true,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () => Navigator.pop(context),
+        body: ListenableBuilder(
+          listenable: _vm,
+          builder: (context, _) {
+            return TabBarView(
+              physics:
+              const NeverScrollableScrollPhysics(),
+              children: [
+                _buildDocumentTabContent(),
+
+                VideoKycScreen(
+                  docKycStatus:
+                  _vm.kycStatus?.status ??
+                      'not_submitted',
+                ),
+              ],
+            );
+          },
         ),
-      ),
-      body: ListenableBuilder(
-        listenable: _vm,
-        builder: (context, _) {
-          return switch (_vm.step) {
-            KycStep.loading    => const _LoadingView(),
-            KycStep.success    => _SuccessView(onDone: () => Navigator.pop(context)),
-            KycStep.submitting => _SubmittingView(message: _vm.progressText ?? 'Submitting...'),
-            KycStep.error when _vm.isProfileIncomplete =>
-                _ProfileIncompleteView(onGoToProfile: () => Navigator.pop(context)),
-            _                  => _buildFormView(),
-          };
-        },
       ),
     );
+  }
+
+
+  Widget _buildDocumentTabContent() {
+    return switch (_vm.step) {
+      KycStep.loading =>
+      const _LoadingView(),
+
+      KycStep.success =>
+          _SuccessView(
+            onDone: () => Navigator.pop(context),
+          ),
+
+      KycStep.submitting =>
+          _SubmittingView(
+            message:
+            _vm.progressText ??
+                'Submitting...',
+          ),
+
+      KycStep.error
+      when _vm.isProfileIncomplete =>
+          _ProfileIncompleteView(
+            onGoToProfile: () =>
+                Navigator.pop(context),
+          ),
+
+      _ => _buildFormView(),
+    };
   }
 
   Widget _buildFormView() {
