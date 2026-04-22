@@ -7,6 +7,7 @@ import '../services/kyc_service.dart';
 import '../widgets/dashboard_section.dart';
 import '../services/notification_service.dart';
 import '../services/notification_push_service.dart';
+import '../core/app_config.dart';
 
 class HomeViewModel extends ChangeNotifier {
   final _service    = UserService();
@@ -49,7 +50,6 @@ class HomeViewModel extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
-    // Load profile + KYC in parallel
     final results = await Future.wait([
       _service.getProfile(),
       _kycService.getStatus(),
@@ -60,16 +60,12 @@ class HomeViewModel extends ChangeNotifier {
     _kycStatus = results[1] as KycStatus;
     _unreadNotifications = (results[2] as Map<String, dynamic>)['unread'] as int;
 
-    // ── TODO: Replace with real API call when backend is ready ───────────
-    // _dashboardData = await _dashboardService.getDashboard();
     _dashboardData = DashboardData.mock();
-    // ─────────────────────────────────────────────────────────────────────
 
     _isLoading = false;
     notifyListeners();
   }
 
-  //Refresh for motification
   Future<void> refreshUnreadCount() async {
     try {
       final result = await NotificationService().getNotifications(limit: 1);
@@ -77,9 +73,6 @@ class HomeViewModel extends ChangeNotifier {
       notifyListeners();
     } catch (_) {}
   }
-
-
-  // ── Refresh wallet balance (call after purchase) ──────────────────────────
 
   Future<void> refreshWalletBalance() async {
     try {
@@ -90,11 +83,8 @@ class HomeViewModel extends ChangeNotifier {
       }
     } catch (e) {
       print('Error refreshing wallet: $e');
-      // Don't throw — just log the error
     }
   }
-
-  // ── Refresh KYC only (call after returning from KycScreen) ────────────────
 
   Future<void> refreshKycStatus() async {
     _kycStatus = await _kycService.getStatus();
@@ -124,18 +114,18 @@ class HomeViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Carousels ─────────────────────────────────────────────────────────────
+  // ── Carousels — returns list of maps with image bytes + metadata ───────────
 
-  Future<List<dynamic>> getCarousels() async {
+  Future<List<Map<String, dynamic>>> getCarousels() async {
     try {
-      // Replace with your actual API URL
       final response = await http.get(
-        Uri.parse('http://103.88.81.7:3000/api/v1/carousels'),
+        Uri.parse('${AppConfig.baseUrl}/carousels'),
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['data']['carousels'] ?? [];
+        final raw = (data['data']['carousels'] ?? []) as List<dynamic>;
+        return raw.cast<Map<String, dynamic>>();
       } else {
         print('Failed to load carousels: ${response.statusCode}');
         return [];
@@ -143,6 +133,17 @@ class HomeViewModel extends ChangeNotifier {
     } catch (e) {
       print('Error loading carousels: $e');
       return [];
+    }
+  }
+
+  /// Track a click on a carousel banner (fire-and-forget, non-blocking).
+  Future<void> trackCarouselClick(int bannerId) async {
+    try {
+      await http.post(
+        Uri.parse('${AppConfig.baseUrl}/carousels/$bannerId/click'),
+      );
+    } catch (_) {
+      // Non-critical — don't surface errors to the user
     }
   }
 

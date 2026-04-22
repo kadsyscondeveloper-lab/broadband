@@ -847,11 +847,15 @@ class _PromoBanner extends StatefulWidget {
 }
 
 class _PromoBannerState extends State<_PromoBanner> {
+  // Each item: { 'title', 'subtitle', 'bytes': Uint8List, 'id', 'click_url' }
   List<Map<String, dynamic>> _items = [];
   bool _loading = true;
   late final PageController _pageController;
   int _currentIndex = 0;
   Timer? _autoScrollTimer;
+
+  // Height of the visible image area
+  static const double _bannerHeight = 220.0;
 
   @override
   void initState() {
@@ -866,8 +870,10 @@ class _PromoBannerState extends State<_PromoBanner> {
       return;
     }
     try {
-      final raw   = await widget.viewModel!.getCarousels();
+      // getCarousels now returns the raw API list directly
+      final raw = await widget.viewModel!.getCarousels();
       final items = <Map<String, dynamic>>[];
+
       for (final c in raw) {
         final url = (c['image_url'] as String?) ?? '';
         Uint8List? bytes;
@@ -878,12 +884,21 @@ class _PromoBannerState extends State<_PromoBanner> {
           } catch (_) {}
         }
         if (bytes != null) {
-          items.add({'title': c['title'] ?? '', 'subtitle': c['subtitle'] ?? '',
-            'bytes': bytes});
+          items.add({
+            'title':     c['title']     ?? '',
+            'subtitle':  c['subtitle']  ?? '',
+            'bytes':     bytes,
+            'id':        c['id'],
+            'click_url': c['click_url'], // nullable
+          });
         }
       }
+
       if (mounted) {
-        setState(() { _items = items; _loading = false; });
+        setState(() {
+          _items = items;
+          _loading = false;
+        });
         if (_items.length > 1) _startAutoScroll();
       }
     } catch (e) {
@@ -897,8 +912,11 @@ class _PromoBannerState extends State<_PromoBanner> {
     _autoScrollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (!mounted || _items.isEmpty) return;
       final next = (_currentIndex + 1) % _items.length;
-      _pageController.animateToPage(next,
-          duration: const Duration(milliseconds: 500), curve: Curves.easeInOut);
+      _pageController.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
     });
   }
 
@@ -909,73 +927,181 @@ class _PromoBannerState extends State<_PromoBanner> {
     super.dispose();
   }
 
+  /// Open the link for a tapped banner and record the click.
+  Future<void> _onBannerTap(Map<String, dynamic> item) async {
+    final clickUrl = item['click_url'] as String?;
+    final id       = item['id'];
+
+    // Track click (fire-and-forget)
+    if (id != null) {
+      final int parsedId = id is int
+          ? id
+          : int.tryParse(id.toString()) ?? 0;
+
+      if (parsedId > 0) {
+        widget.viewModel?.trackCarouselClick(parsedId);
+      }
+    }
+
+    // Launch URL if present
+    if (clickUrl != null && clickUrl.isNotEmpty) {
+      final uri = Uri.tryParse(clickUrl);
+      if (uri != null) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
       return Container(
-        height: 300,
-        decoration: BoxDecoration(color: AppColors.cardBg,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
-                blurRadius: 8, offset: const Offset(0, 2))]),
-        child: ClipRRect(borderRadius: BorderRadius.circular(16),
-            child: const _BannerShimmer()),
+        height: _bannerHeight + 40, // image + dots
+        decoration: BoxDecoration(
+          color: AppColors.cardBg,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            )
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: const _BannerShimmer(),
+        ),
       );
     }
+
     if (_items.isEmpty) return const SizedBox.shrink();
 
     return Container(
-      decoration: BoxDecoration(color: AppColors.cardBg,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
-              blurRadius: 8, offset: const Offset(0, 2))]),
-      child: Column(children: [
-        ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-          child: SizedBox(
-            height: 160,
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount:  _items.length,
-              onPageChanged: (i) {
-                setState(() => _currentIndex = i);
-                widget.onPageChanged(i);
-              },
-              itemBuilder: (_, i) {
-                final bytes = _items[i]['bytes'] as Uint8List;
-                return Image.memory(bytes, fit: BoxFit.cover,
-                    width: double.infinity,
-                    errorBuilder: (_, __, ___) => Container(
-                        color: Colors.grey.shade200,
-                        child: const Center(child: Icon(Icons.broken_image,
-                            color: Colors.grey, size: 32))));
-              },
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          )
+        ],
+      ),
+      child: Column(
+        children: [
+          // ── Image area ──────────────────────────────────────────────────
+          ClipRRect(
+            borderRadius: BorderRadius.vertical(
+              top: const Radius.circular(16),
+              bottom: _items.length <= 1
+                  ? const Radius.circular(16)
+                  : Radius.zero,
+            ),
+            child: SizedBox(
+              height: _bannerHeight,
+              child: PageView.builder(
+                controller: _pageController,
+                itemCount:  _items.length,
+                onPageChanged: (i) {
+                  setState(() => _currentIndex = i);
+                  widget.onPageChanged(i);
+                },
+                itemBuilder: (_, i) {
+                  final item  = _items[i];
+                  final bytes = item['bytes'] as Uint8List;
+                  final hasLink = (item['click_url'] as String?) != null &&
+                      (item['click_url'] as String).isNotEmpty;
+
+                  return GestureDetector(
+                    onTap: () => _onBannerTap(item),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // Full image — contain so nothing is clipped
+                        ColoredBox(
+                          color: Colors.black,
+                          child: Image.memory(
+                            bytes,
+                            fit: BoxFit.contain,
+                            width: double.infinity,
+                            height: _bannerHeight,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: Colors.grey.shade200,
+                              child: const Center(
+                                child: Icon(Icons.broken_image,
+                                    color: Colors.grey, size: 32),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        // Subtle "Tap to open" badge when a link exists
+                        if (hasLink)
+                          Positioned(
+                            right: 10,
+                            bottom: 10,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.55),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: const [
+                                  Icon(Icons.open_in_new,
+                                      color: Colors.white, size: 11),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Tap to open',
+                                    style: TextStyle(
+                                        color: Colors.white, fontSize: 10),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
           ),
-        ),
-        if (_items.length > 1)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(_items.length, (i) {
-                final active = i == _currentIndex;
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  margin: const EdgeInsets.symmetric(horizontal: 3),
-                  width:  active ? 20 : 8, height: 8,
-                  decoration: BoxDecoration(
-                    color: active ? AppColors.primary : Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                );
-              }),
+
+          // ── Page indicator dots ──────────────────────────────────────────
+          if (_items.length > 1)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(_items.length, (i) {
+                  final active = i == _currentIndex;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width:  active ? 20 : 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: active
+                          ? AppColors.primary
+                          : Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  );
+                }),
+              ),
             ),
-          ),
-      ]),
+        ],
+      ),
     );
   }
 }
+
+// ── Shimmer (unchanged) ────────────────────────────────────────────────────
 
 class _BannerShimmer extends StatefulWidget {
   const _BannerShimmer();
@@ -991,31 +1117,38 @@ class _BannerShimmerState extends State<_BannerShimmer>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this,
-        duration: const Duration(milliseconds: 1200))..repeat();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1200))
+      ..repeat();
     _anim = Tween<double>(begin: -1.5, end: 1.5).animate(
         CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
   }
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: _anim,
     builder: (_, __) => Container(
-      height: 176,
+      height: 260,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment(_anim.value - 1, 0),
           end:   Alignment(_anim.value,      0),
-          colors: [Colors.grey.shade200, Colors.grey.shade100, Colors.grey.shade200],
+          colors: [
+            Colors.grey.shade200,
+            Colors.grey.shade100,
+            Colors.grey.shade200,
+          ],
         ),
       ),
     ),
   );
 }
-
 // ─────────────────────────────────────────────────────────────────────────────
 // FEATURES SECTION
 // ─────────────────────────────────────────────────────────────────────────────
