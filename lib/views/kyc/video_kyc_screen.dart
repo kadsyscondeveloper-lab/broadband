@@ -11,10 +11,14 @@ import '../../services/video_kyc_service.dart';
 import 'video_call_screen.dart';
 
 class VideoKycScreen extends StatefulWidget {
-  /// Pass the doc KYC status so we can show the right gate message.
-  final String docKycStatus; // 'not_submitted' | 'pending' | 'under_review' | 'approved' | 'rejected'
+  final String docKycStatus;
+  final bool embedded;
 
-  const VideoKycScreen({super.key, required this.docKycStatus});
+  const VideoKycScreen({
+    super.key,
+    required this.docKycStatus,
+    this.embedded = false,
+  });
 
   @override
   State<VideoKycScreen> createState() => _VideoKycScreenState();
@@ -153,6 +157,14 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final body = _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : _buildBody();
+
+    if (widget.embedded) {
+      return body;
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -160,18 +172,22 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
         foregroundColor: Colors.white,
         title: const Text(
           'Video KYC',
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+          ),
         ),
         centerTitle: true,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            size: 20,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _buildBody(),
+      body: body,
     );
   }
 
@@ -186,7 +202,11 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
         message:
         'Please upload your address proof and ID proof documents before scheduling a video KYC call.',
         buttonLabel: 'Go to Documents',
-        onTap: () => Navigator.pop(context),
+        onTap: () {
+          if (!widget.embedded) {
+            Navigator.pop(context);
+          }
+        },
       );
     }
 
