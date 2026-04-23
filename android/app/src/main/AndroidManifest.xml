@@ -27,7 +27,7 @@
     </queries>
 
     <application
-        android:label="Speedonet"
+        android:label="SpeedoPlay"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true"
@@ -75,7 +75,7 @@
 
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="speedonet_channel" />
+            android:value="speedoplay_channel" />
 
     </application>
 
