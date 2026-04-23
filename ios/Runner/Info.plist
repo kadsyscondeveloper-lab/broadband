@@ -27,25 +27,21 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-    <string>Broadband uses your camera for two purposes: (1) During Video KYC verification, our agent verifies your identity by viewing your face and ID document live on camera. (2) To capture photos of your address proof and ID proof documents when uploading KYC documents.</string>
-
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Broadband uses your microphone during Video KYC verification so our verification agent can hear your responses while confirming your identity on a live call.</string>
-
-    <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Broadband uses your location to check whether our broadband service is available in your area and to auto-fill your address when completing your profile.</string>
-
-    <key>NSLocationAlwaysUsageDescription</key>
-    <string>Broadband uses your location to verify service availability in your area and to assist with address auto-fill during profile setup.</string>
-
-    <key>NSPhotoLibraryUsageDescription</key>
-    <string>Broadband accesses your photo library so you can select existing photos of your KYC documents, such as your Aadhaar card or utility bill, when submitting verification documents.</string>
-
-    <key>NSContactsUsageDescription</key>
-    <string>Broadband accesses your contacts only if you choose to select contact details for recharge or referral.</string>
-
-    <key>NSPhotoLibraryAddUsageDescription</key>
-    <string>Broadband uses your library only for uploading kyc documents and upload profile photo.</string>
+	<string>SpeedoPlay uses your camera for two purposes: (1) During Video KYC verification, our agent verifies your identity by viewing your face and ID document live on camera. (2) To capture photos of your address proof and ID proof documents when uploading KYC documents.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>SpeedoPlay uses your microphone during Video KYC verification so our verification agent can hear your responses while confirming your identity on a live call.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>SpeedoPlay uses your location to check whether our broadband service is available in your area and to auto-fill your address when completing your profile.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>SpeedoPlay uses your location to verify service availability in your area and to assist with address auto-fill during profile setup.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>SpeedoPlay uses your location to check whether our broadband service is available in your area and to auto-fill your address when completing your profile.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>SpeedoPlay accesses your photo library so you can select existing photos of your KYC documents, such as your Aadhaar card or utility bill, when submitting verification documents.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>SpeedoPlay accesses your contacts only if you choose to select contact details for recharge or referral.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>SpeedoPlay uses your library only for uploading KYC documents and profile photo.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
