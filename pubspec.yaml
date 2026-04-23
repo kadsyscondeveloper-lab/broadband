@@ -1,5 +1,5 @@
-name: speedoplay
-description: Speedoplay broadband app
+name: speedonet
+description: Speedonet broadband app
 version: 1.0.0+1
 
 environment:
@@ -75,9 +75,9 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/app_icon/app_logo.webp"
+  image_path: "assets/app_icon/app_logo.png"
   adaptive_icon_background: "#E31E24"
-  adaptive_icon_foreground: "assets/app_icon/app_logo.webp"
+  adaptive_icon_foreground: "assets/app_icon/app_logo.png"
   min_sdk_android: 21
   web:
     generate: false
@@ -96,7 +96,7 @@ flutter:
     - assets/images/onboarding_1.png
     - assets/images/onboarding_2.png
     - assets/images/onboarding_3.png
-    - assets/images/loading_screen.gif
+    - assets/images/loading_screen.jpeg
     - assets/app_icon/
     - assets/images/
     - assets/icons/
