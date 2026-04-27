@@ -1,18 +1,23 @@
 // lib/views/kyc/video_kyc_screen.dart
 //
-// Video KYC screen — shown as the second step inside kyc_screen.dart
-// (or navigated to standalone). Lets the user schedule a video call
-// slot; the agent calls them at the selected time.
+// Revised flow:
+//  1. Fetch the required phrase from the backend (/user/kyc/video/script).
+//  2. Show the user the phrase they must say on camera.
+//  3. Let them record via camera or pick a video from gallery.
+//  4. Preview the recorded video.
+//  5. Submit as base64 — backend AI verifies speech content & face.
+//  6. Show result: pending / verified / failed.
 
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:video_player/video_player.dart';
 import '../../theme/app_theme.dart';
 import '../../services/video_kyc_service.dart';
-import 'video_call_screen.dart';
 
 class VideoKycScreen extends StatefulWidget {
   final String docKycStatus;
-  final bool embedded;
+  final bool   embedded;
 
   const VideoKycScreen({
     super.key,
@@ -25,18 +30,20 @@ class VideoKycScreen extends StatefulWidget {
 }
 
 class _VideoKycScreenState extends State<VideoKycScreen> {
-  final _service    = VideoKycService();
-  final _phoneCtrl  = TextEditingController();
+  final _service = VideoKycService();
+  final _picker  = ImagePicker();
 
   VideoKycRequest? _existing;
-  bool             _isLoading  = true;
-  bool             _isSubmitting = false;
-  bool             _isCancelling = false;
-  String?          _error;
+  VideoKycScript?  _script;
 
-  // Form state
-  DateTime?      _selectedDate;
-  VideoKycSlot   _selectedSlot = VideoKycSlot.morning;
+  bool    _isLoading    = true;
+  bool    _isSubmitting = false;
+  bool    _isCancelling = false;
+  String? _error;
+
+  File?                    _videoFile;
+  VideoPlayerController?   _playerCtrl;
+  bool                     _playerReady = false;
 
   @override
   void initState() {
@@ -46,41 +53,91 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
 
   @override
   void dispose() {
-    _phoneCtrl.dispose();
+    _playerCtrl?.dispose();
     super.dispose();
   }
+
+  // ── Data loading ──────────────────────────────────────────────────────────
 
   Future<void> _load() async {
     setState(() { _isLoading = true; _error = null; });
     _existing = await _service.getStatus();
+    if (_existing == null) {
+      _script = await _service.getScript();
+    }
     setState(() => _isLoading = false);
   }
 
+  // ── Video recording / picking ─────────────────────────────────────────────
+
+  Future<void> _recordVideo() async {
+    final picked = await _picker.pickVideo(
+      source:         ImageSource.camera,
+      maxDuration:    const Duration(seconds: 30),
+      preferredCameraDevice: CameraDevice.front, // selfie cam
+    );
+    if (picked == null) return;
+    await _setVideo(File(picked.path));
+  }
+
+  Future<void> _pickFromGallery() async {
+    final picked = await _picker.pickVideo(
+      source:      ImageSource.gallery,
+      maxDuration: const Duration(seconds: 30),
+    );
+    if (picked == null) return;
+    await _setVideo(File(picked.path));
+  }
+
+  Future<void> _setVideo(File file) async {
+    await _playerCtrl?.dispose();
+    final ctrl = VideoPlayerController.file(file);
+    await ctrl.initialize();
+    ctrl.setLooping(false);
+    setState(() {
+      _videoFile   = file;
+      _playerCtrl  = ctrl;
+      _playerReady = true;
+      _error       = null;
+    });
+  }
+
+  void _clearVideo() {
+    _playerCtrl?.dispose();
+    setState(() {
+      _videoFile   = null;
+      _playerCtrl  = null;
+      _playerReady = false;
+    });
+  }
+
+  // ── Submission ────────────────────────────────────────────────────────────
+
   Future<void> _submit() async {
-    final phone = _phoneCtrl.text.trim();
-    if (_selectedDate == null) {
-      setState(() => _error = 'Please select a preferred date.');
-      return;
-    }
-    if (phone.isEmpty || !RegExp(r'^[6-9]\d{9}$').hasMatch(phone)) {
-      setState(() => _error = 'Enter a valid 10-digit mobile number.');
+    if (_videoFile == null) return;
+
+    // Basic size guard — warn if > 50 MB (rough check before base64 encoding)
+    final bytes = await _videoFile!.length();
+    if (bytes > 50 * 1024 * 1024) {
+      setState(() => _error = 'Video is too large. Please keep it under 50 MB.');
       return;
     }
 
     setState(() { _isSubmitting = true; _error = null; });
-    final result = await _service.schedule(
-      preferredDate: _selectedDate!,
-      preferredSlot: _selectedSlot,
-      callPhone:     phone,
-    );
+
+    final result = await _service.submitVideo(_videoFile!);
+
     if (!mounted) return;
 
     if (result.success) {
+      _clearVideo();
       setState(() { _existing = result.data; _isSubmitting = false; });
     } else {
       setState(() { _error = result.error; _isSubmitting = false; });
     }
   }
+
+  // ── Cancel ────────────────────────────────────────────────────────────────
 
   Future<void> _cancel() async {
     final confirmed = await showDialog<bool>(
@@ -89,7 +146,7 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Cancel Video KYC?'),
         content: const Text(
-            'This will cancel your scheduled call. You can reschedule anytime.'),
+            'Your submission will be cancelled. You can record and submit again anytime.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -110,47 +167,14 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
     if (!mounted) return;
 
     if (result.success) {
-      setState(() { _existing = null; _isCancelling = false; });
+      setState(() {
+        _existing    = null;
+        _isCancelling = false;
+      });
+      await _load(); // reload script too
     } else {
       setState(() { _error = result.error; _isCancelling = false; });
     }
-  }
-
-
-  Future<void> _joinCall() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    final result = await _service.getCallToken();
-
-    if (!mounted) return;
-
-    setState(() => _isLoading = false);
-
-    if (!result.success) {
-      setState(() => _error = result.error);
-      return;
-    }
-
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => VideoCallScreen(
-          credentials: VideoCallCredentials(
-            appId: result.appId!,
-            channel: result.channel!,
-            token: result.token!,
-            uid: result.uid!,
-            requestId: result.requestId!,
-          ),
-        ),
-        fullscreenDialog: true,
-      ),
-    );
-
-    _load();
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -161,29 +185,19 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
         ? const Center(child: CircularProgressIndicator())
         : _buildBody();
 
-    if (widget.embedded) {
-      return body;
-    }
+    if (widget.embedded) return body;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        title: const Text(
-          'Video KYC',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-          ),
-        ),
+        title: const Text('Video KYC',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
         centerTitle: true,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new_rounded,
-            size: 20,
-          ),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -194,105 +208,86 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
   Widget _buildBody() {
     final docStatus = widget.docKycStatus;
 
+    // Gate: docs not submitted yet
     if (docStatus == 'not_submitted') {
       return _GateBanner(
-        icon: Icons.lock_outline_rounded,
-        color: Colors.orange,
-        title: 'Complete Document KYC First',
-        message:
-        'Please upload your address proof and ID proof documents before scheduling a video KYC call.',
+        icon:        Icons.lock_outline_rounded,
+        color:       Colors.orange,
+        title:       'Complete Document KYC First',
+        message:     'Upload your address proof and ID proof before recording a video.',
         buttonLabel: 'Go to Documents',
-        onTap: () {
-          if (!widget.embedded) {
-            Navigator.pop(context);
-          }
-        },
+        onTap:       () { if (!widget.embedded) Navigator.pop(context); },
       );
     }
 
+    // Submitted & AI verifying / human review
+    if (_existing?.isPending == true || _existing?.isAiVerified == true) {
+      return _PendingView(
+        request:      _existing!,
+        isCancelling: _isCancelling,
+        error:        _error,
+        onCancel:     _cancel,
+        onRefresh:    _load,
+      );
+    }
+
+    // Fully verified
     if (_existing?.isCompleted == true) {
       return _CompletedView(request: _existing!);
     }
 
+    // AI rejected
     if (_existing?.isFailed == true) {
       return _FailedView(
-        request: _existing!,
-        onReschedule: () => setState(() => _existing = null),
+        request:     _existing!,
+        onRetry:     () => setState(() => _existing = null),
       );
     }
 
-    if (_existing?.isCallReady == true) {
-      return _CallReadyView(
-        request: _existing!,
-        isJoining: _isLoading,
-        error: _error,
-        onJoin: _joinCall,
-        onRefresh: _load,
-      );
-    }
-
-    if (_existing?.isPending == true) {
-      return _PendingView(
-        request: _existing!,
-        isCancelling: _isCancelling,
-        error: _error,
-        onCancel: _cancel,
-        onRefresh: _load,
-      );
-    }
-
-    return _ScheduleForm(
-      docKycStatus: docStatus,
-      phoneCtrl: _phoneCtrl,
-      selectedDate: _selectedDate,
-      selectedSlot: _selectedSlot,
+    // Not yet submitted (or cancelled) → show recording UI
+    return _RecordingView(
+      script:      _script,
+      videoFile:   _videoFile,
+      playerCtrl:  _playerCtrl,
+      playerReady: _playerReady,
       isSubmitting: _isSubmitting,
-      error: _error,
-      onDateChanged: (d) => setState(() {
-        _selectedDate = d;
-        _error = null;
-      }),
-      onSlotChanged: (s) => setState(() => _selectedSlot = s),
-      onSubmit: _submit,
+      error:       _error,
+      onRecord:    _recordVideo,
+      onGallery:   _pickFromGallery,
+      onClear:     _clearVideo,
+      onSubmit:    _submit,
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SCHEDULE FORM
+// RECORDING VIEW  (the main "new" screen)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _ScheduleForm extends StatelessWidget {
-  final String               docKycStatus;
-  final TextEditingController phoneCtrl;
-  final DateTime?            selectedDate;
-  final VideoKycSlot         selectedSlot;
-  final bool                 isSubmitting;
-  final String?              error;
-  final ValueChanged<DateTime?>    onDateChanged;
-  final ValueChanged<VideoKycSlot> onSlotChanged;
-  final VoidCallback         onSubmit;
+class _RecordingView extends StatelessWidget {
+  final VideoKycScript?        script;
+  final File?                  videoFile;
+  final VideoPlayerController? playerCtrl;
+  final bool                   playerReady;
+  final bool                   isSubmitting;
+  final String?                error;
+  final VoidCallback           onRecord;
+  final VoidCallback           onGallery;
+  final VoidCallback           onClear;
+  final VoidCallback           onSubmit;
 
-  const _ScheduleForm({
-    required this.docKycStatus,
-    required this.phoneCtrl,
-    required this.selectedDate,
-    required this.selectedSlot,
+  const _RecordingView({
+    required this.script,
+    required this.videoFile,
+    required this.playerCtrl,
+    required this.playerReady,
     required this.isSubmitting,
     required this.error,
-    required this.onDateChanged,
-    required this.onSlotChanged,
+    required this.onRecord,
+    required this.onGallery,
+    required this.onClear,
     required this.onSubmit,
   });
-
-  String get _docStatusBadge {
-    switch (docKycStatus) {
-      case 'pending':      return '⏳ Documents Under Review';
-      case 'under_review': return '🔍 Documents Being Verified';
-      case 'approved':     return '✅ Documents Approved';
-      default:             return '';
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -302,100 +297,60 @@ class _ScheduleForm extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
 
-          // ── Info card ──────────────────────────────────────────────────
-          _InfoCard(docStatusBadge: _docStatusBadge),
-          const SizedBox(height: 24),
-
-          // ── How it works ───────────────────────────────────────────────
-          const _HowItWorksCard(),
-          const SizedBox(height: 28),
-
-          // ── Date picker ────────────────────────────────────────────────
-          const _Label(text: 'Preferred Date'),
-          const SizedBox(height: 10),
-          _DatePicker(
-            selectedDate: selectedDate,
-            onChanged:    onDateChanged,
-          ),
+          // ── How it works card ──────────────────────────────────────────
+          _HowItWorksCard(),
           const SizedBox(height: 20),
 
-          // ── Time slot picker ───────────────────────────────────────────
-          const _Label(text: 'Preferred Time Slot'),
-          const SizedBox(height: 10),
-          _SlotPicker(
-            selected:  selectedSlot,
-            onChanged: onSlotChanged,
-          ),
-          const SizedBox(height: 20),
+          // ── Required phrase ────────────────────────────────────────────
+          if (script != null) ...[
+            _PhraseCard(script: script!),
+            const SizedBox(height: 20),
+          ],
 
-          // ── Phone ──────────────────────────────────────────────────────
-          const _Label(text: 'Call Me On'),
-          const SizedBox(height: 10),
-          Container(
-            decoration: BoxDecoration(
-              color:        Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border:       Border.all(color: AppColors.borderColor, width: 1.2),
-              boxShadow: [
-                BoxShadow(
-                  color:      Colors.black.withOpacity(0.04),
-                  blurRadius: 6,
-                  offset:     const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: TextField(
-              controller:   phoneCtrl,
-              keyboardType: TextInputType.phone,
-              maxLength:    10,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              style: const TextStyle(
-                  fontSize: 15, color: AppColors.textDark, fontWeight: FontWeight.w500),
-              decoration: const InputDecoration(
-                hintText:       'Enter mobile number',
-                hintStyle:      TextStyle(color: AppColors.textLight, fontSize: 14),
-                border:         InputBorder.none,
-                counterText:    '',
-                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                prefixIcon:     Icon(Icons.phone_outlined,
-                    color: AppColors.primary, size: 20),
-              ),
-            ),
+          // ── Video preview or pick buttons ──────────────────────────────
+          videoFile == null
+              ? _PickButtons(onRecord: onRecord, onGallery: onGallery)
+              : _VideoPreview(
+            videoFile:   videoFile!,
+            playerCtrl:  playerCtrl,
+            playerReady: playerReady,
+            onClear:     onClear,
           ),
-          const SizedBox(height: 6),
-          Text(
-            'Our agent will call this number at the selected time.',
-            style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-          ),
+          const SizedBox(height: 16),
+
+          // ── Tips ───────────────────────────────────────────────────────
+          _TipsCard(),
+          const SizedBox(height: 16),
 
           // ── Error ──────────────────────────────────────────────────────
           if (error != null) ...[
-            const SizedBox(height: 16),
             _ErrorBanner(message: error!),
+            const SizedBox(height: 16),
           ],
-
-          const SizedBox(height: 32),
 
           // ── Submit ─────────────────────────────────────────────────────
           SizedBox(
-            width:  double.infinity,
+            width: double.infinity,
             height: 54,
             child: ElevatedButton(
-              onPressed: isSubmitting ? null : onSubmit,
+              onPressed: (videoFile != null && !isSubmitting) ? onSubmit : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor:         AppColors.primary,
-                disabledBackgroundColor: AppColors.primary.withOpacity(0.6),
+                disabledBackgroundColor: AppColors.primary.withOpacity(0.4),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
-                elevation: 2,
+                elevation: 0,
               ),
               child: isSubmitting
-                  ? const SizedBox(width: 22, height: 22,
+                  ? const SizedBox(
+                  width: 22, height: 22,
                   child: CircularProgressIndicator(
                       color: Colors.white, strokeWidth: 2.5))
-                  : const Text(
-                'Schedule Video KYC Call',
-                style: TextStyle(
+                  : Text(
+                videoFile == null
+                    ? 'Record a Video to Continue'
+                    : 'Submit for Verification',
+                style: const TextStyle(
                   color:      Colors.white,
                   fontWeight: FontWeight.w800,
                   fontSize:   16,
@@ -411,185 +366,286 @@ class _ScheduleForm extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DATE PICKER
+// PHRASE CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _DatePicker extends StatelessWidget {
-  final DateTime?            selectedDate;
-  final ValueChanged<DateTime?> onChanged;
-
-  const _DatePicker({required this.selectedDate, required this.onChanged});
+class _PhraseCard extends StatelessWidget {
+  final VideoKycScript script;
+  const _PhraseCard({required this.script});
 
   @override
   Widget build(BuildContext context) {
-    final today   = DateTime.now();
-    final maxDate = today.add(const Duration(days: 30));
-
-    return GestureDetector(
-      onTap: () async {
-        final picked = await showDatePicker(
-          context:     context,
-          initialDate: selectedDate ?? today,
-          firstDate:   today,
-          lastDate:    maxDate,
-          builder: (ctx, child) => Theme(
-            data: Theme.of(ctx).copyWith(
-              colorScheme: ColorScheme.light(
-                primary: AppColors.primary,
-                onPrimary: Colors.white,
-                surface: Colors.white,
-              ),
-            ),
-            child: child!,
-          ),
-        );
-        onChanged(picked);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        decoration: BoxDecoration(
-          color:        Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border:       Border.all(
-            color: selectedDate != null
-                ? AppColors.primary.withOpacity(0.5)
-                : AppColors.borderColor,
-            width: selectedDate != null ? 1.5 : 1.2,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color:      Colors.black.withOpacity(0.04),
-              blurRadius: 6,
-              offset:     const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Icon(
-              Icons.calendar_today_rounded,
-              color: AppColors.primary,
-              size:  20,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                selectedDate != null
-                    ? '${selectedDate!.day} ${_monthName(selectedDate!.month)} ${selectedDate!.year}'
-                    : 'Select a date',
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color:        AppColors.primary.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16),
+        border:       Border.all(color: AppColors.primary.withOpacity(0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.record_voice_over_rounded,
+                color: AppColors.primary, size: 20),
+            const SizedBox(width: 8),
+            const Text('Say this phrase on camera',
                 style: TextStyle(
-                  fontSize:   15,
-                  fontWeight: FontWeight.w500,
-                  color: selectedDate != null
-                      ? AppColors.textDark
-                      : AppColors.textLight,
-                ),
-              ),
+                  fontWeight: FontWeight.w700,
+                  fontSize:   13,
+                  color:      AppColors.primary,
+                )),
+          ]),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color:        Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border:       Border.all(color: AppColors.primary.withOpacity(0.2)),
             ),
-            Icon(Icons.arrow_drop_down_rounded,
-                color: AppColors.textGrey, size: 24),
-          ],
-        ),
+            child: Text(
+              '"${script.phrase}"',
+              style: const TextStyle(
+                fontSize:   16,
+                fontWeight: FontWeight.w700,
+                color:      AppColors.textDark,
+                height:     1.5,
+                fontStyle:  FontStyle.italic,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Our AI will verify that you said this phrase clearly. '
+                'Speak naturally — no need to rush.',
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade500, height: 1.4),
+          ),
+        ],
       ),
     );
   }
-
-  String _monthName(int m) {
-    const names = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return names[m];
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SLOT PICKER
+// PICK BUTTONS (record / gallery)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _SlotPicker extends StatelessWidget {
-  final VideoKycSlot         selected;
-  final ValueChanged<VideoKycSlot> onChanged;
+class _PickButtons extends StatelessWidget {
+  final VoidCallback onRecord;
+  final VoidCallback onGallery;
 
-  const _SlotPicker({required this.selected, required this.onChanged});
+  const _PickButtons({required this.onRecord, required this.onGallery});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: VideoKycSlot.values.map((slot) {
-        final isSelected = slot == selected;
-        return Expanded(
-          child: GestureDetector(
-            onTap: () => onChanged(slot),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              margin: EdgeInsets.only(
-                right: slot != VideoKycSlot.evening ? 8 : 0,
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                color:        isSelected
-                    ? AppColors.primary
-                    : Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border:       Border.all(
-                  color: isSelected
-                      ? AppColors.primary
-                      : AppColors.borderColor,
-                  width: isSelected ? 1.5 : 1.2,
-                ),
-                boxShadow: isSelected
-                    ? [
-                  BoxShadow(
-                    color:      AppColors.primary.withOpacity(0.25),
-                    blurRadius: 8,
-                    offset:     const Offset(0, 3),
-                  ),
-                ]
-                    : [
-                  BoxShadow(
-                    color:      Colors.black.withOpacity(0.04),
-                    blurRadius: 4,
-                    offset:     const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    slot.icon,
-                    style: const TextStyle(fontSize: 22),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    slot.value[0].toUpperCase() + slot.value.substring(1),
-                    style: TextStyle(
-                      fontSize:   12,
-                      fontWeight: FontWeight.w700,
-                      color:      isSelected ? Colors.white : AppColors.textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    slot == VideoKycSlot.morning   ? '9 AM–12 PM'  :
-                    slot == VideoKycSlot.afternoon ? '12 PM–4 PM'  : '4 PM–7 PM',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color:    isSelected
-                          ? Colors.white.withOpacity(0.8)
-                          : AppColors.textGrey,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      }).toList(),
+    return Row(children: [
+      Expanded(
+        flex: 3,
+        child: _BigButton(
+          icon:    Icons.videocam_rounded,
+          label:   'Record Video',
+          sub:     'Uses front camera',
+          color:   AppColors.primary,
+          onTap:   onRecord,
+        ),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        flex: 2,
+        child: _BigButton(
+          icon:    Icons.photo_library_rounded,
+          label:   'From Gallery',
+          sub:     'Pick existing',
+          color:   Colors.grey.shade600,
+          onTap:   onGallery,
+        ),
+      ),
+    ]);
+  }
+}
+
+class _BigButton extends StatelessWidget {
+  final IconData     icon;
+  final String       label;
+  final String       sub;
+  final Color        color;
+  final VoidCallback onTap;
+
+  const _BigButton({
+    required this.icon,
+    required this.label,
+    required this.sub,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 12),
+        decoration: BoxDecoration(
+          color:        color.withOpacity(0.07),
+          borderRadius: BorderRadius.circular(16),
+          border:       Border.all(color: color.withOpacity(0.3), width: 1.5),
+        ),
+        child: Column(children: [
+          Icon(icon, color: color, size: 36),
+          const SizedBox(height: 8),
+          Text(label,
+              style: TextStyle(
+                  fontWeight: FontWeight.w800, fontSize: 13, color: color)),
+          const SizedBox(height: 2),
+          Text(sub,
+              style: TextStyle(fontSize: 11, color: color.withOpacity(0.65))),
+        ]),
+      ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PENDING STATE
+// VIDEO PREVIEW
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _VideoPreview extends StatefulWidget {
+  final File                   videoFile;
+  final VideoPlayerController? playerCtrl;
+  final bool                   playerReady;
+  final VoidCallback           onClear;
+
+  const _VideoPreview({
+    required this.videoFile,
+    required this.playerCtrl,
+    required this.playerReady,
+    required this.onClear,
+  });
+
+  @override
+  State<_VideoPreview> createState() => _VideoPreviewState();
+}
+
+class _VideoPreviewState extends State<_VideoPreview> {
+  bool _playing = false;
+
+  void _toggle() {
+    final ctrl = widget.playerCtrl;
+    if (ctrl == null || !widget.playerReady) return;
+    if (_playing) {
+      ctrl.pause();
+    } else {
+      ctrl.play();
+    }
+    setState(() => _playing = !_playing);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ctrl    = widget.playerCtrl;
+    final ready   = widget.playerReady;
+    final dur     = ctrl?.value.duration ?? Duration.zero;
+    final durStr  = '${dur.inSeconds}s';
+
+    return Column(children: [
+      // Video thumbnail / player
+      Stack(
+        alignment: Alignment.center,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: ready && ctrl != null
+                ? AspectRatio(
+                aspectRatio: ctrl.value.aspectRatio,
+                child: VideoPlayer(ctrl))
+                : Container(
+              height: 220,
+              color: Colors.black87,
+              child: const Center(
+                  child: CircularProgressIndicator(color: Colors.white)),
+            ),
+          ),
+          // Play / pause overlay
+          GestureDetector(
+            onTap: _toggle,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 64, height: 64,
+              decoration: BoxDecoration(
+                color:  Colors.black.withOpacity(0.5),
+                shape:  BoxShape.circle,
+              ),
+              child: Icon(
+                _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                color: Colors.white, size: 36,
+              ),
+            ),
+          ),
+          // Duration badge
+          Positioned(
+            bottom: 10, right: 14,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color:        Colors.black54,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(durStr,
+                  style: const TextStyle(
+                      color: Colors.white, fontSize: 12,
+                      fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+
+      // Action row
+      Row(children: [
+        const Icon(Icons.check_circle_rounded, color: Colors.green, size: 18),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            widget.videoFile.path.split('/').last,
+            style: const TextStyle(
+                fontWeight: FontWeight.w600, fontSize: 13,
+                color: AppColors.textDark),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: 8),
+        _Chip(label: 'Re-record', color: AppColors.primary, onTap: widget.onClear),
+      ]),
+    ]);
+  }
+}
+
+class _Chip extends StatelessWidget {
+  final String       label;
+  final Color        color;
+  final VoidCallback onTap;
+  const _Chip({required this.label, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8)),
+      child: Text(label,
+          style: TextStyle(
+              color: color, fontSize: 12, fontWeight: FontWeight.w700)),
+    ),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PENDING VIEW  (AI verifying or human review)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PendingView extends StatelessWidget {
@@ -609,8 +665,14 @@ class _PendingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isConfirmed = request.isConfirmed;
-    final color       = isConfirmed ? Colors.blue : Colors.orange;
+    final isAiDone = request.isAiVerified;
+    final color    = isAiDone ? Colors.blue : Colors.orange;
+    final title    = isAiDone
+        ? 'AI Verified — Human Review'
+        : 'Verifying Your Video…';
+    final subtitle = isAiDone
+        ? 'Our AI has passed your video. A team member will do a final check shortly.'
+        : 'Our AI is analysing your video. This usually takes a few minutes.';
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -631,8 +693,8 @@ class _PendingView extends StatelessWidget {
                 decoration: BoxDecoration(
                     color: color.withOpacity(0.15), shape: BoxShape.circle),
                 child: Icon(
-                  isConfirmed
-                      ? Icons.event_available_rounded
+                  isAiDone
+                      ? Icons.verified_rounded
                       : Icons.hourglass_top_rounded,
                   color: color, size: 26,
                 ),
@@ -640,34 +702,24 @@ class _PendingView extends StatelessWidget {
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      isConfirmed
-                          ? 'Video Call Confirmed!'
-                          : 'Call Scheduled — Pending Confirmation',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize:   15,
-                        color:      color.shade700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      isConfirmed
-                          ? 'Our agent has confirmed the call. Expect a call at the time below.'
-                          : 'Our team will confirm your slot shortly.',
-                      style: TextStyle(
-                          fontSize: 12, color: color.shade600, height: 1.4),
-                    ),
-                  ],
-                ),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title,
+                          style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                              color: color)),
+                      const SizedBox(height: 4),
+                      Text(subtitle,
+                          style: TextStyle(
+                              fontSize: 12, color: color, height: 1.4)),
+                    ]),
               ),
             ]),
           ),
           const SizedBox(height: 20),
 
-          // Details card
+          // Details
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -676,19 +728,16 @@ class _PendingView extends StatelessWidget {
               border:       Border.all(color: AppColors.borderColor),
             ),
             child: Column(children: [
-              _DetailRow(label: 'Reference ID', value: request.referenceId, mono: true),
+              _DetailRow(label: 'Reference ID',    value: request.referenceId, mono: true),
               const Divider(height: 20),
-              _DetailRow(label: 'Preferred Date', value: request.preferredDate),
-              const Divider(height: 20),
-              _DetailRow(
-                label: 'Time Slot',
-                value: request.preferredSlot.label,
-              ),
-              const Divider(height: 20),
-              _DetailRow(label: 'Call Number', value: request.callPhone, mono: true),
-              if (request.confirmedSlot != null) ...[
+              _DetailRow(label: 'Submitted',       value: _fmtDate(request.createdAt)),
+              if (request.aiTranscript != null) ...[
                 const Divider(height: 20),
-                _DetailRow(label: 'Confirmed Time', value: request.confirmedSlot!),
+                _DetailRow(label: 'AI heard',      value: '"${request.aiTranscript}"'),
+              ],
+              if (request.aiConfidence != null) ...[
+                const Divider(height: 20),
+                _DetailRow(label: 'AI confidence', value: '${request.aiConfidence}%'),
               ],
             ]),
           ),
@@ -702,13 +751,12 @@ class _PendingView extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               border:       Border.all(color: const Color(0xFFF5C842).withOpacity(0.4)),
             ),
-            child: Row(children: [
-              const Text('💡', style: TextStyle(fontSize: 18)),
-              const SizedBox(width: 10),
-              const Expanded(
+            child: const Row(children: [
+              Text('💡', style: TextStyle(fontSize: 18)),
+              SizedBox(width: 10),
+              Expanded(
                 child: Text(
-                  'Keep your ID document handy for the video call. '
-                      'Our agent will ask you to show it briefly on camera.',
+                  'You will receive a notification once verification is complete.',
                   style: TextStyle(
                       fontSize: 12, color: Color(0xFF8B6914), height: 1.5),
                 ),
@@ -728,10 +776,11 @@ class _PendingView extends StatelessWidget {
               child: OutlinedButton.icon(
                 onPressed: isCancelling ? null : onCancel,
                 icon: isCancelling
-                    ? const SizedBox(width: 16, height: 16,
+                    ? const SizedBox(
+                    width: 16, height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.cancel_outlined, size: 18),
-                label: Text(isCancelling ? 'Cancelling…' : 'Cancel Request'),
+                label: Text(isCancelling ? 'Cancelling…' : 'Cancel & Re-record'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.red.shade600,
                   side:  BorderSide(color: Colors.red.shade200),
@@ -749,7 +798,7 @@ class _PendingView extends StatelessWidget {
                 label: const Text('Refresh'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primary,
-                  side:  BorderSide(color: AppColors.primary.withOpacity(0.4)),
+                  side: BorderSide(color: AppColors.primary.withOpacity(0.4)),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
@@ -762,170 +811,19 @@ class _PendingView extends StatelessWidget {
       ),
     );
   }
-}
 
-
-
-class _CallReadyView extends StatelessWidget {
-  final VideoKycRequest request;
-  final bool isJoining;
-  final String? error;
-  final VoidCallback onJoin;
-  final VoidCallback onRefresh;
-
-  const _CallReadyView({
-    required this.request,
-    required this.isJoining,
-    required this.onJoin,
-    required this.onRefresh,
-    this.error,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          const SizedBox(height: 20),
-          const _PulsingCallIcon(),
-          const SizedBox(height: 28),
-
-          const Text(
-            'Agent is Ready!',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
-              color: AppColors.textDark,
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          const Text(
-            'Your verification agent has joined.\nTap below to start your KYC video call.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 14,
-              color: AppColors.textGrey,
-              height: 1.6,
-            ),
-          ),
-
-          const SizedBox(height: 28),
-
-          if (error != null) ...[
-            _ErrorBanner(message: error!),
-            const SizedBox(height: 16),
-          ],
-
-          SizedBox(
-            width: double.infinity,
-            height: 58,
-            child: ElevatedButton.icon(
-              onPressed: isJoining ? null : onJoin,
-              icon: isJoining
-                  ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2.5,
-                ),
-              )
-                  : const Icon(Icons.videocam_rounded),
-              label: Text(
-                isJoining ? 'Connecting...' : 'Join Video Call',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 17,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 14),
-
-          TextButton.icon(
-            onPressed: onRefresh,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Refresh status'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PulsingCallIcon extends StatefulWidget {
-  const _PulsingCallIcon();
-
-  @override
-  State<_PulsingCallIcon> createState() => _PulsingCallIconState();
-}
-
-class _PulsingCallIconState extends State<_PulsingCallIcon>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _scale;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true);
-
-    _scale = Tween<double>(begin: 0.92, end: 1.08).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ScaleTransition(
-      scale: _scale,
-      child: Container(
-        width: 110,
-        height: 110,
-        decoration: BoxDecoration(
-          color: Colors.green,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.green.withOpacity(0.35),
-              blurRadius: 22,
-              spreadRadius: 4,
-            ),
-          ],
-        ),
-        child: const Icon(
-          Icons.videocam_rounded,
-          color: Colors.white,
-          size: 52,
-        ),
-      ),
-    );
+  String _fmtDate(String raw) {
+    try {
+      final dt = DateTime.parse(raw).toLocal();
+      return '${dt.day}/${dt.month}/${dt.year}  ${dt.hour.toString().padLeft(2,'0')}:${dt.minute.toString().padLeft(2,'0')}';
+    } catch (_) {
+      return raw;
+    }
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// COMPLETED STATE
+// COMPLETED VIEW
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _CompletedView extends StatelessWidget {
@@ -937,266 +835,142 @@ class _CompletedView extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 100, height: 100,
+            decoration: const BoxDecoration(
+                color: Color(0xFFE8F5E9), shape: BoxShape.circle),
+            child: const Icon(Icons.verified_rounded,
+                color: Colors.green, size: 56),
+          ),
+          const SizedBox(height: 24),
+          const Text('Video KYC Complete! 🎉',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900,
+                  color: AppColors.textDark)),
+          const SizedBox(height: 12),
+          Text(
+            'Your video was verified successfully. '
+                'Your KYC is now fully complete.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontSize: 14, color: Colors.grey.shade600, height: 1.6),
+          ),
+          if (request.agentNotes != null) ...[
+            const SizedBox(height: 16),
             Container(
-              width: 100, height: 100,
-              decoration: const BoxDecoration(
-                  color: Color(0xFFE8F5E9), shape: BoxShape.circle),
-              child: const Icon(Icons.verified_rounded,
-                  color: Colors.green, size: 56),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Video KYC Complete! 🎉',
-              style: TextStyle(
-                fontSize:   22,
-                fontWeight: FontWeight.w900,
-                color:      AppColors.textDark,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color:        Colors.green.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border:       Border.all(color: Colors.green.shade200),
               ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Your video verification was successful. '
-                  'Your KYC is now fully complete.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color:    Colors.grey.shade600,
-                height:   1.6,
-              ),
-            ),
-            if (request.agentNotes != null) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color:        Colors.green.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border:       Border.all(color: Colors.green.shade200),
-                ),
-                child: Text(
-                  '📝 Agent note: ${request.agentNotes}',
-                  style: TextStyle(
-                      fontSize: 13, color: Colors.green.shade700, height: 1.4),
-                ),
-              ),
-            ],
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                  elevation: 0,
-                ),
-                child: const Text('Back to KYC',
-                    style: TextStyle(color: Colors.white,
-                        fontWeight: FontWeight.w700, fontSize: 16)),
-              ),
+              child: Text('📝 Note: ${request.agentNotes}',
+                  style: TextStyle(fontSize: 13,
+                      color: Colors.green.shade700, height: 1.4)),
             ),
           ],
-        ),
+          const SizedBox(height: 32),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+              child: const Text('Done',
+                  style: TextStyle(color: Colors.white,
+                      fontWeight: FontWeight.w700, fontSize: 16)),
+            ),
+          ),
+        ]),
       ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FAILED STATE
+// FAILED VIEW
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _FailedView extends StatelessWidget {
   final VideoKycRequest request;
-  final VoidCallback    onReschedule;
-  const _FailedView({required this.request, required this.onReschedule});
+  final VoidCallback    onRetry;
+  const _FailedView({required this.request, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 90, height: 90,
-              decoration: BoxDecoration(
-                  color: Colors.red.shade50, shape: BoxShape.circle),
-              child: Icon(Icons.video_call_rounded,
-                  color: Colors.red.shade500, size: 48),
-            ),
-            const SizedBox(height: 24),
-            Text('Video KYC Failed',
-                style: TextStyle(
-                  fontSize: 22, fontWeight: FontWeight.w800,
-                  color: Colors.red.shade700,
-                )),
-            const SizedBox(height: 12),
-            if (request.rejectionReason != null)
-              Text(
-                'Reason: ${request.rejectionReason}',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14,
-                    color: Colors.red.shade600, height: 1.5),
-              ),
-            const SizedBox(height: 8),
-            Text(
-              'Please schedule a new slot for another attempt.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-            ),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: onReschedule,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                  elevation: 0,
-                ),
-                child: const Text('Reschedule',
-                    style: TextStyle(color: Colors.white,
-                        fontWeight: FontWeight.w700, fontSize: 16)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GATE BANNER (when pre-requisites aren't met)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _GateBanner extends StatelessWidget {
-  final IconData  icon;
-  final Color     color;
-  final String    title;
-  final String    message;
-  final String    buttonLabel;
-  final VoidCallback onTap;
-
-  const _GateBanner({
-    required this.icon,
-    required this.color,
-    required this.title,
-    required this.message,
-    required this.buttonLabel,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 90, height: 90,
-              decoration: BoxDecoration(
-                  color: color.withOpacity(0.1), shape: BoxShape.circle),
-              child: Icon(icon, color: color, size: 44),
-            ),
-            const SizedBox(height: 24),
-            Text(title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 20, fontWeight: FontWeight.w800,
-                    color: AppColors.textDark)),
-            const SizedBox(height: 12),
-            Text(message,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 14, color: AppColors.textGrey, height: 1.6)),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: onTap,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                  elevation: 0,
-                ),
-                child: Text(buttonLabel,
-                    style: const TextStyle(color: Colors.white,
-                        fontWeight: FontWeight.w700, fontSize: 16)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// INFO CARDS
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _InfoCard extends StatelessWidget {
-  final String docStatusBadge;
-  const _InfoCard({required this.docStatusBadge});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color:        AppColors.primary.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(14),
-        border:       Border.all(color: AppColors.primary.withOpacity(0.15)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          const Icon(Icons.videocam_rounded, color: AppColors.primary, size: 22),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Text('Video KYC Call',
-                style: TextStyle(fontWeight: FontWeight.w800,
-                    fontSize: 15, color: AppColors.textDark)),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 90, height: 90,
+            decoration: BoxDecoration(
+                color: Colors.red.shade50, shape: BoxShape.circle),
+            child: Icon(Icons.videocam_off_rounded,
+                color: Colors.red.shade500, size: 48),
           ),
-          if (docStatusBadge.isNotEmpty)
+          const SizedBox(height: 24),
+          Text('Verification Failed',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800,
+                  color: Colors.red.shade700)),
+          const SizedBox(height: 12),
+          if (request.rejectionReason != null)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color:        Colors.green.shade50,
-                borderRadius: BorderRadius.circular(20),
-                border:       Border.all(color: Colors.green.shade200),
+                color:        Colors.red.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border:       Border.all(color: Colors.red.shade200),
               ),
-              child: Text(
-                docStatusBadge,
-                style: TextStyle(
-                    fontSize: 10, fontWeight: FontWeight.w700,
-                    color: Colors.green.shade700),
+              child: Text('Reason: ${request.rejectionReason}',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13,
+                      color: Colors.red.shade700, height: 1.5)),
+            ),
+          if (request.aiTranscript != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              'AI heard: "${request.aiTranscript}"',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 12, color: Colors.grey.shade600, height: 1.4),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Text('Please record a new video and try again.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+          const SizedBox(height: 32),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.videocam_rounded),
+              label: const Text('Record Again'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
               ),
             ),
+          ),
         ]),
-        const SizedBox(height: 8),
-        const Text(
-          'Schedule a short call with a Speedonet verification agent. '
-              'The call takes about 2–3 minutes — just have your ID document ready.',
-          style: TextStyle(fontSize: 12, color: AppColors.textGrey, height: 1.5),
-        ),
-      ]),
+      ),
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HOW IT WORKS
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _HowItWorksCard extends StatelessWidget {
   const _HowItWorksCard();
@@ -1204,10 +978,10 @@ class _HowItWorksCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const steps = [
-      ('1', 'Schedule', 'Pick your preferred date and time slot below'),
-      ('2', 'We call you', 'Our agent will call your number at the selected time'),
-      ('3', 'Quick verify', 'Show your ID card on the call — 2-3 minutes'),
-      ('4', 'Done!', 'KYC completes and you get full account access'),
+      ('1', 'Read the phrase', 'Note the sentence shown below that you must say'),
+      ('2', 'Record a short video', 'Use your front camera — 5 to 15 seconds is enough'),
+      ('3', 'Submit', 'Our AI instantly checks that you said the phrase correctly'),
+      ('4', 'Done!', 'Verification completes and you get full account access'),
     ];
 
     return Container(
@@ -1218,9 +992,13 @@ class _HowItWorksCard extends StatelessWidget {
         border:       Border.all(color: AppColors.borderColor),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('How it works',
-            style: TextStyle(fontWeight: FontWeight.w800,
-                fontSize: 14, color: AppColors.textDark)),
+        const Row(children: [
+          Icon(Icons.info_outline_rounded, color: AppColors.primary, size: 18),
+          SizedBox(width: 8),
+          Text('How Video KYC works',
+              style: TextStyle(fontWeight: FontWeight.w800,
+                  fontSize: 14, color: AppColors.textDark)),
+        ]),
         const SizedBox(height: 14),
         ...steps.map((s) => Padding(
           padding: const EdgeInsets.only(bottom: 12),
@@ -1237,15 +1015,15 @@ class _HowItWorksCard extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(s.$2, style: const TextStyle(
-                    fontWeight: FontWeight.w700, fontSize: 13,
-                    color: AppColors.textDark)),
-                Text(s.$3, style: const TextStyle(
-                    fontSize: 11, color: AppColors.textGrey, height: 1.4)),
-              ],
-            )),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(s.$2,
+                      style: const TextStyle(fontWeight: FontWeight.w700,
+                          fontSize: 13, color: AppColors.textDark)),
+                  Text(s.$3,
+                      style: const TextStyle(fontSize: 11,
+                          color: AppColors.textGrey, height: 1.4)),
+                ])),
           ]),
         )),
       ]),
@@ -1254,53 +1032,165 @@ class _HowItWorksCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SHARED WIDGETS
+// TIPS CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _Label extends StatelessWidget {
-  final String text;
-  const _Label({required this.text});
+class _TipsCard extends StatelessWidget {
+  const _TipsCard();
+
   @override
-  Widget build(BuildContext context) => Text(text,
-      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
-          color: AppColors.primary));
+  Widget build(BuildContext context) {
+    const tips = [
+      'Use good lighting — your face must be clearly visible',
+      'Hold your ID document steady in front of the camera',
+      'Speak clearly at a normal pace — no need to rush',
+      'Keep background noise minimal for better transcription',
+      'Video must be between 5 and 30 seconds',
+    ];
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color:        const Color(0xFFFFFBF0),
+        borderRadius: BorderRadius.circular(14),
+        border:       Border.all(color: const Color(0xFFF5C842).withOpacity(0.4)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Row(children: [
+          Icon(Icons.lightbulb_outline_rounded,
+              color: Color(0xFF8B6914), size: 18),
+          SizedBox(width: 8),
+          Text('Tips for a successful verification',
+              style: TextStyle(fontWeight: FontWeight.w700,
+                  fontSize: 13, color: Color(0xFF8B6914))),
+        ]),
+        const SizedBox(height: 10),
+        ...tips.map((t) => Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('• ',
+                style: TextStyle(color: Color(0xFF8B6914),
+                    fontWeight: FontWeight.w700)),
+            Expanded(
+              child: Text(t,
+                  style: const TextStyle(fontSize: 12,
+                      color: Color(0xFF8B6914), height: 1.4)),
+            ),
+          ]),
+        )),
+      ]),
+    );
+  }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GATE BANNER
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _GateBanner extends StatelessWidget {
+  final IconData     icon;
+  final Color        color;
+  final String       title;
+  final String       message;
+  final String       buttonLabel;
+  final VoidCallback onTap;
+
+  const _GateBanner({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.message,
+    required this.buttonLabel,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 90, height: 90,
+            decoration: BoxDecoration(
+                color: color.withOpacity(0.1), shape: BoxShape.circle),
+            child: Icon(icon, color: color, size: 44),
+          ),
+          const SizedBox(height: 24),
+          Text(title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800,
+                  color: AppColors.textDark)),
+          const SizedBox(height: 12),
+          Text(message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14,
+                  color: AppColors.textGrey, height: 1.6)),
+          const SizedBox(height: 32),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: onTap,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+              child: Text(buttonLabel,
+                  style: const TextStyle(color: Colors.white,
+                      fontWeight: FontWeight.w700, fontSize: 16)),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SHARED SMALL WIDGETS
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _DetailRow extends StatelessWidget {
   final String label;
   final String value;
   final bool   mono;
   const _DetailRow({required this.label, required this.value, this.mono = false});
+
   @override
   Widget build(BuildContext context) => Row(children: [
-    Text(label, style: const TextStyle(fontSize: 13, color: AppColors.textGrey)),
+    Text(label,
+        style: const TextStyle(fontSize: 13, color: AppColors.textGrey)),
     const Spacer(),
-    Text(value, style: TextStyle(
-      fontSize:      13,
-      fontWeight:    FontWeight.w700,
-      color:         AppColors.textDark,
-      fontFamily:    mono ? 'monospace' : null,
-      letterSpacing: mono ? 0.5 : 0,
-    )),
+    Flexible(
+      child: Text(value,
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
+              color: AppColors.textDark,
+              fontFamily: mono ? 'monospace' : null),
+          textAlign: TextAlign.end),
+    ),
   ]);
 }
 
 class _ErrorBanner extends StatelessWidget {
   final String message;
   const _ErrorBanner({required this.message});
+
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
     decoration: BoxDecoration(
-      color:        AppColors.primary.withOpacity(0.07),
+      color:        Colors.red.shade50,
       borderRadius: BorderRadius.circular(10),
-      border:       Border.all(color: AppColors.primary.withOpacity(0.3)),
+      border:       Border.all(color: Colors.red.shade200),
     ),
     child: Row(children: [
-      const Icon(Icons.error_outline, color: AppColors.primary, size: 18),
+      Icon(Icons.error_outline, color: Colors.red.shade600, size: 18),
       const SizedBox(width: 8),
-      Expanded(child: Text(message, style: const TextStyle(
-          color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w500))),
+      Expanded(child: Text(message,
+          style: TextStyle(color: Colors.red.shade700, fontSize: 13,
+              fontWeight: FontWeight.w500))),
     ]),
   );
 }
