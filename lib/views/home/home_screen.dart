@@ -88,20 +88,15 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-
   void _openInstallationTracker() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const InstallationTrackerScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const InstallationTrackerScreen()),
     );
   }
 
   // ── Profile completeness check ────────────────────────────────────────────
 
-  /// Returns true only when the loaded profile has all fields KYC requires.
-  /// Uses the already-loaded HomeViewModel profile — no extra API call.
   bool _isProfileComplete() {
     final profile = widget.viewModel.profile;
     if (profile == null) return false;
@@ -113,33 +108,27 @@ class _HomeScreenState extends State<HomeScreen> {
         addr.pinCode.isNotEmpty;
   }
 
-  /// Shows the "complete your profile first" bottom sheet.
   void _showProfileRequiredSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) =>
-          _ProfileRequiredSheet(
-            onGoToProfile: () {
-              Navigator.pop(context); // close sheet
-              widget.onNavigateToProfile?.call(); // switch to profile tab
-            },
-          ),
+      builder: (_) => _ProfileRequiredSheet(
+        onGoToProfile: () {
+          Navigator.pop(context);
+          widget.onNavigateToProfile?.call();
+        },
+      ),
     );
   }
 
   // ── Navigation helpers ────────────────────────────────────────────────────
 
-  /// Guards KYC navigation: shows profile-required sheet for new users
-  /// who haven't completed their profile yet.
   void _openKyc() async {
-    // ── Availability gate ──────────────────────────────────────────────────
     if (!widget.viewModel.isAvailabilityConfirmed) {
       _showAvailabilityRequiredSheet();
       return;
     }
-    // ──────────────────────────────────────────────────────────────────────
     if (!_isProfileComplete()) {
       _showProfileRequiredSheet();
       return;
@@ -156,11 +145,10 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            ReferEarnScreen(
-              referralCode: vm.referralCode,
-              referralUrl: vm.referralUrl,
-            ),
+        builder: (_) => ReferEarnScreen(
+          referralCode: vm.referralCode,
+          referralUrl: vm.referralUrl,
+        ),
       ),
     );
   }
@@ -168,122 +156,106 @@ class _HomeScreenState extends State<HomeScreen> {
   void _openAvailabilityCheck() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const ServiceAvailabilityScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const ServiceAvailabilityScreen()),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final vm = widget.viewModel;
-    final topPadding = MediaQuery
-        .of(context)
-        .padding
-        .top;
+    final topPadding = MediaQuery.of(context).padding.top;
     final headerHeight = topPadding + 68.0;
-    final bottomNavHeight = 64 + 16 + MediaQuery
-        .of(context)
-        .padding
-        .bottom;
+    final bottomNavHeight = 64 + 16 + MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: AppColors.background,
       drawer: ListenableBuilder(
         listenable: vm,
-        builder: (context, _) =>
-            AppDrawer(
-              userName: vm.userName,
-              walletBalance: vm.walletBalance,
-              profileImageUrl: vm.profileImageUrl,
-              onClose: () => _scaffoldKey.currentState?.closeDrawer(),
-              onMenuItemTap: (item) {
-                _scaffoldKey.currentState?.closeDrawer();
-                switch (item) {
-                  case 'Profile':
-                    widget.onNavigateToProfile?.call();
-                    break;
-                  case 'New Plans':
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PlansScreen(homeViewModel: vm),
+        builder: (context, _) => AppDrawer(
+          userName: vm.userName,
+          walletBalance: vm.walletBalance,
+          profileImageUrl: vm.profileImageUrl,
+          onClose: () => _scaffoldKey.currentState?.closeDrawer(),
+          onMenuItemTap: (item) {
+            _scaffoldKey.currentState?.closeDrawer();
+            switch (item) {
+              case 'Profile':
+                widget.onNavigateToProfile?.call();
+                break;
+              case 'New Plans':
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PlansScreen(homeViewModel: vm),
+                  ),
+                );
+                break;
+              case 'Check Availability':
+                _openAvailabilityCheck();
+                break;
+              case 'Installation Status':
+                _openInstallationTracker();
+                break;
+              case 'Pays':
+                widget.onNavigateToPay?.call();
+                break;
+              case 'Refer & Earn':
+                _openReferEarn();
+                break;
+              case 'KYC':
+                _openKyc();
+                break;
+              case 'Transaction History':
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const MyBillsScreen()));
+                break;
+              case 'Support/Chat':
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => HelpScreen(viewModel: HelpViewModel()),
+                  ),
+                );
+                break;
+              case 'About Speedonet':
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AboutScreen()),
+                );
+                break;
+              case 'Change Password':
+                Navigator.push(context,
+                    MaterialPageRoute(
+                        builder: (_) => const ChangePasswordScreen()));
+                break;
+              case 'Logout':
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Logout'),
+                    content: const Text('Are you sure you want to logout?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Cancel'),
                       ),
-                    );
-                    break;
-
-
-                  case 'Check Availability':
-                    _openAvailabilityCheck();
-                    break;
-
-                  case 'Installation Status':
-                    _openInstallationTracker();
-                    break;
-
-                  case 'Pays':
-                    widget.onNavigateToPay?.call();
-                    break;
-                  case 'Refer & Earn':
-                    _openReferEarn();
-                    break;
-                  case 'KYC':
-                    _openKyc();
-                    break;
-                  case 'Transaction History':
-                    Navigator.push(context,
-                        MaterialPageRoute(
-                            builder: (_) => const MyBillsScreen()));
-                    break;
-                  case 'Support/Chat':
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => HelpScreen(viewModel: HelpViewModel()),
+                      TextButton(
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          await AuthService().logout();
+                          widget.onLogout?.call();
+                        },
+                        child: const Text('Logout',
+                            style: TextStyle(color: AppColors.primary)),
                       ),
-                    );
-                    break;
-                  case 'About Speedonet':
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const AboutScreen()),
-                    );
-                    break;
-                  case 'Change Password':
-                    Navigator.push(context,
-                        MaterialPageRoute(
-                            builder: (_) => const ChangePasswordScreen()));
-                    break;
-                  case 'Logout':
-                    showDialog(
-                      context: context,
-                      builder: (ctx) =>
-                          AlertDialog(
-                            title: const Text('Logout'),
-                            content: const Text(
-                                'Are you sure you want to logout?'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx),
-                                child: const Text('Cancel'),
-                              ),
-                              TextButton(
-                                onPressed: () async {
-                                  Navigator.pop(ctx);
-                                  await AuthService().logout();
-                                  widget.onLogout?.call();
-                                },
-                                child: const Text('Logout',
-                                    style: TextStyle(color: AppColors.primary)),
-                              ),
-                            ],
-                          ),
-                    );
-                    break;
-                }
-              },
-            ),
+                    ],
+                  ),
+                );
+                break;
+            }
+          },
+        ),
       ),
       body: ListenableBuilder(
         listenable: vm,
@@ -309,8 +281,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   menuKey: _tutorialKeys.menu,
                   notificationKey: _tutorialKeys.notifications,
                   walletKey: _tutorialKeys.wallet,
-                  onMenuTap: () =>
-                      _scaffoldKey.currentState?.openDrawer(),
+                  onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
                   onNotificationTap: () async {
                     final result = await Navigator.push<String>(
                       context,
@@ -329,15 +300,13 @@ class _HomeScreenState extends State<HomeScreen> {
               // ── Body ─────────────────────────────────────────────────────
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                      16, 0, 16, bottomNavHeight + 16),
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, bottomNavHeight + 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
 
                       // 1. KYC status banner
-                      if (vm.kycStatus != null &&
-                          !vm.kycStatus!.isApproved) ...[
+                      if (vm.kycStatus != null && !vm.kycStatus!.isApproved) ...[
                         _KycStatusBanner(
                             kycStatus: vm.kycStatus, onTap: _openKyc),
                         const SizedBox(height: 8),
@@ -346,8 +315,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       const InstallationStatusCard(),
                       const SizedBox(height: 12),
 
-                      // 2. Manage Services
-                      _ManageServicesCard(
+                      // 2. Manage Services — 2-column rectangular grid
+                      _ServicesGrid(
                         services: vm.services,
                         onNavigateToPay: widget.onNavigateToPay,
                         onKycTap: _openKyc,
@@ -360,11 +329,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // 3. Speedo OTT Cards
-                      _SpeedoCards(),
-                      const SizedBox(height: 16),
-
-                      // 4. Promo Banner
+                      // 3. Promo Banner
                       _PromoBanner(
                         currentIndex: vm.promoBannerIndex,
                         onPageChanged: vm.onPromoBannerPageChanged,
@@ -372,7 +337,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: 30),
 
-                      // 5. Features / Refer & Earn
+                      // 4. Features / Refer & Earn
                       _FeaturesSection(
                         currentIndex: vm.featureBannerIndex,
                         onPageChanged: vm.onFeatureBannerPageChanged,
@@ -398,59 +363,47 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) =>
-          Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: EdgeInsets.fromLTRB(
+          24, 12, 24,
+          24 + MediaQuery.of(context).padding.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-            padding: EdgeInsets.fromLTRB(
-              24, 12, 24,
-              24 + MediaQuery
-                  .of(context)
-                  .padding
-                  .bottom,
+            const SizedBox(height: 24),
+            const Text(
+              'Check Availability First',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                const Text(
-                  'Check Availability First',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-
-                const Text(
-                  'Please check availability before proceeding.',
-                  textAlign: TextAlign.center,
-                ),
-
-                const SizedBox(height: 20),
-
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _openAvailabilityCheck();
-                  },
-                  child: const Text('Check Availability'),
-                ),
-              ],
+            const SizedBox(height: 10),
+            const Text(
+              'Please check availability before proceeding.',
+              textAlign: TextAlign.center,
             ),
-          ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _openAvailabilityCheck();
+              },
+              child: const Text('Check Availability'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -467,7 +420,7 @@ class _KycStatusBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = kycStatus;
-    if (s == null || s.isApproved)  return const SizedBox.shrink();
+    if (s == null || s.isApproved) return const SizedBox.shrink();
     if (s.isNotSubmitted) return _NotSubmittedBanner(onTap: onTap);
     if (s.isPending)      return _PendingBanner(onCheckStatus: onTap);
     if (s.isRejected)     return _RejectedBanner(onFix: onTap);
@@ -483,7 +436,7 @@ class _PendingBanner extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
-      color:        AppColors.reviewBg,
+      color: AppColors.reviewBg,
       borderRadius: BorderRadius.circular(16),
       border: Border.all(color: AppColors.reviewBorder.withOpacity(0.4)),
     ),
@@ -529,9 +482,9 @@ class _RejectedBanner extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
-      color:        Colors.red.shade50,
+      color: Colors.red.shade50,
       borderRadius: BorderRadius.circular(16),
-      border:       Border.all(color: Colors.red.shade200),
+      border: Border.all(color: Colors.red.shade200),
     ),
     child: Row(children: [
       AppIcon(AppIcons.cancelCircle, color: Colors.red.shade600, size: 26),
@@ -553,7 +506,8 @@ class _RejectedBanner extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-              color: Colors.red.shade600, borderRadius: BorderRadius.circular(8)),
+              color: Colors.red.shade600,
+              borderRadius: BorderRadius.circular(8)),
           child: const Text('Fix Now',
               style: TextStyle(color: Colors.white,
                   fontWeight: FontWeight.w700, fontSize: 12)),
@@ -564,10 +518,10 @@ class _RejectedBanner extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MANAGE SERVICES
+// MANAGE SERVICES — 2-column rectangular grid
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _ManageServicesCard extends StatelessWidget {
+class _ServicesGrid extends StatelessWidget {
   final List<Map<String, String>> services;
   final VoidCallback?  onNavigateToPay;
   final VoidCallback?  onKycTap;
@@ -576,9 +530,9 @@ class _ManageServicesCard extends StatelessWidget {
   final GlobalKey?     payBillsKey;
   final GlobalKey?     newPlanKey;
   final GlobalKey?     kycKey;
-  final VoidCallback? onAvailabilityRequired;
+  final VoidCallback?  onAvailabilityRequired;
 
-  const _ManageServicesCard({
+  const _ServicesGrid({
     required this.services,
     this.onNavigateToPay,
     this.onKycTap,
@@ -590,18 +544,18 @@ class _ManageServicesCard extends StatelessWidget {
     this.onAvailabilityRequired,
   });
 
-  String _getImageAsset(String iconKey) {
+  String _assetFor(String iconKey) {
     switch (iconKey) {
       case 'pay_bills':   return 'assets/images/pay_bills.png';
-      case 'new_plan':    return 'assets/images/new_plan.png';
-      case 'kyc':         return 'assets/images/KYC_icon.png';
-      case 'outstanding': return 'assets/images/outstanding_icon.png';
-      case 'my_bills':    return 'assets/images/my_bills.png';
+      case 'new_plan':    return 'assets/images/wifi-signal_2888720.png';
+      case 'kyc':         return 'assets/images/kyc.png';
+      case 'outstanding': return 'assets/images/document_17246597.png';
+      case 'my_bills':    return 'assets/images/pay_bills.png';
       default:            return 'assets/images/pay_bills.png';
     }
   }
 
-  GlobalKey? _keyForLabel(String label) {
+  GlobalKey? _keyFor(String label) {
     switch (label) {
       case 'Pay Bills': return payBillsKey;
       case 'New Plan':  return newPlanKey;
@@ -612,60 +566,68 @@ class _ManageServicesCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      key:     cardKey,
-      width:   double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color:        AppColors.cardBg,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05),
-              blurRadius: 8, offset: const Offset(0, 2))
-        ],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Manage Services',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700,
-                color: AppColors.textDark)),
-        const SizedBox(height: 20),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: services.take(4).map((s) => _ServiceItem(
-            imageAsset: _getImageAsset(s['icon']!),
-            label: s['label']!,
-            screenContext: context,
-            onNavigateToPay: onNavigateToPay,
-            onKycTap: onKycTap,
-            homeViewModel: homeViewModel,
-            tutorialKey: _keyForLabel(s['label']!),
-            onAvailabilityRequired: onAvailabilityRequired,
-          )).toList(),
-        ),
-        if (services.length > 4) ...[
-          const SizedBox(height: 20),
-          Row(
-            children: services.skip(4).map((s) => Padding(
-              padding: const EdgeInsets.only(right: 24),
-              child: _ServiceItem(
-                imageAsset:      _getImageAsset(s['icon']!),
-                label:           s['label']!,
-                screenContext:   context,
-                onNavigateToPay: onNavigateToPay,
-                onKycTap:        onKycTap,
-                homeViewModel:   homeViewModel,
-                tutorialKey:     _keyForLabel(s['label']!),
-                onAvailabilityRequired: onAvailabilityRequired,
-              ),
-            )).toList(),
+    final rows = <List<Map<String, String>>>[];
+    for (var i = 0; i < services.length; i += 2) {
+      rows.add(services.sublist(i, (i + 2).clamp(0, services.length)));
+    }
+
+    return Column(
+      key: cardKey,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Manage Services',
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textDark,
           ),
-        ],
-      ]),
+        ),
+        const SizedBox(height: 14),
+        ...rows.map((pair) => Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: _ServiceRect(
+                  imageAsset:             _assetFor(pair[0]['icon']!),
+                  label:                  pair[0]['label']!,
+                  screenContext:          context,
+                  onNavigateToPay:        onNavigateToPay,
+                  onKycTap:               onKycTap,
+                  homeViewModel:          homeViewModel,
+                  tutorialKey:            _keyFor(pair[0]['label']!),
+                  onAvailabilityRequired: onAvailabilityRequired,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: pair.length > 1
+                    ? _ServiceRect(
+                  imageAsset:             _assetFor(pair[1]['icon']!),
+                  label:                  pair[1]['label']!,
+                  screenContext:          context,
+                  onNavigateToPay:        onNavigateToPay,
+                  onKycTap:               onKycTap,
+                  homeViewModel:          homeViewModel,
+                  tutorialKey:            _keyFor(pair[1]['label']!),
+                  onAvailabilityRequired: onAvailabilityRequired,
+                )
+                    : const SizedBox(),
+              ),
+            ],
+          ),
+        )),
+      ],
     );
   }
 }
 
-class _ServiceItem extends StatelessWidget {
+// ─────────────────────────────────────────────────────────────────────────────
+// RECTANGULAR SERVICE CARD
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ServiceRect extends StatefulWidget {
   final String        imageAsset;
   final String        label;
   final BuildContext  screenContext;
@@ -673,9 +635,9 @@ class _ServiceItem extends StatelessWidget {
   final VoidCallback?  onKycTap;
   final HomeViewModel? homeViewModel;
   final GlobalKey?     tutorialKey;
-  final VoidCallback? onAvailabilityRequired;
+  final VoidCallback?  onAvailabilityRequired;
 
-  const _ServiceItem({
+  const _ServiceRect({
     required this.imageAsset,
     required this.label,
     required this.screenContext,
@@ -686,28 +648,59 @@ class _ServiceItem extends StatelessWidget {
     this.onAvailabilityRequired,
   });
 
+  @override
+  State<_ServiceRect> createState() => _ServiceRectState();
+}
+
+class _ServiceRectState extends State<_ServiceRect>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double>   _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 110),
+    );
+    _scale = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
   void _onTap() {
-    switch (label) {
-      case 'Pay Bills':  onNavigateToPay?.call(); break;
-      case 'KYC':        onKycTap?.call(); break;
+    final ctx = widget.screenContext;
+    switch (widget.label) {
+      case 'Pay Bills':
+        widget.onNavigateToPay?.call();
+        break;
+      case 'KYC':
+        widget.onKycTap?.call();
+        break;
       case 'Outstanding':
-        Navigator.push(screenContext,
+        Navigator.push(ctx,
             MaterialPageRoute(builder: (_) => const PendingBillsScreen()));
         break;
       case 'My Bills':
-        Navigator.push(screenContext,
+        Navigator.push(ctx,
             MaterialPageRoute(builder: (_) => const MyBillsScreen()));
         break;
       case 'New Plan':
-        if (!(homeViewModel?.isAvailabilityConfirmed ?? false)) {
-          onAvailabilityRequired?.call();
+        if (!(widget.homeViewModel?.isAvailabilityConfirmed ?? false)) {
+          widget.onAvailabilityRequired?.call();
           return;
         }
-
         Navigator.push(
-          screenContext,
+          ctx,
           MaterialPageRoute(
-            builder: (_) => PlansScreen(homeViewModel: homeViewModel),
+            builder: (_) => PlansScreen(homeViewModel: widget.homeViewModel),
           ),
         );
         break;
@@ -717,111 +710,46 @@ class _ServiceItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap:    _onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(
-          key:    tutorialKey,
-          width:  55,
-          height: 55,
-          decoration: const BoxDecoration(shape: BoxShape.circle),
-          padding: const EdgeInsets.all(4),
-          child: Image.asset(imageAsset, fit: BoxFit.contain),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          width: 72,
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, color: AppColors.textDark,
-                  fontWeight: FontWeight.w500, height: 1.3),
-              maxLines: 2,
-            ),
+      key:         widget.tutorialKey,
+      onTapDown:   (_) => _ctrl.forward(),
+      onTapUp:     (_) { _ctrl.reverse(); _onTap(); },
+      onTapCancel: ()  => _ctrl.reverse(),
+      child: ScaleTransition(
+        scale: _scale,
+        child: Container(
+          height: 72,
+          decoration: BoxDecoration(
+            color: AppColors.cardBg,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color:      Colors.black.withOpacity(0.055),
+                blurRadius: 8,
+                offset:     const Offset(0, 2),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                widget.label,
+                style: const TextStyle(
+                  fontSize:   13.5,
+                  fontWeight: FontWeight.w600,
+                  color:      AppColors.textDark,
+                ),
+              ),
+              Image.asset(
+                widget.imageAsset,
+                width:  48,
+                height: 48,
+                fit:    BoxFit.contain,
+              ),
+            ],
           ),
         ),
-      ]),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SPEEDO CARDS
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SpeedoCards extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Row(children: [
-      Expanded(child: _SpeedoCard(
-        title: 'SPEEDO', titleSuffix: 'prime', isTv: false,
-        subtitle: 'Watch your favourite\nmovies on Speedo Prime',
-      )),
-      const SizedBox(width: 12),
-      Expanded(child: _SpeedoCard(
-        title: 'SPEEDO', titleSuffix: 'TV', isTv: true,
-        subtitle: 'Watch all OTT content\nin one place',
-      )),
-    ]);
-  }
-}
-
-class _SpeedoCard extends StatelessWidget {
-  final String title, titleSuffix, subtitle;
-  final bool isTv;
-
-  static const _primePacakge = 'com.speedoprime';
-  static const _tvPackage    = 'com.speedotv';
-
-  const _SpeedoCard({
-    required this.title, required this.titleSuffix,
-    required this.isTv, required this.subtitle,
-  });
-
-  Future<void> _launch() async {
-    final package  = isTv ? _tvPackage : _primePacakge;
-    final appUri   = Uri.parse('android-app://$package');
-    final storeUri = Uri.parse(
-        'https://play.google.com/store/apps/details?id=$package');
-    if (await canLaunchUrl(appUri)) {
-      await launchUrl(appUri);
-    } else {
-      await launchUrl(storeUri, mode: LaunchMode.externalApplication);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: _launch,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        constraints: const BoxConstraints(minHeight: 180),
-        decoration: BoxDecoration(
-          color:        AppColors.cardBg,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
-              blurRadius: 8, offset: const Offset(0, 2))],
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min, children: [
-              Image.asset(isTv ? 'assets/images/speedo_tv.png'
-                  : 'assets/images/speedo_prime.png',
-                  width: 140, height: 50, fit: BoxFit.contain),
-              const SizedBox(height: 8),
-              Text(subtitle, maxLines: 2,
-                  style: const TextStyle(fontSize: 13, color: AppColors.textGrey,
-                      height: 1.4)),
-              const SizedBox(height: 8),
-              Row(children: [
-                const Text('Watch Now',
-                    style: TextStyle(color: AppColors.primary,
-                        fontWeight: FontWeight.w700, fontSize: 13)),
-                const SizedBox(width: 4),
-                AppIcon(AppIcons.arrowRight, size: 14, color: AppColors.primary),
-              ]),
-            ]),
       ),
     );
   }
@@ -847,14 +775,12 @@ class _PromoBanner extends StatefulWidget {
 }
 
 class _PromoBannerState extends State<_PromoBanner> {
-  // Each item: { 'title', 'subtitle', 'bytes': Uint8List, 'id', 'click_url' }
   List<Map<String, dynamic>> _items = [];
   bool _loading = true;
   late final PageController _pageController;
   int _currentIndex = 0;
   Timer? _autoScrollTimer;
 
-  // Height of the visible image area
   static const double _bannerHeight = 220.0;
 
   @override
@@ -870,7 +796,6 @@ class _PromoBannerState extends State<_PromoBanner> {
       return;
     }
     try {
-      // getCarousels now returns the raw API list directly
       final raw = await widget.viewModel!.getCarousels();
       final items = <Map<String, dynamic>>[];
 
@@ -885,11 +810,11 @@ class _PromoBannerState extends State<_PromoBanner> {
         }
         if (bytes != null) {
           items.add({
-            'title':     c['title']     ?? '',
-            'subtitle':  c['subtitle']  ?? '',
+            'title':     c['title']    ?? '',
+            'subtitle':  c['subtitle'] ?? '',
             'bytes':     bytes,
             'id':        c['id'],
-            'click_url': c['click_url'], // nullable
+            'click_url': c['click_url'],
           });
         }
       }
@@ -927,28 +852,18 @@ class _PromoBannerState extends State<_PromoBanner> {
     super.dispose();
   }
 
-  /// Open the link for a tapped banner and record the click.
   Future<void> _onBannerTap(Map<String, dynamic> item) async {
     final clickUrl = item['click_url'] as String?;
     final id       = item['id'];
 
-    // Track click (fire-and-forget)
     if (id != null) {
-      final int parsedId = id is int
-          ? id
-          : int.tryParse(id.toString()) ?? 0;
-
-      if (parsedId > 0) {
-        widget.viewModel?.trackCarouselClick(parsedId);
-      }
+      final int parsedId = id is int ? id : int.tryParse(id.toString()) ?? 0;
+      if (parsedId > 0) widget.viewModel?.trackCarouselClick(parsedId);
     }
 
-    // Launch URL if present
     if (clickUrl != null && clickUrl.isNotEmpty) {
       final uri = Uri.tryParse(clickUrl);
-      if (uri != null) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      }
+      if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 
@@ -956,16 +871,13 @@ class _PromoBannerState extends State<_PromoBanner> {
   Widget build(BuildContext context) {
     if (_loading) {
       return Container(
-        height: _bannerHeight + 40, // image + dots
+        height: _bannerHeight + 40,
         decoration: BoxDecoration(
           color: AppColors.cardBg,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            )
+            BoxShadow(color: Colors.black.withOpacity(0.05),
+                blurRadius: 8, offset: const Offset(0, 2)),
           ],
         ),
         child: ClipRRect(
@@ -982,16 +894,12 @@ class _PromoBannerState extends State<_PromoBanner> {
         color: AppColors.cardBg,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          )
+          BoxShadow(color: Colors.black.withOpacity(0.05),
+              blurRadius: 8, offset: const Offset(0, 2)),
         ],
       ),
       child: Column(
         children: [
-          // ── Image area ──────────────────────────────────────────────────
           ClipRRect(
             borderRadius: BorderRadius.vertical(
               top: const Radius.circular(16),
@@ -1019,7 +927,6 @@ class _PromoBannerState extends State<_PromoBanner> {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        // Full image — contain so nothing is clipped
                         ColoredBox(
                           color: Colors.black,
                           child: Image.memory(
@@ -1036,12 +943,9 @@ class _PromoBannerState extends State<_PromoBanner> {
                             ),
                           ),
                         ),
-
-                        // Subtle "Tap to open" badge when a link exists
                         if (hasLink)
                           Positioned(
-                            right: 10,
-                            bottom: 10,
+                            right: 10, bottom: 10,
                             child: Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 10, vertical: 4),
@@ -1055,11 +959,9 @@ class _PromoBannerState extends State<_PromoBanner> {
                                   Icon(Icons.open_in_new,
                                       color: Colors.white, size: 11),
                                   SizedBox(width: 4),
-                                  Text(
-                                    'Tap to open',
-                                    style: TextStyle(
-                                        color: Colors.white, fontSize: 10),
-                                  ),
+                                  Text('Tap to open',
+                                      style: TextStyle(
+                                          color: Colors.white, fontSize: 10)),
                                 ],
                               ),
                             ),
@@ -1071,8 +973,6 @@ class _PromoBannerState extends State<_PromoBanner> {
               ),
             ),
           ),
-
-          // ── Page indicator dots ──────────────────────────────────────────
           if (_items.length > 1)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1086,9 +986,7 @@ class _PromoBannerState extends State<_PromoBanner> {
                     width:  active ? 20 : 8,
                     height: 8,
                     decoration: BoxDecoration(
-                      color: active
-                          ? AppColors.primary
-                          : Colors.grey.shade300,
+                      color: active ? AppColors.primary : Colors.grey.shade300,
                       borderRadius: BorderRadius.circular(4),
                     ),
                   );
@@ -1101,7 +999,7 @@ class _PromoBannerState extends State<_PromoBanner> {
   }
 }
 
-// ── Shimmer (unchanged) ────────────────────────────────────────────────────
+// ── Shimmer ────────────────────────────────────────────────────────────────
 
 class _BannerShimmer extends StatefulWidget {
   const _BannerShimmer();
@@ -1149,12 +1047,13 @@ class _BannerShimmerState extends State<_BannerShimmer>
     ),
   );
 }
+
 // ─────────────────────────────────────────────────────────────────────────────
 // FEATURES SECTION
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _FeaturesSection extends StatefulWidget {
-  final int          currentIndex;
+  final int           currentIndex;
   final Function(int) onPageChanged;
   final VoidCallback  onReferTap;
   final GlobalKey?    sectionKey;
@@ -1186,7 +1085,7 @@ class _FeaturesSectionState extends State<_FeaturesSection> {
       key:     widget.sectionKey,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color:        AppColors.cardBg,
+        color: AppColors.cardBg,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05),
             blurRadius: 8, offset: const Offset(0, 2))],
@@ -1198,9 +1097,12 @@ class _FeaturesSectionState extends State<_FeaturesSection> {
                   color: AppColors.textDark)),
           Row(children: List.generate(2, (i) => Container(
             margin: const EdgeInsets.symmetric(horizontal: 2),
-            width:  i == _currentIndex ? 20 : 8, height: 8,
+            width:  i == _currentIndex ? 20 : 8,
+            height: 8,
             decoration: BoxDecoration(
-              color: i == _currentIndex ? AppColors.primary : Colors.grey.shade300,
+              color: i == _currentIndex
+                  ? AppColors.primary
+                  : Colors.grey.shade300,
               borderRadius: BorderRadius.circular(4),
             ),
           ))),
@@ -1243,8 +1145,11 @@ class _FeatureSlide extends StatelessWidget {
   final VoidCallback onTap;
 
   const _FeatureSlide({
-    required this.imagePath, required this.title,
-    required this.subtitle, required this.buttonLabel, required this.onTap,
+    required this.imagePath,
+    required this.title,
+    required this.subtitle,
+    required this.buttonLabel,
+    required this.onTap,
   });
 
   @override
@@ -1322,7 +1227,8 @@ class _NotSubmittedBanner extends StatelessWidget {
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(color: Colors.blue.shade600,
+          decoration: BoxDecoration(
+              color: Colors.blue.shade600,
               borderRadius: BorderRadius.circular(8)),
           child: const Text('Start KYC',
               style: TextStyle(color: Colors.white,
@@ -1335,7 +1241,6 @@ class _NotSubmittedBanner extends StatelessWidget {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PROFILE REQUIRED SHEET
-// Shown when a user taps KYC before completing their profile.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ProfileRequiredSheet extends StatelessWidget {
@@ -1346,7 +1251,7 @@ class _ProfileRequiredSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        color:        Colors.white,
+        color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.fromLTRB(
@@ -1356,57 +1261,48 @@ class _ProfileRequiredSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-
-          // Drag handle
           Container(
             width: 36, height: 4,
             decoration: BoxDecoration(
-              color:        Colors.grey.shade300,
+              color: Colors.grey.shade300,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
           const SizedBox(height: 24),
-
-          // Icon
           Container(
             width: 72, height: 72,
             decoration: BoxDecoration(
-              color:  const Color(0xFF1A1A2E).withOpacity(0.07),
+              color: const Color(0xFF1A1A2E).withOpacity(0.07),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.person_outline_rounded,
                 size: 36, color: Color(0xFF1A1A2E)),
           ),
           const SizedBox(height: 20),
-
-          // Title
           const Text(
             'Complete Your Profile First',
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize:   18,
+              fontSize: 18,
               fontWeight: FontWeight.w800,
-              color:      Color(0xFF1A1A2E),
+              color: Color(0xFF1A1A2E),
             ),
           ),
           const SizedBox(height: 10),
-
-          // Body
           const Text(
             'Before submitting KYC documents, please fill in your '
                 'name and address details in your profile. This helps us '
                 'verify your identity accurately.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: Color(0xFF666680), height: 1.6),
+            style: TextStyle(
+                fontSize: 13, color: Color(0xFF666680), height: 1.6),
           ),
           const SizedBox(height: 20),
-
-          // Checklist
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color:        const Color(0xFFF5F5FA),
+              color: const Color(0xFFF5F5FA),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
@@ -1427,8 +1323,8 @@ class _ProfileRequiredSheet extends StatelessWidget {
                           size: 16, color: Color(0xFF1A1A2E)),
                       const SizedBox(width: 8),
                       Text(field,
-                          style: const TextStyle(fontSize: 13,
-                              color: Color(0xFF1A1A2E))),
+                          style: const TextStyle(
+                              fontSize: 13, color: Color(0xFF1A1A2E))),
                     ]),
                   ),
                 ),
@@ -1436,8 +1332,6 @@ class _ProfileRequiredSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-
-          // CTA — Complete Profile
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
@@ -1457,8 +1351,6 @@ class _ProfileRequiredSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-
-          // Dismiss
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Maybe Later',
@@ -1469,5 +1361,3 @@ class _ProfileRequiredSheet extends StatelessWidget {
     );
   }
 }
-
-

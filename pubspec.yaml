@@ -88,6 +88,12 @@ flutter:
 
   assets:
     - assets/images/speedo_prime.png
+    - assets/images/pay_bills.png
+    - assets/images/wifi-signal_2888720.png
+    - assets/images/document_17246597.png
+    - assets/images/wireless-router_11845451.png
+    - assets/images/kyc.png
+    - assets/images/KYC_icon.png
     - assets/images/speedo_tv.png
     - assets/images/refer_friend.png
     - assets/images/support.png
