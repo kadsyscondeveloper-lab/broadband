@@ -118,9 +118,8 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
 
     if (result.success) {
       _clearVideo();
-      setState(() { _existing = result.data; _isSubmitting = false; });
-    } else {
-      setState(() { _error = result.error; _isSubmitting = false; });
+      setState(() => _isSubmitting = false);
+      await _load(); // re-fetch full record so pending UI shows correctly
     }
   }
 
