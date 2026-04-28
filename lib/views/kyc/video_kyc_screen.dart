@@ -1,12 +1,4 @@
 // lib/views/kyc/video_kyc_screen.dart
-//
-// Revised flow:
-//  1. Fetch the required phrase from the backend (/user/kyc/video/script).
-//  2. Show the user the phrase they must say on camera.
-//  3. Let them record via camera or pick a video from gallery.
-//  4. Preview the recorded video.
-//  5. Submit as base64 — backend AI verifies speech content & face.
-//  6. Show result: pending / verified / failed.
 
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -34,7 +26,6 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
   final _picker  = ImagePicker();
 
   VideoKycRequest? _existing;
-  VideoKycScript?  _script;
 
   bool    _isLoading    = true;
   bool    _isSubmitting = false;
@@ -62,9 +53,6 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
   Future<void> _load() async {
     setState(() { _isLoading = true; _error = null; });
     _existing = await _service.getStatus();
-    if (_existing == null) {
-      _script = await _service.getScript();
-    }
     setState(() => _isLoading = false);
   }
 
@@ -72,9 +60,9 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
 
   Future<void> _recordVideo() async {
     final picked = await _picker.pickVideo(
-      source:         ImageSource.camera,
-      maxDuration:    const Duration(seconds: 30),
-      preferredCameraDevice: CameraDevice.front, // selfie cam
+      source:                ImageSource.camera,
+      maxDuration:           const Duration(seconds: 30),
+      preferredCameraDevice: CameraDevice.front,
     );
     if (picked == null) return;
     await _setVideo(File(picked.path));
@@ -116,7 +104,6 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
   Future<void> _submit() async {
     if (_videoFile == null) return;
 
-    // Basic size guard — warn if > 50 MB (rough check before base64 encoding)
     final bytes = await _videoFile!.length();
     if (bytes > 50 * 1024 * 1024) {
       setState(() => _error = 'Video is too large. Please keep it under 50 MB.');
@@ -168,10 +155,10 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
 
     if (result.success) {
       setState(() {
-        _existing    = null;
+        _existing     = null;
         _isCancelling = false;
       });
-      await _load(); // reload script too
+      await _load();
     } else {
       setState(() { _error = result.error; _isCancelling = false; });
     }
@@ -220,8 +207,8 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
       );
     }
 
-    // Submitted & AI verifying / human review
-    if (_existing?.isPending == true || _existing?.isAiVerified == true) {
+    // Under review (pending or under_review)
+    if (_existing?.isInReview == true) {
       return _PendingView(
         request:      _existing!,
         isCancelling: _isCancelling,
@@ -236,36 +223,34 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
       return _CompletedView(request: _existing!);
     }
 
-    // AI rejected
-    if (_existing?.isFailed == true) {
+    // Rejected or failed — show reason and let user re-record
+    if (_existing?.isRejected == true || _existing?.isFailed == true) {
       return _FailedView(
-        request:     _existing!,
-        onRetry:     () => setState(() => _existing = null),
+        request: _existing!,
+        onRetry: () => setState(() => _existing = null),
       );
     }
 
     // Not yet submitted (or cancelled) → show recording UI
     return _RecordingView(
-      script:      _script,
-      videoFile:   _videoFile,
-      playerCtrl:  _playerCtrl,
-      playerReady: _playerReady,
+      videoFile:    _videoFile,
+      playerCtrl:   _playerCtrl,
+      playerReady:  _playerReady,
       isSubmitting: _isSubmitting,
-      error:       _error,
-      onRecord:    _recordVideo,
-      onGallery:   _pickFromGallery,
-      onClear:     _clearVideo,
-      onSubmit:    _submit,
+      error:        _error,
+      onRecord:     _recordVideo,
+      onGallery:    _pickFromGallery,
+      onClear:      _clearVideo,
+      onSubmit:     _submit,
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RECORDING VIEW  (the main "new" screen)
+// RECORDING VIEW
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _RecordingView extends StatelessWidget {
-  final VideoKycScript?        script;
   final File?                  videoFile;
   final VideoPlayerController? playerCtrl;
   final bool                   playerReady;
@@ -277,7 +262,6 @@ class _RecordingView extends StatelessWidget {
   final VoidCallback           onSubmit;
 
   const _RecordingView({
-    required this.script,
     required this.videoFile,
     required this.playerCtrl,
     required this.playerReady,
@@ -297,17 +281,11 @@ class _RecordingView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
 
-          // ── How it works card ──────────────────────────────────────────
-          _HowItWorksCard(),
+          // How it works
+          const _HowItWorksCard(),
           const SizedBox(height: 20),
 
-          // ── Required phrase ────────────────────────────────────────────
-          if (script != null) ...[
-            _PhraseCard(script: script!),
-            const SizedBox(height: 20),
-          ],
-
-          // ── Video preview or pick buttons ──────────────────────────────
+          // Video preview or pick buttons
           videoFile == null
               ? _PickButtons(onRecord: onRecord, onGallery: onGallery)
               : _VideoPreview(
@@ -318,17 +296,17 @@ class _RecordingView extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // ── Tips ───────────────────────────────────────────────────────
-          _TipsCard(),
+          // Tips
+          const _TipsCard(),
           const SizedBox(height: 16),
 
-          // ── Error ──────────────────────────────────────────────────────
+          // Error
           if (error != null) ...[
             _ErrorBanner(message: error!),
             const SizedBox(height: 16),
           ],
 
-          // ── Submit ─────────────────────────────────────────────────────
+          // Submit
           SizedBox(
             width: double.infinity,
             height: 54,
@@ -366,71 +344,7 @@ class _RecordingView extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PHRASE CARD
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _PhraseCard extends StatelessWidget {
-  final VideoKycScript script;
-  const _PhraseCard({required this.script});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color:        AppColors.primary.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(16),
-        border:       Border.all(color: AppColors.primary.withOpacity(0.25)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            const Icon(Icons.record_voice_over_rounded,
-                color: AppColors.primary, size: 20),
-            const SizedBox(width: 8),
-            const Text('Say this phrase on camera',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize:   13,
-                  color:      AppColors.primary,
-                )),
-          ]),
-          const SizedBox(height: 14),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color:        Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border:       Border.all(color: AppColors.primary.withOpacity(0.2)),
-            ),
-            child: Text(
-              '"${script.phrase}"',
-              style: const TextStyle(
-                fontSize:   16,
-                fontWeight: FontWeight.w700,
-                color:      AppColors.textDark,
-                height:     1.5,
-                fontStyle:  FontStyle.italic,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Our AI will verify that you said this phrase clearly. '
-                'Speak naturally — no need to rush.',
-            style: TextStyle(fontSize: 11, color: Colors.grey.shade500, height: 1.4),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PICK BUTTONS (record / gallery)
+// PICK BUTTONS
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PickButtons extends StatelessWidget {
@@ -445,22 +359,22 @@ class _PickButtons extends StatelessWidget {
       Expanded(
         flex: 3,
         child: _BigButton(
-          icon:    Icons.videocam_rounded,
-          label:   'Record Video',
-          sub:     'Uses front camera',
-          color:   AppColors.primary,
-          onTap:   onRecord,
+          icon:  Icons.videocam_rounded,
+          label: 'Record Video',
+          sub:   'Uses front camera',
+          color: AppColors.primary,
+          onTap: onRecord,
         ),
       ),
       const SizedBox(width: 12),
       Expanded(
         flex: 2,
         child: _BigButton(
-          icon:    Icons.photo_library_rounded,
-          label:   'From Gallery',
-          sub:     'Pick existing',
-          color:   Colors.grey.shade600,
-          onTap:   onGallery,
+          icon:  Icons.photo_library_rounded,
+          label: 'From Gallery',
+          sub:   'Pick existing',
+          color: Colors.grey.shade600,
+          onTap: onGallery,
         ),
       ),
     ]);
@@ -545,13 +459,12 @@ class _VideoPreviewState extends State<_VideoPreview> {
 
   @override
   Widget build(BuildContext context) {
-    final ctrl    = widget.playerCtrl;
-    final ready   = widget.playerReady;
-    final dur     = ctrl?.value.duration ?? Duration.zero;
-    final durStr  = '${dur.inSeconds}s';
+    final ctrl   = widget.playerCtrl;
+    final ready  = widget.playerReady;
+    final dur    = ctrl?.value.duration ?? Duration.zero;
+    final durStr = '${dur.inSeconds}s';
 
     return Column(children: [
-      // Video thumbnail / player
       Stack(
         alignment: Alignment.center,
         children: [
@@ -563,20 +476,19 @@ class _VideoPreviewState extends State<_VideoPreview> {
                 child: VideoPlayer(ctrl))
                 : Container(
               height: 220,
-              color: Colors.black87,
+              color:  Colors.black87,
               child: const Center(
                   child: CircularProgressIndicator(color: Colors.white)),
             ),
           ),
-          // Play / pause overlay
           GestureDetector(
             onTap: _toggle,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               width: 64, height: 64,
               decoration: BoxDecoration(
-                color:  Colors.black.withOpacity(0.5),
-                shape:  BoxShape.circle,
+                color: Colors.black.withOpacity(0.5),
+                shape: BoxShape.circle,
               ),
               child: Icon(
                 _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
@@ -584,7 +496,6 @@ class _VideoPreviewState extends State<_VideoPreview> {
               ),
             ),
           ),
-          // Duration badge
           Positioned(
             bottom: 10, right: 14,
             child: Container(
@@ -602,8 +513,6 @@ class _VideoPreviewState extends State<_VideoPreview> {
         ],
       ),
       const SizedBox(height: 12),
-
-      // Action row
       Row(children: [
         const Icon(Icons.check_circle_rounded, color: Colors.green, size: 18),
         const SizedBox(width: 6),
@@ -645,7 +554,7 @@ class _Chip extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PENDING VIEW  (AI verifying or human review)
+// PENDING VIEW
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PendingView extends StatelessWidget {
@@ -665,14 +574,14 @@ class _PendingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isAiDone = request.isAiVerified;
-    final color    = isAiDone ? Colors.blue : Colors.orange;
-    final title    = isAiDone
-        ? 'AI Verified — Human Review'
+    final isUnderReview = request.isUnderReview;
+    final color = isUnderReview ? Colors.blue : Colors.orange;
+    final title = isUnderReview
+        ? 'Under Review'
         : 'Verifying Your Video…';
-    final subtitle = isAiDone
-        ? 'Our AI has passed your video. A team member will do a final check shortly.'
-        : 'Our AI is analysing your video. This usually takes a few minutes.';
+    final subtitle = isUnderReview
+        ? 'Our team is reviewing your submission. We\'ll notify you once complete.'
+        : 'Your video has been received and is queued for review. This usually takes a few minutes.';
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -693,8 +602,8 @@ class _PendingView extends StatelessWidget {
                 decoration: BoxDecoration(
                     color: color.withOpacity(0.15), shape: BoxShape.circle),
                 child: Icon(
-                  isAiDone
-                      ? Icons.verified_rounded
+                  isUnderReview
+                      ? Icons.manage_search_rounded
                       : Icons.hourglass_top_rounded,
                   color: color, size: 26,
                 ),
@@ -702,24 +611,25 @@ class _PendingView extends StatelessWidget {
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title,
-                          style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 15,
-                              color: color)),
-                      const SizedBox(height: 4),
-                      Text(subtitle,
-                          style: TextStyle(
-                              fontSize: 12, color: color, height: 1.4)),
-                    ]),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                            color: color)),
+                    const SizedBox(height: 4),
+                    Text(subtitle,
+                        style: TextStyle(
+                            fontSize: 12, color: color, height: 1.4)),
+                  ],
+                ),
               ),
             ]),
           ),
           const SizedBox(height: 20),
 
-          // Details
+          // Details card
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -728,17 +638,14 @@ class _PendingView extends StatelessWidget {
               border:       Border.all(color: AppColors.borderColor),
             ),
             child: Column(children: [
-              _DetailRow(label: 'Reference ID',    value: request.referenceId, mono: true),
+              _DetailRow(
+                  label: 'Reference ID',
+                  value: request.referenceId,
+                  mono: true),
               const Divider(height: 20),
-              _DetailRow(label: 'Submitted',       value: _fmtDate(request.createdAt)),
-              if (request.aiTranscript != null) ...[
-                const Divider(height: 20),
-                _DetailRow(label: 'AI heard',      value: '"${request.aiTranscript}"'),
-              ],
-              if (request.aiConfidence != null) ...[
-                const Divider(height: 20),
-                _DetailRow(label: 'AI confidence', value: '${request.aiConfidence}%'),
-              ],
+              _DetailRow(
+                  label: 'Submitted',
+                  value: _fmtDate(request.createdAt)),
             ]),
           ),
           const SizedBox(height: 12),
@@ -749,7 +656,8 @@ class _PendingView extends StatelessWidget {
             decoration: BoxDecoration(
               color:        const Color(0xFFFFF8E7),
               borderRadius: BorderRadius.circular(12),
-              border:       Border.all(color: const Color(0xFFF5C842).withOpacity(0.4)),
+              border:       Border.all(
+                  color: const Color(0xFFF5C842).withOpacity(0.4)),
             ),
             child: const Row(children: [
               Text('💡', style: TextStyle(fontSize: 18)),
@@ -758,7 +666,9 @@ class _PendingView extends StatelessWidget {
                 child: Text(
                   'You will receive a notification once verification is complete.',
                   style: TextStyle(
-                      fontSize: 12, color: Color(0xFF8B6914), height: 1.5),
+                      fontSize: 12,
+                      color: Color(0xFF8B6914),
+                      height: 1.5),
                 ),
               ),
             ]),
@@ -815,7 +725,9 @@ class _PendingView extends StatelessWidget {
   String _fmtDate(String raw) {
     try {
       final dt = DateTime.parse(raw).toLocal();
-      return '${dt.day}/${dt.month}/${dt.year}  ${dt.hour.toString().padLeft(2,'0')}:${dt.minute.toString().padLeft(2,'0')}';
+      return '${dt.day}/${dt.month}/${dt.year}  '
+          '${dt.hour.toString().padLeft(2, '0')}:'
+          '${dt.minute.toString().padLeft(2, '0')}';
     } catch (_) {
       return raw;
     }
@@ -845,7 +757,9 @@ class _CompletedView extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           const Text('Video KYC Complete! 🎉',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900,
+              style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
                   color: AppColors.textDark)),
           const SizedBox(height: 12),
           Text(
@@ -865,8 +779,10 @@ class _CompletedView extends StatelessWidget {
                 border:       Border.all(color: Colors.green.shade200),
               ),
               child: Text('📝 Note: ${request.agentNotes}',
-                  style: TextStyle(fontSize: 13,
-                      color: Colors.green.shade700, height: 1.4)),
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.green.shade700,
+                      height: 1.4)),
             ),
           ],
           const SizedBox(height: 32),
@@ -882,8 +798,10 @@ class _CompletedView extends StatelessWidget {
                 elevation: 0,
               ),
               child: const Text('Done',
-                  style: TextStyle(color: Colors.white,
-                      fontWeight: FontWeight.w700, fontSize: 16)),
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16)),
             ),
           ),
         ]),
@@ -893,7 +811,7 @@ class _CompletedView extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FAILED VIEW
+// FAILED / REJECTED VIEW
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _FailedView extends StatelessWidget {
@@ -915,9 +833,13 @@ class _FailedView extends StatelessWidget {
                 color: Colors.red.shade500, size: 48),
           ),
           const SizedBox(height: 24),
-          Text('Verification Failed',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800,
-                  color: Colors.red.shade700)),
+          Text(
+            request.isRejected ? 'Verification Rejected' : 'Verification Failed',
+            style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: Colors.red.shade700),
+          ),
           const SizedBox(height: 12),
           if (request.rejectionReason != null)
             Container(
@@ -927,30 +849,27 @@ class _FailedView extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 border:       Border.all(color: Colors.red.shade200),
               ),
-              child: Text('Reason: ${request.rejectionReason}',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13,
-                      color: Colors.red.shade700, height: 1.5)),
+              child: Text(
+                'Reason: ${request.rejectionReason}',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.red.shade700,
+                    height: 1.5),
+              ),
             ),
-          if (request.aiTranscript != null) ...[
-            const SizedBox(height: 10),
-            Text(
-              'AI heard: "${request.aiTranscript}"',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 12, color: Colors.grey.shade600, height: 1.4),
-            ),
-          ],
           const SizedBox(height: 8),
-          Text('Please record a new video and try again.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+          Text(
+            'Please record a new video and try again.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+          ),
           const SizedBox(height: 32),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: onRetry,
-              icon: const Icon(Icons.videocam_rounded),
+              icon:  const Icon(Icons.videocam_rounded),
               label: const Text('Record Again'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
@@ -969,7 +888,7 @@ class _FailedView extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HOW IT WORKS
+// HOW IT WORKS CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _HowItWorksCard extends StatelessWidget {
@@ -978,9 +897,9 @@ class _HowItWorksCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const steps = [
-      ('1', 'Read the phrase', 'Note the sentence shown below that you must say'),
-      ('2', 'Record a short video', 'Use your front camera — 5 to 15 seconds is enough'),
-      ('3', 'Submit', 'Our AI instantly checks that you said the phrase correctly'),
+      ('1', 'Record a short video', 'Use your front camera — 5 to 30 seconds is enough'),
+      ('2', 'Submit', 'Upload the video directly from your device'),
+      ('3', 'Review', 'Our team reviews your video within a short time'),
       ('4', 'Done!', 'Verification completes and you get full account access'),
     ];
 
@@ -996,8 +915,10 @@ class _HowItWorksCard extends StatelessWidget {
           Icon(Icons.info_outline_rounded, color: AppColors.primary, size: 18),
           SizedBox(width: 8),
           Text('How Video KYC works',
-              style: TextStyle(fontWeight: FontWeight.w800,
-                  fontSize: 14, color: AppColors.textDark)),
+              style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                  color: AppColors.textDark)),
         ]),
         const SizedBox(height: 14),
         ...steps.map((s) => Padding(
@@ -1009,21 +930,30 @@ class _HowItWorksCard extends StatelessWidget {
                   color: AppColors.primary, shape: BoxShape.circle),
               child: Center(
                 child: Text(s.$1,
-                    style: const TextStyle(color: Colors.white,
-                        fontSize: 12, fontWeight: FontWeight.w800)),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800)),
               ),
             ),
             const SizedBox(width: 12),
-            Expanded(child: Column(
+            Expanded(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(s.$2,
-                      style: const TextStyle(fontWeight: FontWeight.w700,
-                          fontSize: 13, color: AppColors.textDark)),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                          color: AppColors.textDark)),
                   Text(s.$3,
-                      style: const TextStyle(fontSize: 11,
-                          color: AppColors.textGrey, height: 1.4)),
-                ])),
+                      style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textGrey,
+                          height: 1.4)),
+                ],
+              ),
+            ),
           ]),
         )),
       ]),
@@ -1042,17 +972,18 @@ class _TipsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     const tips = [
       'Use good lighting — your face must be clearly visible',
-      'Hold your ID document steady in front of the camera',
-      'Speak clearly at a normal pace — no need to rush',
-      'Keep background noise minimal for better transcription',
+      'Hold your phone steady and look directly at the camera',
+      'Keep background noise minimal',
       'Video must be between 5 and 30 seconds',
+      'Maximum file size is 50 MB',
     ];
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color:        const Color(0xFFFFFBF0),
         borderRadius: BorderRadius.circular(14),
-        border:       Border.all(color: const Color(0xFFF5C842).withOpacity(0.4)),
+        border:       Border.all(
+            color: const Color(0xFFF5C842).withOpacity(0.4)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Row(children: [
@@ -1060,20 +991,25 @@ class _TipsCard extends StatelessWidget {
               color: Color(0xFF8B6914), size: 18),
           SizedBox(width: 8),
           Text('Tips for a successful verification',
-              style: TextStyle(fontWeight: FontWeight.w700,
-                  fontSize: 13, color: Color(0xFF8B6914))),
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: Color(0xFF8B6914))),
         ]),
         const SizedBox(height: 10),
         ...tips.map((t) => Padding(
           padding: const EdgeInsets.only(bottom: 6),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('• ',
-                style: TextStyle(color: Color(0xFF8B6914),
+                style: TextStyle(
+                    color: Color(0xFF8B6914),
                     fontWeight: FontWeight.w700)),
             Expanded(
               child: Text(t,
-                  style: const TextStyle(fontSize: 12,
-                      color: Color(0xFF8B6914), height: 1.4)),
+                  style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF8B6914),
+                      height: 1.4)),
             ),
           ]),
         )),
@@ -1118,13 +1054,15 @@ class _GateBanner extends StatelessWidget {
           const SizedBox(height: 24),
           Text(title,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800,
+              style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
                   color: AppColors.textDark)),
           const SizedBox(height: 12),
           Text(message,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 14,
-                  color: AppColors.textGrey, height: 1.6)),
+              style: const TextStyle(
+                  fontSize: 14, color: AppColors.textGrey, height: 1.6)),
           const SizedBox(height: 32),
           SizedBox(
             width: double.infinity,
@@ -1138,8 +1076,10 @@ class _GateBanner extends StatelessWidget {
                 elevation: 0,
               ),
               child: Text(buttonLabel,
-                  style: const TextStyle(color: Colors.white,
-                      fontWeight: FontWeight.w700, fontSize: 16)),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16)),
             ),
           ),
         ]),
@@ -1156,16 +1096,20 @@ class _DetailRow extends StatelessWidget {
   final String label;
   final String value;
   final bool   mono;
-  const _DetailRow({required this.label, required this.value, this.mono = false});
+  const _DetailRow(
+      {required this.label, required this.value, this.mono = false});
 
   @override
   Widget build(BuildContext context) => Row(children: [
     Text(label,
-        style: const TextStyle(fontSize: 13, color: AppColors.textGrey)),
+        style:
+        const TextStyle(fontSize: 13, color: AppColors.textGrey)),
     const Spacer(),
     Flexible(
       child: Text(value,
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
+          style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
               color: AppColors.textDark,
               fontFamily: mono ? 'monospace' : null),
           textAlign: TextAlign.end),
@@ -1188,9 +1132,13 @@ class _ErrorBanner extends StatelessWidget {
     child: Row(children: [
       Icon(Icons.error_outline, color: Colors.red.shade600, size: 18),
       const SizedBox(width: 8),
-      Expanded(child: Text(message,
-          style: TextStyle(color: Colors.red.shade700, fontSize: 13,
-              fontWeight: FontWeight.w500))),
+      Expanded(
+        child: Text(message,
+            style: TextStyle(
+                color: Colors.red.shade700,
+                fontSize: 13,
+                fontWeight: FontWeight.w500)),
+      ),
     ]),
   );
 }

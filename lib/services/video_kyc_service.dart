@@ -1,7 +1,7 @@
 // lib/services/video_kyc_service.dart
 //
 // Submits the video as multipart/form-data (field name: "video").
-// Base64 encoding has been removed — the backend (multer) handles the file directly.
+// Dio sets the content-type + boundary automatically when FormData is passed.
 
 import 'dart:io';
 import 'package:dio/dio.dart';
@@ -11,11 +11,11 @@ import '../core/api_client.dart';
 
 enum VideoKycStatus {
   notSubmitted,
-  pending,       // submitted, under review
-  underReview,   // admin is reviewing
-  completed,     // approved
-  rejected,      // admin rejected — user can resubmit
-  failed,        // processing error
+  pending,
+  underReview,
+  completed,
+  rejected,
+  failed,
   cancelled;
 
   static VideoKycStatus fromString(String? s) {
@@ -62,12 +62,12 @@ class VideoKycRequest {
     reviewedAt:      j['reviewed_at']      as String?,
   );
 
-  bool get isPending    => status == VideoKycStatus.pending;
+  bool get isPending     => status == VideoKycStatus.pending;
   bool get isUnderReview => status == VideoKycStatus.underReview;
-  bool get isCompleted  => status == VideoKycStatus.completed;
-  bool get isRejected   => status == VideoKycStatus.rejected;
-  bool get isFailed     => status == VideoKycStatus.failed;
-  bool get isCancelled  => status == VideoKycStatus.cancelled;
+  bool get isCompleted   => status == VideoKycStatus.completed;
+  bool get isRejected    => status == VideoKycStatus.rejected;
+  bool get isFailed      => status == VideoKycStatus.failed;
+  bool get isCancelled   => status == VideoKycStatus.cancelled;
 
   /// True while waiting for any kind of review
   bool get isInReview   => isPending || isUnderReview;
@@ -109,15 +109,14 @@ class VideoKycService {
 
   // ── POST /user/kyc/video — multipart file upload ──────────────────────────
   //
-  // Sends the video as multipart/form-data with field name "video".
-  // The backend (multer) saves the file to disk and returns a reference ID.
+  // Passes the video as multipart/form-data with field name "video".
+  // Dio detects FormData and sets the correct Content-Type + boundary header
+  // automatically — no manual Options needed.
 
   Future<VideoKycResult> submitVideo(File videoFile) async {
     try {
       final fileName = videoFile.path.split('/').last;
       final mimeType = _mimeType(videoFile.path);
-
-      // Split mime into type/subtype for DioMediaType
       final mimeParts = mimeType.split('/');
 
       final formData = FormData.fromMap({
@@ -128,17 +127,8 @@ class VideoKycService {
         ),
       });
 
-      final res = await _api.post(
-        '/user/kyc/video',
-        data: formData,
-        options: Options(
-          contentType: 'multipart/form-data',
-          headers: {
-            // Remove Content-Type so Dio sets boundary automatically
-            Headers.contentTypeHeader: null,
-          },
-        ),
-      );
+      // Pass FormData directly — Dio sets multipart/form-data + boundary itself
+      final res = await _api.post('/user/kyc/video', data: formData);
 
       final responseData = res.data['data'];
       return VideoKycResult(

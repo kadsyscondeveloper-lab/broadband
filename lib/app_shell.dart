@@ -45,9 +45,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // When the user taps a notification from the system tray, the app
-    // resumes here. Re-fetching the profile picks up availability_confirmed
-    // (or any other server-side change) so the UI gates update immediately.
     if (state == AppLifecycleState.resumed) {
       _homeVM.loadProfile();
     }
@@ -59,25 +56,32 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     }
   }
 
+  /// Shows a confirmation dialog, clears the FCM token, then calls logout.
+  /// All screens receive this instead of [widget.onLogout] directly so the
+  /// user always gets the confirmation step.
   Future<void> _handleLogout() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Logout', style: TextStyle(fontWeight: FontWeight.w700)),
+        title: const Text('Logout',
+            style: TextStyle(fontWeight: FontWeight.w700)),
         content: const Text('Are you sure you want to logout?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textGrey)),
+            child: const Text('Cancel',
+                style: TextStyle(color: AppColors.textGrey)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
-            child: const Text('Logout', style: TextStyle(color: Colors.white)),
+            child: const Text('Logout',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -116,7 +120,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           onNavigateToProfile: _navigateToProfile,
           onNavigateToPay:     _navigateToPay,
           onWalletTap:         _openWalletRecharge,
-          onLogout:            widget.onLogout,
+          onLogout:            _handleLogout,   // ← confirmation dialog
         );
       case 1:
         return const PaymentHistoryScreen();
@@ -126,9 +130,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         return HelpScreen(viewModel: _helpVM);
       case 4:
         return ProfileScreen(
-          viewModel: _profileVM,
+          viewModel:        _profileVM,
           onNavigateToHome: _navigateToHome,
-          onLogout: widget.onLogout,
+          onLogout:         _handleLogout,     // ← confirmation dialog
         );
       default:
         return HomeScreen(viewModel: _homeVM);
