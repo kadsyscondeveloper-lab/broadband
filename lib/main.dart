@@ -274,7 +274,7 @@ class _AuthGateState extends State<_AuthGate> {
         backgroundColor: const Color(0xFFE31E24),
         body: SizedBox.expand(
           child: Image.asset(
-            'assets/images/loading_screen.gif',
+            'assets/images/loading_screen.jpeg',
             fit: BoxFit.cover,
             errorBuilder: (context, error, stackTrace) {
               debugPrint('❌ loading_screen.gif missing: $error');

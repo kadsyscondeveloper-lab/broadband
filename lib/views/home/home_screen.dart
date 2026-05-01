@@ -24,6 +24,7 @@ import '../refer/refer_earn_screen.dart';
 import '../bills/my_bills_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../profile/change_password_screen.dart';
+import '../../services/rent_service.dart';
 import '../help/help_screen.dart';
 import '../../viewmodels/help_viewmodel.dart';
 import '../plans/plans_screen.dart';
@@ -555,6 +556,7 @@ class _ServicesGrid extends StatelessWidget {
       case 'kyc':         return 'assets/images/kyc.png';
       case 'outstanding': return 'assets/images/document_17246597.png';
       case 'my_bills':    return 'assets/images/bills.png';
+      case 'collect':     return 'assets/images/collect.png'; // ← your icon
       default:            return 'assets/images/pay_bills.png';
     }
   }
@@ -575,6 +577,9 @@ class _ServicesGrid extends StatelessWidget {
       rows.add(services.sublist(i, (i + 2).clamp(0, services.length)));
     }
 
+    final rentStatus  = homeViewModel?.rentStatus  ?? RentStatus.empty();
+    final isCollecting = homeViewModel?.isCollecting ?? false;
+
     return Column(
       key: cardKey,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -582,9 +587,9 @@ class _ServicesGrid extends StatelessWidget {
         const Text(
           'Manage Services',
           style: TextStyle(
-            fontSize: 17,
+            fontSize:   17,
             fontWeight: FontWeight.w700,
-            color: AppColors.textDark,
+            color:      AppColors.textDark,
           ),
         ),
         const SizedBox(height: 14),
@@ -602,6 +607,8 @@ class _ServicesGrid extends StatelessWidget {
                   homeViewModel:          homeViewModel,
                   tutorialKey:            _keyFor(pair[0]['label']!),
                   onAvailabilityRequired: onAvailabilityRequired,
+                  rentStatus:             rentStatus,
+                  isCollecting:           isCollecting,
                 ),
               ),
               const SizedBox(width: 10),
@@ -616,6 +623,8 @@ class _ServicesGrid extends StatelessWidget {
                   homeViewModel:          homeViewModel,
                   tutorialKey:            _keyFor(pair[1]['label']!),
                   onAvailabilityRequired: onAvailabilityRequired,
+                  rentStatus:             rentStatus,
+                  isCollecting:           isCollecting,
                 )
                     : const SizedBox(),
               ),
@@ -640,6 +649,8 @@ class _ServiceRect extends StatefulWidget {
   final HomeViewModel? homeViewModel;
   final GlobalKey?     tutorialKey;
   final VoidCallback?  onAvailabilityRequired;
+  final RentStatus     rentStatus;
+  final bool           isCollecting;
 
   const _ServiceRect({
     required this.imageAsset,
@@ -650,6 +661,8 @@ class _ServiceRect extends StatefulWidget {
     this.homeViewModel,
     this.tutorialKey,
     this.onAvailabilityRequired,
+    this.rentStatus       = const RentStatus(hasActivePlan: false),
+    this.isCollecting     = false,
   });
 
   @override
@@ -657,30 +670,98 @@ class _ServiceRect extends StatefulWidget {
 }
 
 class _ServiceRectState extends State<_ServiceRect>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
+    with TickerProviderStateMixin {
+  // Tap-scale animation (all tiles)
+  late final AnimationController _scaleCtrl;
   late final Animation<double>   _scale;
+
+  // Shimmer animation (collect tile only, when active)
+  late final AnimationController _shimmerCtrl;
+  late final Animation<double>   _shimmerAnim;
+
+  // Pulse animation for icon glow (collect tile only, when active)
+  late final AnimationController _pulseCtrl;
+  late final Animation<double>   _pulse;
+
+  bool get _isCollect    => widget.label == 'Collect';
+  bool get _canCollect   => _isCollect && widget.rentStatus.canCollect && !widget.isCollecting;
+  bool get _doneToday    => _isCollect && widget.rentStatus.collectedToday;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
+
+    // Tap scale
+    _scaleCtrl = AnimationController(
+      vsync:    this,
       duration: const Duration(milliseconds: 110),
     );
     _scale = Tween<double>(begin: 1.0, end: 0.95).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
+      CurvedAnimation(parent: _scaleCtrl, curve: Curves.easeOut),
     );
+
+    // Shimmer sweep
+    _shimmerCtrl = AnimationController(
+      vsync:    this,
+      duration: const Duration(milliseconds: 1400),
+    );
+    _shimmerAnim = Tween<double>(begin: -1.5, end: 2.0).animate(
+      CurvedAnimation(parent: _shimmerCtrl, curve: Curves.easeInOut),
+    );
+
+    // Icon pulse
+    _pulseCtrl = AnimationController(
+      vsync:    this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _pulse = Tween<double>(begin: 1.0, end: 1.18).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
+    );
+
+    _syncCollectAnimations();
+  }
+
+  @override
+  void didUpdateWidget(_ServiceRect old) {
+    super.didUpdateWidget(old);
+    if (old.rentStatus.canCollect  != widget.rentStatus.canCollect ||
+        old.rentStatus.collectedToday != widget.rentStatus.collectedToday) {
+      _syncCollectAnimations();
+    }
+  }
+
+  void _syncCollectAnimations() {
+    if (_canCollect) {
+      _shimmerCtrl.repeat();
+      _pulseCtrl.repeat(reverse: true);
+    } else {
+      _shimmerCtrl
+        ..stop()
+        ..reset();
+      _pulseCtrl
+        ..stop()
+        ..reset();
+    }
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _scaleCtrl.dispose();
+    _shimmerCtrl.dispose();
+    _pulseCtrl.dispose();
     super.dispose();
   }
 
-  void _onTap() {
+  // ── Tap handler ────────────────────────────────────────────────────────────
+
+  Future<void> _onTap() async {
     final ctx = widget.screenContext;
+
+    if (_isCollect) {
+      _handleCollectTap(ctx);
+      return;
+    }
+
     switch (widget.label) {
       case 'Pay Bills':
         widget.onNavigateToPay?.call();
@@ -711,60 +792,421 @@ class _ServiceRectState extends State<_ServiceRect>
     }
   }
 
+  void _handleCollectTap(BuildContext ctx) async {
+    final rent = widget.rentStatus;
+
+    // Already collected today
+    if (rent.collectedToday) {
+      _showToast(ctx, 'Already collected today. Come back tomorrow! 😊',
+          color: const Color(0xFF2E7D32));
+      return;
+    }
+
+    // No active plan
+    if (!rent.hasActivePlan) {
+      _showToast(ctx, 'Purchase a plan to start earning daily rent.',
+          color: Colors.blueGrey.shade700);
+      return;
+    }
+
+    // Outside collection window
+    if (!rent.inCollectionWindow) {
+      _showToast(
+        ctx,
+        'Rent collection opens at ${rent.windowLabel} ⏰',
+        color: Colors.orange.shade700,
+      );
+      return;
+    }
+
+    // Pending collect (should trigger animation already)
+    if (rent.pendingRent <= 0) {
+      _showToast(ctx, 'No rent accumulated yet. Check back after a day.',
+          color: Colors.blueGrey.shade700);
+      return;
+    }
+
+    // Do collect
+    final error = await widget.homeViewModel?.collectRent();
+    if (error != null && ctx.mounted) {
+      _showToast(ctx, error, color: Colors.red.shade700);
+    } else if (ctx.mounted) {
+      _showSuccessToast(ctx, rent.pendingRent);
+    }
+  }
+
+  void _showToast(BuildContext ctx, String msg, {required Color color}) {
+    ScaffoldMessenger.of(ctx).showSnackBar(
+      SnackBar(
+        content:         Text(msg, style: const TextStyle(fontWeight: FontWeight.w500)),
+        backgroundColor: color,
+        behavior:        SnackBarBehavior.floating,
+        shape:           RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin:          const EdgeInsets.all(16),
+        duration:        const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _showSuccessToast(BuildContext ctx, double amount) {
+    ScaffoldMessenger.of(ctx).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+            const SizedBox(width: 10),
+            Text(
+              '₹${amount.toStringAsFixed(2)} added to your wallet!',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF1A1A2E),
+        behavior:        SnackBarBehavior.floating,
+        shape:           RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin:          const EdgeInsets.all(16),
+        duration:        const Duration(seconds: 4),
+      ),
+    );
+  }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       key:         widget.tutorialKey,
-      onTapDown:   (_) => _ctrl.forward(),
-      onTapUp:     (_) { _ctrl.reverse(); _onTap(); },
-      onTapCancel: ()  => _ctrl.reverse(),
+      onTapDown:   (_) => _scaleCtrl.forward(),
+      onTapUp:     (_) { _scaleCtrl.reverse(); _onTap(); },
+      onTapCancel: ()  => _scaleCtrl.reverse(),
       child: ScaleTransition(
         scale: _scale,
-        child: Container(
+        child: _isCollect ? _buildCollectCard() : _buildRegularCard(),
+      ),
+    );
+  }
+
+  // ── Regular tile (all non-collect) ────────────────────────────────────────
+
+  Widget _buildRegularCard() {
+    return Container(
+      height: 72,
+      decoration: BoxDecoration(
+        color:        AppColors.cardBg,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color:      Colors.black.withOpacity(0.055),
+            blurRadius: 8,
+            offset:     const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              widget.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize:   13.5,
+                fontWeight: FontWeight.w600,
+                color:      AppColors.textDark,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            width:  64,
+            height: 64,
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color:        Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Image.asset(widget.imageAsset, fit: BoxFit.contain),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Collect tile (three states) ───────────────────────────────────────────
+
+  Widget _buildCollectCard() {
+    if (_doneToday) return _buildCollectDone();
+    if (_canCollect) return _buildCollectActive();
+    return _buildCollectIdle();
+  }
+
+  // State 1: Outside window / no plan — looks like a normal card but muted
+  Widget _buildCollectIdle() {
+    return Container(
+      height: 72,
+      decoration: BoxDecoration(
+        color:        AppColors.cardBg,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color:      Colors.black.withOpacity(0.055),
+            blurRadius: 8,
+            offset:     const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Collect',
+                  style: TextStyle(
+                    fontSize:   13.5,
+                    fontWeight: FontWeight.w600,
+                    color:      AppColors.textDark,
+                  ),
+                ),
+                if (widget.rentStatus.hasActivePlan)
+                  Text(
+                    widget.rentStatus.windowLabel,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color:    Colors.orange.shade600,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            width:  64,
+            height: 64,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color:        Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Image.asset(widget.imageAsset, fit: BoxFit.contain),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // State 2: Collection window is open — shimmer + pulse
+  Widget _buildCollectActive() {
+    return AnimatedBuilder(
+      animation: _shimmerAnim,
+      builder: (context, child) {
+        return Container(
           height: 72,
           decoration: BoxDecoration(
-            color: AppColors.cardBg,
             borderRadius: BorderRadius.circular(14),
+            // Base dark background
+            color: const Color(0xFF1A1A2E),
             boxShadow: [
               BoxShadow(
-                color:      Colors.black.withOpacity(0.055),
+                color:      Colors.amber.withOpacity(0.35),
+                blurRadius: 14,
+                offset:     const Offset(0, 4),
+              ),
+              BoxShadow(
+                color:      const Color(0xFF1A1A2E).withOpacity(0.3),
                 blurRadius: 8,
                 offset:     const Offset(0, 2),
               ),
             ],
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  widget.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textDark,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Stack(
+              children: [
+                // Sweeping shimmer overlay
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment(_shimmerAnim.value - 1, -0.5),
+                        end:   Alignment(_shimmerAnim.value,      0.5),
+                        colors: const [
+                          Colors.transparent,
+                          Color(0x33F5A623), // amber glow mid
+                          Color(0x55F5A623),
+                          Color(0x33F5A623),
+                          Colors.transparent,
+                        ],
+                        stops: const [0.0, 0.3, 0.5, 0.7, 1.0],
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                width: 64,
-                height: 64,
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
+                // Card content
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Collect',
+                              style: TextStyle(
+                                fontSize:   13.5,
+                                fontWeight: FontWeight.w700,
+                                color:      Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              widget.isCollecting
+                                  ? 'Collecting…'
+                                  : '₹${widget.rentStatus.pendingRent.toStringAsFixed(2)} ready',
+                              style: TextStyle(
+                                fontSize:   11,
+                                fontWeight: FontWeight.w600,
+                                color:      Colors.amber.shade300,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Pulsing icon container
+                      AnimatedBuilder(
+                        animation: _pulse,
+                        builder: (_, __) => Transform.scale(
+                          scale: _pulse.value,
+                          child: Container(
+                            width:  60,
+                            height: 60,
+                            padding: const EdgeInsets.all(9),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end:   Alignment.bottomRight,
+                                colors: [
+                                  Colors.amber.shade400,
+                                  Colors.amber.shade700,
+                                ],
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color:      Colors.amber.withOpacity(0.5),
+                                  blurRadius: 10,
+                                  spreadRadius: 1,
+                                ),
+                              ],
+                            ),
+                            child: widget.isCollecting
+                                ? const Center(
+                              child: SizedBox(
+                                width: 20, height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color:       Colors.white,
+                                ),
+                              ),
+                            )
+                                : Image.asset(
+                              widget.imageAsset,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Image.asset(
-                  widget.imageAsset,
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+        );
+      },
+    );
+  }
+
+  // State 3: Already collected today — green / done
+  Widget _buildCollectDone() {
+    return Container(
+      height: 72,
+      decoration: BoxDecoration(
+        color:        const Color(0xFFEDF7EE),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF4CAF50).withOpacity(0.3)),
+        boxShadow: [
+          BoxShadow(
+            color:      Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset:     const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'Collected',
+                  style: TextStyle(
+                    fontSize:   13.5,
+                    fontWeight: FontWeight.w700,
+                    color:      Color(0xFF2E7D32),
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Come back tomorrow',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color:    Color(0xFF4CAF50),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            width:  64,
+            height: 64,
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color:        const Color(0xFF4CAF50).withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Stack(
+              children: [
+                Center(child: Image.asset(widget.imageAsset, fit: BoxFit.contain)),
+                // Green checkmark badge
+                Positioned(
+                  right: 0, top: 0,
+                  child: Container(
+                    width:  16, height: 16,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF4CAF50),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.check, size: 10, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

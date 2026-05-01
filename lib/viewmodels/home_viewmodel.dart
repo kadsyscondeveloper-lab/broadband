@@ -1,52 +1,56 @@
 // lib/viewmodels/home_viewmodel.dart
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../services/user_service.dart';
 import '../services/kyc_service.dart';
+import '../services/rent_service.dart';
 import '../widgets/dashboard_section.dart';
 import '../services/notification_service.dart';
 import '../services/notification_push_service.dart';
 import '../core/app_config.dart';
 
 class HomeViewModel extends ChangeNotifier {
-  final _service    = UserService();
-  final _kycService = KycService();
+  final _service     = UserService();
+  final _kycService  = KycService();
+  final _rentService = RentService();
 
   FullProfile?   _profile;
-  bool           _isLoading          = false;
+  bool           _isLoading           = false;
   KycStatus?     _kycStatus;
   DashboardData? _dashboardData;
-  int            _featureBannerIndex = 0;
-  int            _promoBannerIndex   = 1;
+  int            _featureBannerIndex  = 0;
+  int            _promoBannerIndex    = 1;
+  RentStatus     _rentStatus          = RentStatus.empty();
+  bool           _isCollecting        = false;
+
+  int _unreadNotifications = 0;
 
   // ── Getters ───────────────────────────────────────────────────────────────
 
-  FullProfile?   get profile            => _profile;
-  bool           get isLoading          => _isLoading;
-  KycStatus?     get kycStatus          => _kycStatus;
-  DashboardData? get dashboardData      => _dashboardData;
-  int            get featureBannerIndex => _featureBannerIndex;
-  int            get promoBannerIndex   => _promoBannerIndex;
-  int                _unreadNotifications= 0;
+  FullProfile?   get profile             => _profile;
+  bool           get isLoading           => _isLoading;
+  KycStatus?     get kycStatus           => _kycStatus;
+  DashboardData? get dashboardData       => _dashboardData;
+  int            get featureBannerIndex  => _featureBannerIndex;
+  int            get promoBannerIndex    => _promoBannerIndex;
   int            get unreadNotifications => _unreadNotifications;
+  RentStatus     get rentStatus          => _rentStatus;
+  bool           get isCollecting        => _isCollecting;
 
-  // Legacy compat
-  bool get isKycUnderReview => _kycStatus?.isPending ?? false;
-
-  String  get userName        => _profile?.name          ?? '';
-  double  get walletBalance   => _profile?.walletBalance ?? 0.0;
-  bool get isAvailabilityConfirmed => _profile?.availabilityConfirmed ?? false;
-  String? get profileImageUrl => _profile?.profileImageUrl;
-  String  get referralCode => _profile?.referralCode ?? '';
-  String  get referralUrl  => _profile?.referralUrl  ?? '';
+  bool    get isKycUnderReview       => _kycStatus?.isPending ?? false;
+  String  get userName               => _profile?.name          ?? '';
+  double  get walletBalance          => _profile?.walletBalance  ?? 0.0;
+  bool    get isAvailabilityConfirmed => _profile?.availabilityConfirmed ?? false;
+  String? get profileImageUrl        => _profile?.profileImageUrl;
+  String  get referralCode           => _profile?.referralCode ?? '';
+  String  get referralUrl            => _profile?.referralUrl  ?? '';
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
   Future<void> loadProfile() async {
-    NotificationPushService.onAvailabilityConfirmed = () {
-      loadProfile();
-    };
+    NotificationPushService.onAvailabilityConfirmed = () => loadProfile();
     _isLoading = true;
     notifyListeners();
 
@@ -54,17 +58,46 @@ class HomeViewModel extends ChangeNotifier {
       _service.getProfile(),
       _kycService.getStatus(),
       NotificationService().getNotifications(limit: 1),
+      _rentService.getStatus(),
     ]);
 
-    _profile   = results[0] as FullProfile?;
-    _kycStatus = results[1] as KycStatus;
+    _profile             = results[0] as FullProfile?;
+    _kycStatus           = results[1] as KycStatus;
     _unreadNotifications = (results[2] as Map<String, dynamic>)['unread'] as int;
-
-    _dashboardData = DashboardData.mock();
+    _rentStatus          = results[3] as RentStatus;
+    _dashboardData       = DashboardData.mock();
 
     _isLoading = false;
     notifyListeners();
   }
+
+  // ── Collect rent ──────────────────────────────────────────────────────────
+
+  /// Returns null on success, error message on failure.
+  Future<String?> collectRent() async {
+    _isCollecting = true;
+    notifyListeners();
+
+    final result = await _rentService.collect();
+    _isCollecting = false;
+
+    if (result.success) {
+      await Future.wait([refreshWalletBalance(), refreshRentStatus()]);
+      return null;
+    }
+
+    notifyListeners();
+    return result.error ?? 'Could not collect rent. Please try again.';
+  }
+
+  Future<void> refreshRentStatus() async {
+    try {
+      _rentStatus = await _rentService.getStatus();
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  // ── Other refresh helpers ─────────────────────────────────────────────────
 
   Future<void> refreshUnreadCount() async {
     try {
@@ -76,14 +109,9 @@ class HomeViewModel extends ChangeNotifier {
 
   Future<void> refreshWalletBalance() async {
     try {
-      final updatedProfile = await _service.getProfile();
-      if (updatedProfile != null) {
-        _profile = updatedProfile;
-        notifyListeners();
-      }
-    } catch (e) {
-      print('Error refreshing wallet: $e');
-    }
+      final updated = await _service.getProfile();
+      if (updated != null) { _profile = updated; notifyListeners(); }
+    } catch (_) {}
   }
 
   Future<void> refreshKycStatus() async {
@@ -114,40 +142,26 @@ class HomeViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Carousels — returns list of maps with image bytes + metadata ───────────
+  // ── Carousels ─────────────────────────────────────────────────────────────
 
   Future<List<Map<String, dynamic>>> getCarousels() async {
     try {
-      final response = await http.get(
-        Uri.parse('${AppConfig.baseUrl}/carousels'),
-      );
-
+      final response = await http.get(Uri.parse('${AppConfig.baseUrl}/carousels'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final raw = (data['data']['carousels'] ?? []) as List<dynamic>;
-        return raw.cast<Map<String, dynamic>>();
-      } else {
-        print('Failed to load carousels: ${response.statusCode}');
-        return [];
+        return ((data['data']['carousels'] ?? []) as List).cast();
       }
-    } catch (e) {
-      print('Error loading carousels: $e');
       return [];
-    }
+    } catch (_) { return []; }
   }
 
-  /// Track a click on a carousel banner (fire-and-forget, non-blocking).
   Future<void> trackCarouselClick(int bannerId) async {
     try {
-      await http.post(
-        Uri.parse('${AppConfig.baseUrl}/carousels/$bannerId/click'),
-      );
-    } catch (_) {
-      // Non-critical — don't surface errors to the user
-    }
+      await http.post(Uri.parse('${AppConfig.baseUrl}/carousels/$bannerId/click'));
+    } catch (_) {}
   }
 
-  // ── Static data ───────────────────────────────────────────────────────────
+  // ── Services grid data ─── ← Collect is now the 6th tile ─────────────────
 
   final List<Map<String, String>> services = [
     {'icon': 'pay_bills',   'label': 'Pay Bills'},
@@ -155,6 +169,7 @@ class HomeViewModel extends ChangeNotifier {
     {'icon': 'kyc',         'label': 'KYC'},
     {'icon': 'outstanding', 'label': 'Outstanding'},
     {'icon': 'my_bills',    'label': 'My Bills'},
+    {'icon': 'collect',     'label': 'Collect'},     // ← NEW
   ];
 
   final List<Map<String, String>> promoItems = [
