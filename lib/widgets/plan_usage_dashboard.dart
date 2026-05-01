@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/plan_model.dart';
 import '../services/rent_service.dart';
+import '../theme/app_theme.dart';
 
 class PlanUsageDashboard extends StatelessWidget {
   final ActiveSubscription? activeSub;
@@ -17,28 +18,52 @@ class PlanUsageDashboard extends StatelessWidget {
 
   // ── Visibility guard ────────────────────────────────────────────────────────
 
-  bool get _shouldShow =>
-      activeSub != null || rentStatus.hasActivePlan;
+  bool get _shouldShow => activeSub != null || rentStatus.hasActivePlan;
 
-  // ── Derived values ──────────────────────────────────────────────────────────
-
-  double get _amountPaid => activeSub?.amountPaid ?? 0;
-
-  double get _percentage =>
-      _amountPaid > 0
-          ? (rentStatus.totalCollected / _amountPaid).clamp(0.0, 1.0)
-          : 0.0;
+  // ── Plan meta ───────────────────────────────────────────────────────────────
 
   String get _planName =>
       activeSub?.planName ?? rentStatus.planName ?? 'Active Plan';
 
   String get _speedLabel => activeSub?.speedLabel ?? '';
+  String get _dataLabel  => activeSub?.dataLabel  ?? 'Unlimited';
+  int    get _daysRemaining => activeSub?.daysRemaining ?? 0;
+  int    get _validityDays  => activeSub?.validityDays  ?? 30;
+  bool   get _isExpiringSoon => _daysRemaining <= 5;
 
-  String get _dataLabel => activeSub?.dataLabel ?? 'Unlimited';
+  // ── Data-usage proxy (days elapsed → estimated GB) ──────────────────────────
 
-  int get _daysRemaining => activeSub?.daysRemaining ?? 0;
+  int get _daysElapsed =>
+      (_validityDays - _daysRemaining).clamp(0, _validityDays);
 
-  bool get _isExpiringSoon => _daysRemaining <= 5;
+  double get _usagePercentage =>
+      _validityDays > 0
+          ? (_daysElapsed / _validityDays).clamp(0.0, 1.0)
+          : 0.0;
+
+  /// Parse "200 GB" → 200.0 | "Unlimited" → null
+  double? get _totalDataGb {
+    final raw = _dataLabel.trim();
+    if (raw.toLowerCase() == 'unlimited') return null;
+    final m = RegExp(r'(\d+(?:\.\d+)?)').firstMatch(raw);
+    return m != null ? double.tryParse(m.group(1)!) : null;
+  }
+
+  String get _dataUsedLabel {
+    final total = _totalDataGb;
+    if (total == null) return '$_daysElapsed days';
+    final used = total * _usagePercentage;
+    return used < 1
+        ? '${(used * 1024).toStringAsFixed(0)} MB'
+        : '${used.toStringAsFixed(1)} GB';
+  }
+
+  String get _dataTotalLabel {
+    final total = _totalDataGb;
+    return total == null ? 'Unlimited' : '${total.toStringAsFixed(0)} GB';
+  }
+
+  // ── Formatting ──────────────────────────────────────────────────────────────
 
   String _formatExpiry(DateTime? dt) {
     if (dt == null) return '—';
@@ -49,30 +74,29 @@ class PlanUsageDashboard extends StatelessWidget {
     return '${dt.day} ${months[dt.month - 1]}';
   }
 
-  Color _gaugeColor(double pct) {
-    if (pct >= 0.7) return const Color(0xFF4ADE80); // green
-    if (pct >= 0.4) return const Color(0xFFFBBF24); // amber
-    return const Color(0xFF60A5FA);                  // blue
-  }
-
   // ── Build ───────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     if (!_shouldShow) return const SizedBox.shrink();
 
-    final pct        = _percentage;
-    final gaugeColor = _gaugeColor(pct);
+    const red = AppColors.primary;
+    final pct = _usagePercentage;
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A2E),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1A1A2E).withOpacity(0.35),
-            blurRadius: 18,
+            color: Colors.black.withOpacity(0.07),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: AppColors.primary.withOpacity(0.08),
+            blurRadius: 24,
             offset: const Offset(0, 6),
           ),
         ],
@@ -81,10 +105,10 @@ class PlanUsageDashboard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildHeader(),
-          const SizedBox(height: 20),
-          _buildMainRow(pct, gaugeColor),
+          const SizedBox(height: 18),
+          _buildMainRow(pct, red),
           const SizedBox(height: 14),
-          Divider(color: Colors.white.withOpacity(0.08), height: 1),
+          Divider(color: Colors.grey.shade100, height: 1),
           const SizedBox(height: 14),
           _buildFooter(),
         ],
@@ -97,22 +121,22 @@ class PlanUsageDashboard extends StatelessWidget {
   Widget _buildHeader() {
     return Row(
       children: [
-        // Plan + speed badge
+        // Plan name + speed badge
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.10),
+            color: AppColors.primary.withOpacity(0.07),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.wifi_rounded, color: Colors.white, size: 14),
+              const Icon(Icons.wifi_rounded, color: AppColors.primary, size: 14),
               const SizedBox(width: 7),
               Text(
                 _planName,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppColors.primary,
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
@@ -122,12 +146,12 @@ class PlanUsageDashboard extends StatelessWidget {
                   width: 1,
                   height: 12,
                   margin: const EdgeInsets.symmetric(horizontal: 8),
-                  color: Colors.white.withOpacity(0.25),
+                  color: AppColors.primary.withOpacity(0.25),
                 ),
                 Text(
                   _speedLabel,
-                  style: const TextStyle(
-                    color: Color(0xFFFCD34D),
+                  style: TextStyle(
+                    color: AppColors.primary.withOpacity(0.75),
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -142,21 +166,21 @@ class PlanUsageDashboard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
             color: _isExpiringSoon
-                ? const Color(0xFFEF4444).withOpacity(0.15)
-                : const Color(0xFF34D399).withOpacity(0.12),
+                ? Colors.red.withOpacity(0.08)
+                : Colors.green.withOpacity(0.07),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color: _isExpiringSoon
-                  ? const Color(0xFFEF4444).withOpacity(0.35)
-                  : const Color(0xFF34D399).withOpacity(0.25),
+                  ? Colors.red.withOpacity(0.30)
+                  : Colors.green.withOpacity(0.25),
             ),
           ),
           child: Text(
             '$_daysRemaining days left',
             style: TextStyle(
               color: _isExpiringSoon
-                  ? const Color(0xFFFCA5A5)
-                  : const Color(0xFF6EE7B7),
+                  ? Colors.red.shade700
+                  : Colors.green.shade700,
               fontSize: 11,
               fontWeight: FontWeight.w600,
             ),
@@ -166,9 +190,9 @@ class PlanUsageDashboard extends StatelessWidget {
     );
   }
 
-  // ── Main row: gauge + stats ─────────────────────────────────────────────────
+  // ── Main row: arc gauge + stats ─────────────────────────────────────────────
 
-  Widget _buildMainRow(double pct, Color gaugeColor) {
+  Widget _buildMainRow(double pct, Color red) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -177,7 +201,7 @@ class PlanUsageDashboard extends StatelessWidget {
           width: 110,
           height: 110,
           child: CustomPaint(
-            painter: _ArcGaugePainter(percentage: pct, color: gaugeColor),
+            painter: _ArcGaugePainter(percentage: pct, color: red),
             child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -185,16 +209,16 @@ class PlanUsageDashboard extends StatelessWidget {
                   Text(
                     '${(pct * 100).toInt()}%',
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: Color(0xFF1A1A2E),
                       fontSize: 22,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'recovered',
+                    'used',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.45),
+                      color: Colors.grey.shade400,
                       fontSize: 9,
                       fontWeight: FontWeight.w500,
                     ),
@@ -205,67 +229,59 @@ class PlanUsageDashboard extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 20),
-        // Stats
+        // Stats column
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Rent recovery',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.5),
-                  fontSize: 11,
-                ),
+                'Data usage',
+                style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
               ),
               const SizedBox(height: 4),
-              // Amount
               Row(
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
                   Text(
-                    '₹${rentStatus.totalCollected.toStringAsFixed(0)}',
+                    _dataUsedLabel,
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: Color(0xFF1A1A2E),
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    'of ₹${_amountPaid.toStringAsFixed(0)}',
+                    'of $_dataTotalLabel',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.4),
+                      color: Colors.grey.shade400,
                       fontSize: 13,
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
-              // Progress bar
+              // Progress bar — red
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: LinearProgressIndicator(
                   value: pct,
                   minHeight: 6,
-                  backgroundColor: Colors.white.withOpacity(0.08),
-                  valueColor: AlwaysStoppedAnimation<Color>(gaugeColor),
+                  backgroundColor: Colors.grey.shade100,
+                  valueColor: AlwaysStoppedAnimation<Color>(red),
                 ),
               ),
               const SizedBox(height: 10),
-              // Daily earn rate
+              // Daily rent — secondary line
               Row(
                 children: [
-                  const Icon(
-                    Icons.trending_up_rounded,
-                    color: Color(0xFFFCD34D),
-                    size: 14,
-                  ),
+                  Icon(Icons.trending_up_rounded, color: red, size: 14),
                   const SizedBox(width: 4),
                   Text(
-                    '+₹${rentStatus.dailyRent.toStringAsFixed(2)}/day',
-                    style: const TextStyle(
-                      color: Color(0xFFFCD34D),
+                    '+₹${rentStatus.dailyRent.toStringAsFixed(2)}/day earned',
+                    style: TextStyle(
+                      color: red,
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
@@ -279,7 +295,7 @@ class PlanUsageDashboard extends StatelessWidget {
     );
   }
 
-  // ── Footer: speed / data / expiry ────────────────────────────────────────────
+  // ── Footer: speed / data / expiry ───────────────────────────────────────────
 
   Widget _buildFooter() {
     return Row(
@@ -308,11 +324,11 @@ class PlanUsageDashboard extends StatelessWidget {
   Widget _buildVerticalDivider() => Container(
     width: 1,
     height: 28,
-    color: Colors.white.withOpacity(0.08),
+    color: Colors.grey.shade100,
   );
 }
 
-// ── Footer stat chip ─────────────────────────────────────────────────────────
+// ── Footer stat chip ──────────────────────────────────────────────────────────
 
 class _FooterStat extends StatelessWidget {
   final IconData icon;
@@ -333,14 +349,11 @@ class _FooterStat extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: Colors.white.withOpacity(0.4), size: 11),
+              Icon(icon, color: Colors.grey.shade400, size: 11),
               const SizedBox(width: 4),
               Text(
                 sublabel,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.4),
-                  fontSize: 10,
-                ),
+                style: TextStyle(color: Colors.grey.shade400, fontSize: 10),
               ),
             ],
           ),
@@ -348,7 +361,7 @@ class _FooterStat extends StatelessWidget {
           Text(
             label,
             style: const TextStyle(
-              color: Colors.white,
+              color: Color(0xFF1A1A2E),
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -359,7 +372,7 @@ class _FooterStat extends StatelessWidget {
   }
 }
 
-// ── Arc gauge painter ────────────────────────────────────────────────────────
+// ── Arc gauge painter ─────────────────────────────────────────────────────────
 
 class _ArcGaugePainter extends CustomPainter {
   final double percentage;
@@ -369,17 +382,17 @@ class _ArcGaugePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center    = Offset(size.width / 2, size.height / 2);
-    final radius    = size.width / 2 - 8;
-    // Arc spans 270° — starts at 135° (bottom-left) sweeps clockwise
-    const startAngle = pi * 0.75;
-    const sweepFull  = pi * 1.5;
+    final center     = Offset(size.width / 2, size.height / 2);
+    final radius     = size.width / 2 - 8;
+    const startAngle = pi * 0.75;   // 135° — bottom-left
+    const sweepFull  = pi * 1.5;    // 270° sweep
 
+    // Background track
     final bgPaint = Paint()
-      ..color      = Colors.white.withOpacity(0.08)
-      ..strokeWidth = 10
-      ..style      = PaintingStyle.stroke
-      ..strokeCap  = StrokeCap.round;
+      ..color       = Colors.grey.shade100
+      ..strokeWidth  = 10
+      ..style       = PaintingStyle.stroke
+      ..strokeCap   = StrokeCap.round;
 
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
@@ -389,6 +402,7 @@ class _ArcGaugePainter extends CustomPainter {
       bgPaint,
     );
 
+    // Filled arc
     if (percentage > 0) {
       final fgPaint = Paint()
         ..color       = color

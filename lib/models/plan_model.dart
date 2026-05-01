@@ -36,6 +36,7 @@ class Plan {
   /// Display-ready label — kept for UI compatibility
   String get dataLabel => isUnlimited ? 'Unlimited' : dataLimit;
 
+
   String get validityLabel {
     if (validityDays == 30) return '1 Month';
     if (validityDays == 90) return '3 Months';
@@ -97,6 +98,9 @@ class ActiveSubscription {
       dataLimit.trim().toLowerCase() == 'unlimited';
 
   String get dataLabel => isUnlimited ? 'Unlimited' : dataLimit;
+  String get speedLabel =>
+      speedMbps >= 1000 ? '${speedMbps ~/ 1000} Gbps' : '$speedMbps Mbps';
+
 
   int get daysRemaining {
     if (expiresAt == null) return 0;
