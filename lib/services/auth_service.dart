@@ -68,7 +68,7 @@ class AuthService {
       phone: authData.user.phone,
       name:  authData.user.name,
     );
-    NotificationPushService().registerTokenAfterLogin();
+
   }
 
   AuthResult _handleDioError(DioException e) {

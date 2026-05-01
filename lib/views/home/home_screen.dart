@@ -229,7 +229,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     MaterialPageRoute(
                         builder: (_) => const ChangePasswordScreen()));
                 break;
-              case 'Logout':
+              /* case 'Logout':
                 showDialog(
                   context: context,
                   builder: (ctx) => AlertDialog(
@@ -243,7 +243,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       TextButton(
                         onPressed: () async {
                           Navigator.pop(ctx);
-                          await AuthService().logout();
+                          _scaffoldKey.currentState?.closeDrawer();
                           widget.onLogout?.call();
                         },
                         child: const Text('Logout',
@@ -251,8 +251,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ],
                   ),
-                );
+                ); */
+              case 'Logout':
+                _scaffoldKey.currentState?.closeDrawer();
+                widget.onLogout?.call();   // AppShell handles dialog + FCM + logout
                 break;
+
             }
           },
         ),
@@ -550,7 +554,7 @@ class _ServicesGrid extends StatelessWidget {
       case 'new_plan':    return 'assets/images/wifi-signal_2888720.png';
       case 'kyc':         return 'assets/images/kyc.png';
       case 'outstanding': return 'assets/images/document_17246597.png';
-      case 'my_bills':    return 'assets/images/pay_bills.png';
+      case 'my_bills':    return 'assets/images/bills.png';
       default:            return 'assets/images/pay_bills.png';
     }
   }
@@ -731,21 +735,32 @@ class _ServiceRectState extends State<_ServiceRect>
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                widget.label,
-                style: const TextStyle(
-                  fontSize:   13.5,
-                  fontWeight: FontWeight.w600,
-                  color:      AppColors.textDark,
+              Expanded(
+                child: Text(
+                  widget.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textDark,
+                  ),
                 ),
               ),
-              Image.asset(
-                widget.imageAsset,
-                width:  48,
-                height: 48,
-                fit:    BoxFit.contain,
+              const SizedBox(width: 12),
+              Container(
+                width: 64,
+                height: 64,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Image.asset(
+                  widget.imageAsset,
+                  fit: BoxFit.contain,
+                ),
               ),
             ],
           ),
