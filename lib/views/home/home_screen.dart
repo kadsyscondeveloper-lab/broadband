@@ -20,6 +20,7 @@ import '../kyc/kyc_screen.dart';
 import '../../widgets/installation_status_card.dart';
 import '../availability/service_availability_screen.dart';
 import '../installation/installation_tracker_screen.dart';
+import '../../widgets/plan_usage_dashboard.dart';
 import '../refer/refer_earn_screen.dart';
 import '../bills/my_bills_screen.dart';
 import '../notifications/notifications_screen.dart';
@@ -317,8 +318,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(height: 8),
                       ],
 
-                      const InstallationStatusCard(),
-                      const SizedBox(height: 12),
+                      // ── Plan usage dashboard ──────────────────────────────────────────
+                          if (vm.activeSub != null || vm.rentStatus.hasActivePlan) ...[
+                           PlanUsageDashboard(
+                              activeSub:  vm.activeSub,
+                              rentStatus: vm.rentStatus,
+                            ),
+                            const SizedBox(height: 12),
+                         ],
 
                       // 2. Manage Services — 2-column rectangular grid
                       _ServicesGrid(

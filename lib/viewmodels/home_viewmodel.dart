@@ -1,4 +1,8 @@
 // lib/viewmodels/home_viewmodel.dart
+// Changes vs original:
+//   • Added PlanService import
+//   • Added _activeSub field + getter
+//   • loadProfile() now fetches getActiveSubscription() in parallel
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -6,6 +10,8 @@ import 'dart:convert';
 import '../services/user_service.dart';
 import '../services/kyc_service.dart';
 import '../services/rent_service.dart';
+import '../services/plan_service.dart';            // ← NEW
+import '../models/plan_model.dart';                 // ← NEW
 import '../widgets/dashboard_section.dart';
 import '../services/notification_service.dart';
 import '../services/notification_push_service.dart';
@@ -15,37 +21,40 @@ class HomeViewModel extends ChangeNotifier {
   final _service     = UserService();
   final _kycService  = KycService();
   final _rentService = RentService();
+  final _planService = PlanService();              // ← NEW
 
-  FullProfile?   _profile;
-  bool           _isLoading           = false;
-  KycStatus?     _kycStatus;
-  DashboardData? _dashboardData;
-  int            _featureBannerIndex  = 0;
-  int            _promoBannerIndex    = 1;
-  RentStatus     _rentStatus          = RentStatus.empty();
-  bool           _isCollecting        = false;
+  FullProfile?        _profile;
+  bool                _isLoading           = false;
+  KycStatus?          _kycStatus;
+  DashboardData?      _dashboardData;
+  int                 _featureBannerIndex  = 0;
+  int                 _promoBannerIndex    = 1;
+  RentStatus          _rentStatus          = RentStatus.empty();
+  bool                _isCollecting        = false;
+  ActiveSubscription? _activeSub;                 // ← NEW
 
   int _unreadNotifications = 0;
 
   // ── Getters ───────────────────────────────────────────────────────────────
 
-  FullProfile?   get profile             => _profile;
-  bool           get isLoading           => _isLoading;
-  KycStatus?     get kycStatus           => _kycStatus;
-  DashboardData? get dashboardData       => _dashboardData;
-  int            get featureBannerIndex  => _featureBannerIndex;
-  int            get promoBannerIndex    => _promoBannerIndex;
-  int            get unreadNotifications => _unreadNotifications;
-  RentStatus     get rentStatus          => _rentStatus;
-  bool           get isCollecting        => _isCollecting;
+  FullProfile?        get profile             => _profile;
+  bool                get isLoading           => _isLoading;
+  KycStatus?          get kycStatus           => _kycStatus;
+  DashboardData?      get dashboardData       => _dashboardData;
+  int                 get featureBannerIndex  => _featureBannerIndex;
+  int                 get promoBannerIndex    => _promoBannerIndex;
+  int                 get unreadNotifications => _unreadNotifications;
+  RentStatus          get rentStatus          => _rentStatus;
+  bool                get isCollecting        => _isCollecting;
+  ActiveSubscription? get activeSub           => _activeSub;    // ← NEW
 
-  bool    get isKycUnderReview       => _kycStatus?.isPending ?? false;
-  String  get userName               => _profile?.name          ?? '';
-  double  get walletBalance          => _profile?.walletBalance  ?? 0.0;
+  bool    get isKycUnderReview        => _kycStatus?.isPending ?? false;
+  String  get userName                => _profile?.name          ?? '';
+  double  get walletBalance           => _profile?.walletBalance  ?? 0.0;
   bool    get isAvailabilityConfirmed => _profile?.availabilityConfirmed ?? false;
-  String? get profileImageUrl        => _profile?.profileImageUrl;
-  String  get referralCode           => _profile?.referralCode ?? '';
-  String  get referralUrl            => _profile?.referralUrl  ?? '';
+  String? get profileImageUrl         => _profile?.profileImageUrl;
+  String  get referralCode            => _profile?.referralCode ?? '';
+  String  get referralUrl             => _profile?.referralUrl  ?? '';
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
@@ -54,17 +63,21 @@ class HomeViewModel extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
+    // Fetch everything in parallel — activeSub added to the wait list
     final results = await Future.wait([
       _service.getProfile(),
       _kycService.getStatus(),
       NotificationService().getNotifications(limit: 1),
       _rentService.getStatus(),
+      _planService.getActiveSubscription(),          // ← NEW (index 4)
     ]);
 
     _profile             = results[0] as FullProfile?;
     _kycStatus           = results[1] as KycStatus;
-    _unreadNotifications = (results[2] as Map<String, dynamic>)['unread'] as int;
+    _unreadNotifications =
+    (results[2] as Map<String, dynamic>)['unread'] as int;
     _rentStatus          = results[3] as RentStatus;
+    _activeSub           = results[4] as ActiveSubscription?;  // ← NEW
     _dashboardData       = DashboardData.mock();
 
     _isLoading = false;
@@ -110,7 +123,10 @@ class HomeViewModel extends ChangeNotifier {
   Future<void> refreshWalletBalance() async {
     try {
       final updated = await _service.getProfile();
-      if (updated != null) { _profile = updated; notifyListeners(); }
+      if (updated != null) {
+        _profile = updated;
+        notifyListeners();
+      }
     } catch (_) {}
   }
 
@@ -146,22 +162,26 @@ class HomeViewModel extends ChangeNotifier {
 
   Future<List<Map<String, dynamic>>> getCarousels() async {
     try {
-      final response = await http.get(Uri.parse('${AppConfig.baseUrl}/carousels'));
+      final response =
+      await http.get(Uri.parse('${AppConfig.baseUrl}/carousels'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return ((data['data']['carousels'] ?? []) as List).cast();
       }
       return [];
-    } catch (_) { return []; }
+    } catch (_) {
+      return [];
+    }
   }
 
   Future<void> trackCarouselClick(int bannerId) async {
     try {
-      await http.post(Uri.parse('${AppConfig.baseUrl}/carousels/$bannerId/click'));
+      await http
+          .post(Uri.parse('${AppConfig.baseUrl}/carousels/$bannerId/click'));
     } catch (_) {}
   }
 
-  // ── Services grid data ─── ← Collect is now the 6th tile ─────────────────
+  // ── Services grid ─────────────────────────────────────────────────────────
 
   final List<Map<String, String>> services = [
     {'icon': 'pay_bills',   'label': 'Pay Bills'},
@@ -169,7 +189,7 @@ class HomeViewModel extends ChangeNotifier {
     {'icon': 'kyc',         'label': 'KYC'},
     {'icon': 'outstanding', 'label': 'Outstanding'},
     {'icon': 'my_bills',    'label': 'My Bills'},
-    {'icon': 'collect',     'label': 'Collect'},     // ← NEW
+    {'icon': 'collect',     'label': 'Collect'},
   ];
 
   final List<Map<String, String>> promoItems = [
