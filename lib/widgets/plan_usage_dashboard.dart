@@ -89,15 +89,16 @@ class PlanUsageDashboard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
+          // Reduced from 0.07/16 → 0.05/10 and 0.08/24 → 0.05/14
           BoxShadow(
-            color: Colors.black.withOpacity(0.07),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
           BoxShadow(
-            color: AppColors.primary.withOpacity(0.08),
-            blurRadius: 24,
-            offset: const Offset(0, 6),
+            color: AppColors.primary.withOpacity(0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -121,69 +122,87 @@ class PlanUsageDashboard extends StatelessWidget {
   Widget _buildHeader() {
     return Row(
       children: [
-        // Plan name + speed badge
+        // ── Plan name pill: solid red bg + white text ──────────────────────
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.07),
-            borderRadius: BorderRadius.circular(8),
+            color: AppColors.primary,          // solid fill, not washed-out tint
+            borderRadius: BorderRadius.circular(6),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.wifi_rounded, color: AppColors.primary, size: 14),
-              const SizedBox(width: 7),
+              const Icon(Icons.wifi_rounded, color: Colors.white, size: 13),
+              const SizedBox(width: 5),
               Text(
                 _planName,
                 style: const TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
+                  color: Colors.white,           // white on red — proper contrast
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.1,
                 ),
               ),
-              if (_speedLabel.isNotEmpty) ...[
-                Container(
-                  width: 1,
-                  height: 12,
-                  margin: const EdgeInsets.symmetric(horizontal: 8),
-                  color: AppColors.primary.withOpacity(0.25),
-                ),
-                Text(
-                  _speedLabel,
-                  style: TextStyle(
-                    color: AppColors.primary.withOpacity(0.75),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
             ],
           ),
         ),
+
+        // ── Speed pill: outlined, sits right next to plan name ─────────────
+        if (_speedLabel.isNotEmpty) ...[
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+            decoration: BoxDecoration(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: AppColors.primary.withOpacity(0.35),
+                width: 1.2,
+              ),
+            ),
+            child: Text(
+              _speedLabel,
+              style: TextStyle(
+                color: AppColors.primary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+
         const Spacer(),
-        // Days remaining badge
+
+        // ── Days remaining pill: solid green or red + white text ───────────
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
             color: _isExpiringSoon
-                ? Colors.red.withOpacity(0.08)
-                : Colors.green.withOpacity(0.07),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: _isExpiringSoon
-                  ? Colors.red.withOpacity(0.30)
-                  : Colors.green.withOpacity(0.25),
-            ),
+                ? const Color(0xFFE53935)       // solid red
+                : const Color(0xFF2E7D32),      // solid deep green
+            borderRadius: BorderRadius.circular(6),
           ),
-          child: Text(
-            '$_daysRemaining days left',
-            style: TextStyle(
-              color: _isExpiringSoon
-                  ? Colors.red.shade700
-                  : Colors.green.shade700,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _isExpiringSoon
+                    ? Icons.warning_amber_rounded
+                    : Icons.access_time_rounded,
+                color: Colors.white,
+                size: 11,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '$_daysRemaining days left',
+                style: const TextStyle(
+                  color: Colors.white,           // white on solid bg — clear read
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.1,
+                ),
+              ),
+            ],
           ),
         ),
       ],
