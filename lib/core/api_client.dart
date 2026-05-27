@@ -16,7 +16,7 @@ class ApiClient {
 
   // ← ADD THIS — exposes the current access token for WebView auth header
   String? get token => _storage.accessToken;
-
+  static const String tenant = 'speedonet';
   void _init() {
     _dio = Dio(BaseOptions(
       baseUrl:        AppConfig.baseUrl,
@@ -25,6 +25,7 @@ class ApiClient {
       headers: {
         'Content-Type': 'application/json',
         'Accept':        'application/json',
+        'X-Tenant':      AppConfig.tenant,        // ← add this line
       },
     ));
 

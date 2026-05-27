@@ -24,4 +24,6 @@ class AppConfig {
   static const String kUserId       = 'user_id';
   static const String kUserPhone    = 'user_phone';
   static const String kUserName     = 'user_name';
+
+  static const String tenant = 'speedonet';
 }

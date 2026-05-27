@@ -2,20 +2,19 @@
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../core/app_config.dart';
 import '../core/storage_service.dart';
 import '../models/plan_model.dart';
 
 class PlanService {
-  static const String _base = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://103.88.81.7:3000/api/v1',
-  );
+  static String get _base => AppConfig.baseUrl;
 
   final _storage = StorageService();
 
   Map<String, String> get _authHeaders => {
     'Content-Type': 'application/json',
     'Authorization': 'Bearer ${_storage.accessToken}',
+    'X-Tenant':      AppConfig.tenant,
   };
 
   // ── Plans ───────────────────────────────────────────────────────────────────
