@@ -1,6 +1,19 @@
 import 'package:dio/dio.dart';
 import '../core/api_client.dart';
 
+// ── AddressItem (id + name) from CRM address master ───────────────────────────
+
+class AddressItem {
+  final int    id;
+  final String name;
+  const AddressItem({required this.id, required this.name});
+
+  factory AddressItem.fromJson(Map<String, dynamic> j) => AddressItem(
+    id:   (j['id']   as num?)?.toInt() ?? 0,
+    name:  j['name'] as String? ?? '',
+  );
+}
+
 // ── Address model ─────────────────────────────────────────────────────────────
 
 class ProfileAddress {
@@ -131,22 +144,23 @@ class UserService {
     }
   }
 
-  // GET /locations/states
-  Future<List<String>> getStates() async {
+  // GET /address/states  — [{id, name}] from CRM address master
+  Future<List<AddressItem>> getStates() async {
     try {
-      final res = await _api.get('/locations/states');  // ✅ _api not _dio
-      return List<String>.from(res.data['data']['states'] as List);
+      final res = await _api.get('/address/states');
+      final list = res.data['data'] as List? ?? [];
+      return list.map((s) => AddressItem.fromJson(s as Map<String, dynamic>)).toList();
     } catch (e) {
       return [];
     }
   }
 
-  // GET /locations/cities?state=Maharashtra
-  Future<List<String>> getCities(String state) async {
+  // GET /address/cities?state_id=X  — [{id, name}]
+  Future<List<AddressItem>> getCities(int stateId) async {
     try {
-      final encoded = Uri.encodeQueryComponent(state);
-      final res = await _api.get('/locations/cities?state=$encoded');
-      return List<String>.from(res.data['data']['cities'] as List);
+      final res = await _api.get('/address/cities', params: {'state_id': stateId});
+      final list = res.data['data'] as List? ?? [];
+      return list.map((c) => AddressItem.fromJson(c as Map<String, dynamic>)).toList();
     } catch (e) {
       return [];
     }

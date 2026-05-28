@@ -7,6 +7,7 @@ import '../profile/delete_account_sheet.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import '../../viewmodels/profile_viewmodel.dart';
+import '../../services/user_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   final ProfileViewModel viewModel;
@@ -27,6 +28,8 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _emailController;
+  late final TextEditingController _stateController;
+  late final TextEditingController _cityController;
   late final TextEditingController _houseNoController;
   late final TextEditingController _addressController;
   late final TextEditingController _pinCodeController;
@@ -39,6 +42,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     _nameController    = TextEditingController();
     _emailController   = TextEditingController();
+    _stateController   = TextEditingController();
+    _cityController    = TextEditingController();
     _houseNoController = TextEditingController();
     _addressController = TextEditingController();
     _pinCodeController = TextEditingController();
@@ -68,6 +73,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final vm = widget.viewModel;
     _nameController.text    = vm.name;
     _emailController.text   = vm.email;
+    _stateController.text   = vm.state;
+    _cityController.text    = vm.city;
     _houseNoController.text = vm.houseNo;
     _addressController.text = vm.address;
     _pinCodeController.text = vm.pinCode;
@@ -79,6 +86,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     widget.viewModel.removeListener(_onViewModelChange);
     _nameController.dispose();
     _emailController.dispose();
+    _stateController.dispose();
+    _cityController.dispose();
     _houseNoController.dispose();
     _addressController.dispose();
     _pinCodeController.dispose();
@@ -96,8 +105,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       // Update text controllers
       if (result.address.isNotEmpty) _addressController.text = result.address;
       if (result.pinCode.isNotEmpty) _pinCodeController.text = result.pinCode;
+      if (result.state.isNotEmpty)   _stateController.text   = result.state;
+      if (result.city.isNotEmpty)    _cityController.text    = result.city;
 
-      // Push into view-model (handles state/city dropdowns)
+      // Push into view-model too
       if (result.state.isNotEmpty) widget.viewModel.updateState(result.state);
       if (result.city.isNotEmpty)  widget.viewModel.updateCity(result.city);
 
@@ -234,7 +245,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (imgUrl != null && imgUrl.isNotEmpty) {
         if (imgUrl.startsWith('data:')) {
           final base64Part =
-              imgUrl.contains(',') ? imgUrl.split(',').last : imgUrl;
+          imgUrl.contains(',') ? imgUrl.split(',').last : imgUrl;
           image = Image.memory(
             base64Decode(base64Part),
             fit: BoxFit.cover,
@@ -247,8 +258,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             loadingBuilder: (_, child, progress) => progress == null
                 ? child
                 : const Center(
-                    child: CircularProgressIndicator(
-                        color: AppColors.primary, strokeWidth: 2)),
+                child: CircularProgressIndicator(
+                    color: AppColors.primary, strokeWidth: 2)),
             errorBuilder: (_, __, ___) => _defaultAvatarContent(vm),
           );
         }
@@ -300,12 +311,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _defaultAvatarContent(ProfileViewModel vm) {
     final initials = vm.name.trim().isNotEmpty
         ? vm.name
-            .trim()
-            .split(' ')
-            .map((w) => w.isNotEmpty ? w[0] : '')
-            .take(2)
-            .join()
-            .toUpperCase()
+        .trim()
+        .split(' ')
+        .map((w) => w.isNotEmpty ? w[0] : '')
+        .take(2)
+        .join()
+        .toUpperCase()
         : '';
 
     if (initials.isNotEmpty) {
@@ -332,6 +343,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _update() async {
     widget.viewModel.updateName(_nameController.text);
     widget.viewModel.updateEmail(_emailController.text);
+    widget.viewModel.updateState(_stateController.text);
+    widget.viewModel.updateCity(_cityController.text);
     widget.viewModel.updateHouseNo(_houseNoController.text);
     widget.viewModel.updateAddress(_addressController.text);
     widget.viewModel.updatePinCode(_pinCodeController.text);
@@ -487,63 +500,72 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     // ── USE MY LOCATION BUTTON ──────────────────────────
                     _locationLoading
                         ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.primary,
-                            ),
-                          )
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.primary,
+                      ),
+                    )
                         : TextButton.icon(
-                            onPressed: _autoFillLocation,
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppColors.primary,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 6),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                side: BorderSide(
-                                  color: AppColors.primary.withOpacity(0.4),
-                                ),
-                              ),
-                              backgroundColor:
-                                  AppColors.primary.withOpacity(0.06),
-                            ),
-                            icon: const Icon(Icons.my_location_rounded,
-                                size: 15),
-                            label: const Text(
-                              'Use My Location',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                      onPressed: _autoFillLocation,
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: BorderSide(
+                            color: AppColors.primary.withOpacity(0.4),
                           ),
+                        ),
+                        backgroundColor:
+                        AppColors.primary.withOpacity(0.06),
+                      ),
+                      icon: const Icon(Icons.my_location_rounded,
+                          size: 15),
+                      label: const Text(
+                        'Use My Location',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 16),
 
-                // ── State dropdown ──────────────────────────────────────
+                // ── State dropdown ──────────────────────────────────────────
                 const _FieldLabel(text: 'State'),
                 const SizedBox(height: 8),
-                _DropdownField(
+                _AddressDropdown(
                   value: vm.state,
                   items: vm.states,
-                  onChanged: vm.updateState,
                   isLoading: vm.statesLoading,
                   hint: 'Select State',
+                  onChanged: (name) {
+                    _stateController.text = name;
+                    _cityController.text  = '';
+                    widget.viewModel.updateState(name);
+                  },
                 ),
                 const SizedBox(height: 16),
 
-                // ── City dropdown ───────────────────────────────────────
+                // ── City dropdown ───────────────────────────────────────────
                 const _FieldLabel(text: 'City'),
                 const SizedBox(height: 8),
-                _DropdownField(
+                _AddressDropdown(
                   value: vm.city,
                   items: vm.cities,
-                  onChanged: vm.updateCity,
                   isLoading: vm.citiesLoading,
-                  hint: 'Select City',
+                  hint: vm.state.isEmpty
+                      ? 'Select state first'
+                      : vm.citiesLoading ? 'Loading cities…' : 'Select City',
+                  onChanged: (name) {
+                    _cityController.text = name;
+                    widget.viewModel.updateCity(name);
+                  },
                 ),
                 const SizedBox(height: 16),
 
@@ -577,7 +599,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       disabledBackgroundColor:
-                          AppColors.primary.withOpacity(0.6),
+                      AppColors.primary.withOpacity(0.6),
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -586,19 +608,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     child: vm.isUpdating
                         ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                                color: Colors.white, strokeWidth: 2),
-                          )
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2),
+                    )
                         : const Text(
-                            'Update Profile',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16,
-                            ),
-                          ),
+                      'Update Profile',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
                   ),
                 ),
 
@@ -630,13 +652,13 @@ class _FieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Text(
-        text,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          color: AppColors.textGrey,
-        ),
-      );
+    text,
+    style: const TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w500,
+      color: AppColors.textGrey,
+    ),
+  );
 }
 
 class _ProfileField extends StatelessWidget {
@@ -684,7 +706,7 @@ class _ProfileField extends StatelessWidget {
             decoration: const InputDecoration(
               border: InputBorder.none,
               contentPadding:
-                  EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             ),
           ),
         ),
@@ -722,44 +744,114 @@ class _DropdownField extends StatelessWidget {
       child: DropdownButtonHideUnderline(
         child: isLoading
             ? const SizedBox(
-                height: 48,
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 16, height: 16,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: AppColors.primary),
-                    ),
-                    SizedBox(width: 12),
-                    Text('Loading…',
-                        style: TextStyle(
-                            fontSize: 15, color: AppColors.textGrey)),
-                  ],
-                ),
-              )
-            : DropdownButton<String>(
-                value: effectiveValue,
-                isExpanded: true,
-                hint: Text(hint,
-                    style: const TextStyle(
-                        fontSize: 15, color: AppColors.textGrey)),
-                icon: const Icon(Icons.keyboard_arrow_down,
-                    color: AppColors.textGrey),
-                items: items
-                    .map((item) => DropdownMenuItem(
-                          value: item,
-                          child: Text(item,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                color: AppColors.textDark,
-                                fontWeight: FontWeight.w500,
-                              )),
-                        ))
-                    .toList(),
-                onChanged: items.isEmpty
-                    ? null
-                    : (v) => v != null ? onChanged(v) : null,
+          height: 48,
+          child: Row(
+            children: [
+              SizedBox(
+                width: 16, height: 16,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: AppColors.primary),
               ),
+              SizedBox(width: 12),
+              Text('Loading…',
+                  style: TextStyle(
+                      fontSize: 15, color: AppColors.textGrey)),
+            ],
+          ),
+        )
+            : DropdownButton<String>(
+          value: effectiveValue,
+          isExpanded: true,
+          hint: Text(hint,
+              style: const TextStyle(
+                  fontSize: 15, color: AppColors.textGrey)),
+          icon: const Icon(Icons.keyboard_arrow_down,
+              color: AppColors.textGrey),
+          items: items
+              .map((item) => DropdownMenuItem(
+            value: item,
+            child: Text(item,
+                style: const TextStyle(
+                  fontSize: 15,
+                  color: AppColors.textDark,
+                  fontWeight: FontWeight.w500,
+                )),
+          ))
+              .toList(),
+          onChanged: items.isEmpty
+              ? null
+              : (v) => v != null ? onChanged(v) : null,
+        ),
+      ),
+    );
+  }
+}
+
+
+// ── Address dropdown — works with AddressItem (id + name) ─────────────────────
+
+class _AddressDropdown extends StatelessWidget {
+  final String value;
+  final List<AddressItem> items;
+  final void Function(String name) onChanged;
+  final bool isLoading;
+  final String hint;
+
+  const _AddressDropdown({
+    required this.value,
+    required this.items,
+    required this.onChanged,
+    this.isLoading = false,
+    this.hint = 'Select',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Match by name (profile stores names, not IDs)
+    final matched = items.any((i) => i.name == value);
+    final effectiveValue = matched ? value : null;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.borderColor),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: isLoading
+            ? const SizedBox(
+          height: 48,
+          child: Row(children: [
+            SizedBox(
+              width: 16, height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+            ),
+            SizedBox(width: 12),
+            Text('Loading…', style: TextStyle(fontSize: 15, color: AppColors.textGrey)),
+          ]),
+        )
+            : DropdownButton<String>(
+          value: effectiveValue,
+          isExpanded: true,
+          hint: Text(hint,
+              style: const TextStyle(fontSize: 15, color: AppColors.textGrey)),
+          icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textGrey),
+          items: items
+              .map((item) => DropdownMenuItem(
+            value: item.name,
+            child: Text(item.name,
+                style: const TextStyle(
+                  fontSize: 15,
+                  color: AppColors.textDark,
+                  fontWeight: FontWeight.w500,
+                )),
+          ))
+              .toList(),
+          onChanged: items.isEmpty
+              ? null
+              : (v) { if (v != null) onChanged(v); },
+        ),
       ),
     );
   }

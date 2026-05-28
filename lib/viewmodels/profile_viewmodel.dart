@@ -1,4 +1,3 @@
-// lib/viewmodels/profile_viewmodel.dart
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/user_service.dart';
@@ -21,11 +20,11 @@ class ProfileViewModel extends ChangeNotifier {
   String? _imageError;
 
   // ── Location state ────────────────────────────────────────────────────────
-  List<String> _states          = [];
-  List<String> _cities          = [];
-  bool         _statesLoading   = false;
-  bool         _citiesLoading   = false;
-  String?      _locationsError;
+  List<AddressItem> _states        = [];
+  List<AddressItem> _cities        = [];
+  bool              _statesLoading = false;
+  bool              _citiesLoading = false;
+  String?           _locationsError;
 
   // ── Getters ───────────────────────────────────────────────────────────────
 
@@ -42,13 +41,13 @@ class ProfileViewModel extends ChangeNotifier {
   String? get imageError        => _imageError;
 
   // Locations
-  List<String> get states         => _states;
-  List<String> get cities         => _cities;
-  bool         get statesLoading  => _statesLoading;
-  bool         get citiesLoading  => _citiesLoading;
-  String?      get locationsError => _locationsError;
+  List<AddressItem> get states         => _states;
+  List<AddressItem> get cities         => _cities;
+  bool              get statesLoading  => _statesLoading;
+  bool              get citiesLoading  => _citiesLoading;
+  String?           get locationsError => _locationsError;
 
-  // Convenience getters used directly in the UI
+  // Convenience getters
   String get name          => _profile?.name          ?? '';
   String get phone         => _profile?.phone         ?? '';
   String get email         => _profile?.email         ?? '';
@@ -59,10 +58,9 @@ class ProfileViewModel extends ChangeNotifier {
   String get pinCode       => _profile?.address.pinCode ?? '';
   double get walletBalance => _profile?.walletBalance ?? 0.0;
   String get kycStatus     => _profile?.kycStatus     ?? 'not_submitted';
-
   String? get profileImageUrl => _profile?.profileImageUrl;
 
-  // ── Load profile from API ─────────────────────────────────────────────────
+  // ── Load profile ──────────────────────────────────────────────────────────
 
   Future<void> loadProfile() async {
     _isLoading = true;
@@ -77,10 +75,14 @@ class ProfileViewModel extends ChangeNotifier {
     _isLoading = false;
     notifyListeners();
 
-    // After profile loads, fetch states and cities for the current state
+    // Load states, then cities for the current state
     await loadStates();
     if (state.isNotEmpty) {
-      await loadCitiesForState(state);
+      final match = _states.firstWhere(
+            (s) => s.name.toLowerCase() == state.toLowerCase(),
+        orElse: () => const AddressItem(id: 0, name: ''),
+      );
+      if (match.id > 0) await loadCitiesForState(match.id);
     }
   }
 
@@ -88,32 +90,30 @@ class ProfileViewModel extends ChangeNotifier {
 
   Future<void> loadStates() async {
     if (_statesLoading) return;
-    _statesLoading   = true;
-    _locationsError  = null;
+    _statesLoading  = true;
+    _locationsError = null;
     notifyListeners();
 
     try {
       _states = await _service.getStates();
     } catch (_) {
-      _locationsError = 'Could not load states. Please try again.';
+      _locationsError = 'Could not load states.';
     }
 
     _statesLoading = false;
     notifyListeners();
   }
 
-  /// Called whenever the user picks a new state — clears city and fetches
-  /// the fresh city list for that state from the backend.
-  Future<void> loadCitiesForState(String stateName) async {
+  Future<void> loadCitiesForState(int stateId) async {
     if (_citiesLoading) return;
     _cities        = [];
     _citiesLoading = true;
     notifyListeners();
 
     try {
-      _cities = await _service.getCities(stateName);
+      _cities = await _service.getCities(stateId);
     } catch (_) {
-      _locationsError = 'Could not load cities. Please try again.';
+      _locationsError = 'Could not load cities.';
     }
 
     _citiesLoading = false;
@@ -145,7 +145,7 @@ class ProfileViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Local field updates (before hitting save) ─────────────────────────────
+  // ── Local field updates ───────────────────────────────────────────────────
 
   void updateName(String v)  { _profile = _profile?.copyWith(name: v);  notifyListeners(); }
   void updateEmail(String v) { _profile = _profile?.copyWith(email: v); notifyListeners(); }
@@ -153,12 +153,16 @@ class ProfileViewModel extends ChangeNotifier {
   void updateState(String v) {
     _profile = _profile?.copyWith(address: ProfileAddress(
       houseNo: houseNo, address: address,
-      // Clear city when state changes — old city may not belong to new state
       city: '', state: v, pinCode: pinCode,
     ));
+    // Reload cities for new state
+    _cities = [];
+    final match = _states.firstWhere(
+          (s) => s.name == v,
+      orElse: () => const AddressItem(id: 0, name: ''),
+    );
+    if (match.id > 0) loadCitiesForState(match.id);
     notifyListeners();
-    // Fetch fresh city list for the newly selected state
-    loadCitiesForState(v);
   }
 
   void updateCity(String v) {

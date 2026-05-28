@@ -1,5 +1,3 @@
-// lib/viewmodels/kyc_viewmodel.dart
-
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -10,72 +8,88 @@ import '../services/user_service.dart';
 enum KycStep { loading, form, submitting, success, error }
 
 class KycViewModel extends ChangeNotifier {
-  final _service     = KycService();
-  final _imgPicker   = ImagePicker();
+  final _service   = KycService();
+  final _imgPicker = ImagePicker();
 
-  // ── State ─────────────────────────────────────────────────────────────────
-  KycStep  _step          = KycStep.loading;
-  String?  _errorMessage;
-  String?  _progressText;
+  // ── Doc KYC state ─────────────────────────────────────────────────────────
+  KycStep    _step         = KycStep.loading;
+  String?    _errorMessage;
+  String?    _progressText;
   KycStatus? _kycStatus;
 
-  String  _addressProofType = 'Rent Agreement';
-  String  _idProofType      = 'Aadhar Card';
-  File?   _addressFile;
-  File?   _idFile;
+  String _addressProofType = 'Rent Agreement';
+  String _idProofType      = 'Aadhar Card';
+  File?  _addressFile;
+  File?  _idFile;
+
+  // ── Video KYC state ───────────────────────────────────────────────────────
+  VideoKycStatus? _videoKycStatus;
+  File?   _videoFile;
+  String  _preferredDate  = '';
+  String  _preferredSlot  = 'Morning (9 AM – 12 PM)';
+  String  _callPhone      = '';
+  bool    _videoSubmitting = false;
+  String? _videoError;
+  bool    _videoSuccess    = false;
 
   // ── Getters ───────────────────────────────────────────────────────────────
-  KycStep   get step          => _step;
-  String?   get errorMessage  => _errorMessage;
-  String?   get progressText  => _progressText;
-  KycStatus? get kycStatus    => _kycStatus;
-  String    get addressProofType => _addressProofType;
-  String    get idProofType      => _idProofType;
-  File?     get addressFile   => _addressFile;
-  File?     get idFile        => _idFile;
+  KycStep         get step           => _step;
+  String?         get errorMessage   => _errorMessage;
+  String?         get progressText   => _progressText;
+  KycStatus?      get kycStatus      => _kycStatus;
+  String          get addressProofType => _addressProofType;
+  String          get idProofType      => _idProofType;
+  File?           get addressFile    => _addressFile;
+  File?           get idFile         => _idFile;
 
-  bool get isSubmitting       => _step == KycStep.submitting;
-  bool get hasAddressFile     => _addressFile != null;
-  bool get hasIdFile          => _idFile != null;
-  bool get canSubmit          => hasAddressFile && hasIdFile && !isSubmitting;
+  VideoKycStatus? get videoKycStatus  => _videoKycStatus;
+  File?           get videoFile       => _videoFile;
+  String          get preferredDate   => _preferredDate;
+  String          get preferredSlot   => _preferredSlot;
+  String          get callPhone       => _callPhone;
+  bool            get videoSubmitting => _videoSubmitting;
+  String?         get videoError      => _videoError;
+  bool            get videoSuccess    => _videoSuccess;
+
+  bool get isSubmitting        => _step == KycStep.submitting;
+  bool get hasAddressFile      => _addressFile != null;
+  bool get hasIdFile           => _idFile != null;
+  bool get canSubmit           => hasAddressFile && hasIdFile && !isSubmitting;
+  bool get hasVideoFile        => _videoFile != null;
+  bool get canSubmitVideo      =>
+      _preferredDate.isNotEmpty && _callPhone.isNotEmpty && !_videoSubmitting;
   bool get isProfileIncomplete =>
-      _step == KycStep.error &&
-          (_errorMessage?.contains('profile') ?? false);
+      _step == KycStep.error && (_errorMessage?.contains('profile') ?? false);
 
   String get addressFileName =>
       _addressFile != null ? _addressFile!.path.split('/').last : '';
-
   String get idFileName =>
       _idFile != null ? _idFile!.path.split('/').last : '';
+  String get videoFileName =>
+      _videoFile != null ? _videoFile!.path.split('/').last : '';
 
   final List<String> addressProofTypes = [
-    'Rent Agreement',
-    'Utility Bill',
-    'Bank Statement',
-    'Passport',
-    'Voter ID',
+    'Rent Agreement', 'Utility Bill', 'Bank Statement', 'Passport', 'Voter ID',
   ];
-
   final List<String> idProofTypes = [
-    'Aadhar Card',
-    'Passport',
-    'Voter ID',
-    'Driving License',
-    'PAN Card',
+    'Aadhar Card', 'Passport', 'Voter ID', 'Driving License', 'PAN Card',
+  ];
+  final List<String> timeSlots = [
+    'Morning (9 AM – 12 PM)',
+    'Afternoon (12 PM – 3 PM)',
+    'Evening (3 PM – 6 PM)',
   ];
 
   // ── Init ──────────────────────────────────────────────────────────────────
-  // In kyc_viewmodel.dart
   final _userService = UserService();
 
   Future<void> init() async {
     _step = KycStep.loading;
     notifyListeners();
 
-    // Check profile completeness first
     final profile = await _userService.getProfile();
-    final addr = profile?.address;
-    final isProfileComplete = profile != null &&
+    final addr    = profile?.address;
+    final isComplete = profile != null &&
         profile.name.isNotEmpty &&
         addr != null &&
         addr.address.isNotEmpty &&
@@ -83,90 +97,95 @@ class KycViewModel extends ChangeNotifier {
         addr.state.isNotEmpty &&
         addr.pinCode.isNotEmpty;
 
-    if (!isProfileComplete) {
-      _step = KycStep.error;
+    if (!isComplete) {
+      _step         = KycStep.error;
       _errorMessage = 'Please complete your profile (name and address) before submitting KYC.';
       notifyListeners();
       return;
     }
 
-    _kycStatus = await _service.getStatus();
-    _step = KycStep.form;
+    final results = await Future.wait([
+      _service.getStatus(),
+      _service.getVideoStatus(),
+    ]);
+    _kycStatus      = results[0] as KycStatus;
+    _videoKycStatus = results[1] as VideoKycStatus;
+    _callPhone      = profile?.phone ?? '';
+    _step           = KycStep.form;
     notifyListeners();
   }
 
   // ── Setters ───────────────────────────────────────────────────────────────
   void setAddressProofType(String v) { _addressProofType = v; notifyListeners(); }
   void setIdProofType(String v)      { _idProofType = v;      notifyListeners(); }
+  void setPreferredDate(String v)    { _preferredDate = v;    notifyListeners(); }
+  void setPreferredSlot(String v)    { _preferredSlot = v;    notifyListeners(); }
+  void setCallPhone(String v)        { _callPhone = v;        notifyListeners(); }
 
   // ── File picking ──────────────────────────────────────────────────────────
   Future<void> pickAddressFile(BuildContext ctx) async {
-    final file = await _showPickerSheet(ctx);
-    if (file != null) { _addressFile = file; notifyListeners(); }
+    final f = await _showPickerSheet(ctx, allowVideo: false);
+    if (f != null) { _addressFile = f; notifyListeners(); }
   }
 
   Future<void> pickIdFile(BuildContext ctx) async {
-    final file = await _showPickerSheet(ctx);
-    if (file != null) { _idFile = file; notifyListeners(); }
+    final f = await _showPickerSheet(ctx, allowVideo: false);
+    if (f != null) { _idFile = f; notifyListeners(); }
+  }
+
+  Future<void> pickVideoFile(BuildContext ctx) async {
+    final f = await _showPickerSheet(ctx, allowVideo: true);
+    if (f != null) { _videoFile = f; notifyListeners(); }
   }
 
   void removeAddressFile() { _addressFile = null; notifyListeners(); }
   void removeIdFile()      { _idFile = null;      notifyListeners(); }
+  void removeVideoFile()   { _videoFile = null;   notifyListeners(); }
 
-  Future<File?> _showPickerSheet(BuildContext ctx) async {
-    // Step 1: show the sheet and wait for the user to pick a SOURCE (not a file yet)
+  Future<File?> _showPickerSheet(BuildContext ctx, {required bool allowVideo}) async {
     final source = await showModalBottomSheet<String>(
       context: ctx,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (sheetCtx) => _FilePickerSheet(
+        allowVideo: allowVideo,
         onCamera:   () => Navigator.pop(sheetCtx, 'camera'),
         onGallery:  () => Navigator.pop(sheetCtx, 'gallery'),
         onDocument: () => Navigator.pop(sheetCtx, 'document'),
+        onVideo:    () => Navigator.pop(sheetCtx, 'video'),
       ),
     );
-
     if (source == null) return null;
 
-    // Step 2: NOW do the async file picking after the sheet has fully closed
     switch (source) {
       case 'camera':
-        final img = await _imgPicker.pickImage(
-            source: ImageSource.camera, imageQuality: 80);
+        final img = await _imgPicker.pickImage(source: ImageSource.camera, imageQuality: 80);
         return img != null ? File(img.path) : null;
-
       case 'gallery':
-        final img = await _imgPicker.pickImage(
-            source: ImageSource.gallery, imageQuality: 80);
+        final img = await _imgPicker.pickImage(source: ImageSource.gallery, imageQuality: 80);
         return img != null ? File(img.path) : null;
-
+      case 'video':
+        final vid = await _imgPicker.pickVideo(source: ImageSource.gallery);
+        return vid != null ? File(vid.path) : null;
       case 'document':
         final result = await FilePicker.platform.pickFiles(
           type: FileType.custom,
           allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
         );
-        if (result != null && result.files.single.path != null) {
-          return File(result.files.single.path!);
-        }
+        if (result?.files.single.path != null) return File(result!.files.single.path!);
         return null;
-
       default:
         return null;
     }
   }
 
-  // ── Submit ────────────────────────────────────────────────────────────────
+  // ── Submit doc KYC ────────────────────────────────────────────────────────
   Future<void> submit() async {
     if (!canSubmit) return;
 
     _step         = KycStep.submitting;
     _errorMessage = null;
-    _progressText = 'Encoding documents...';
-    notifyListeners();
-
-    await Future.delayed(const Duration(milliseconds: 300)); // let UI paint
-
-    _progressText = 'Submitting KYC...';
+    _progressText = 'Uploading documents…';
     notifyListeners();
 
     final result = await _service.submitKyc(
@@ -187,24 +206,66 @@ class KycViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Submit video KYC ──────────────────────────────────────────────────────
+  Future<void> submitVideoKyc() async {
+    if (!canSubmitVideo) return;
+
+    _videoSubmitting = true;
+    _videoError      = null;
+    _videoSuccess    = false;
+    notifyListeners();
+
+    final result = await _service.submitVideoKyc(
+      preferredDate: _preferredDate,
+      preferredSlot: _preferredSlot,
+      callPhone:     _callPhone,
+      videoFile:     _videoFile,
+    );
+
+    _videoSubmitting = false;
+    if (result.success) {
+      _videoKycStatus = result.videoKycStatus;
+      _videoSuccess   = true;
+    } else {
+      _videoError = result.error;
+    }
+    notifyListeners();
+  }
+
+  Future<void> cancelVideoKyc() async {
+    await _service.cancelVideoKyc();
+    _videoKycStatus = VideoKycStatus.notSubmitted();
+    _videoSuccess   = false;
+    notifyListeners();
+  }
+
   void retryAfterError() {
     _step = KycStep.form;
     _errorMessage = null;
     notifyListeners();
   }
+
+  void clearVideoError() {
+    _videoError = null;
+    notifyListeners();
+  }
 }
 
-// ── File picker bottom sheet ──────────────────────────────────────────────────
+// ── File / Video picker bottom sheet ─────────────────────────────────────────
 
 class _FilePickerSheet extends StatelessWidget {
+  final bool         allowVideo;
   final VoidCallback onCamera;
   final VoidCallback onGallery;
   final VoidCallback onDocument;
+  final VoidCallback onVideo;
 
   const _FilePickerSheet({
+    required this.allowVideo,
     required this.onCamera,
     required this.onGallery,
     required this.onDocument,
+    required this.onVideo,
   });
 
   @override
@@ -220,7 +281,6 @@ class _FilePickerSheet extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Handle bar
             Container(
               width: 36, height: 4,
               decoration: BoxDecoration(
@@ -229,34 +289,28 @@ class _FilePickerSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            const Text(
-              'Upload Document',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E)),
+            Text(
+              allowVideo ? 'Upload Video / Document' : 'Upload Document',
+              style: const TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E)),
             ),
             const SizedBox(height: 6),
             Text(
-              'JPG, PNG or PDF • Max 5 MB',
+              allowVideo ? 'MP4, MOV, WebM • Max 100 MB' : 'JPG, PNG or PDF • Max 10 MB',
               style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
             ),
             const SizedBox(height: 28),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _SheetOption(
-                  icon: Icons.camera_alt_outlined,
-                  label: 'Camera',
-                  onTap: onCamera,
-                ),
-                _SheetOption(
-                  icon: Icons.photo_library_outlined,
-                  label: 'Gallery',
-                  onTap: onGallery,
-                ),
-                _SheetOption(
-                  icon: Icons.description_outlined,
-                  label: 'Document',
-                  onTap: onDocument,
-                ),
+              children: allowVideo
+                  ? [
+                _SheetOption(icon: Icons.videocam_outlined,     label: 'Gallery', onTap: onVideo),
+                _SheetOption(icon: Icons.description_outlined,  label: 'Files',   onTap: onDocument),
+              ]
+                  : [
+                _SheetOption(icon: Icons.camera_alt_outlined,   label: 'Camera',   onTap: onCamera),
+                _SheetOption(icon: Icons.photo_library_outlined, label: 'Gallery',  onTap: onGallery),
+                _SheetOption(icon: Icons.description_outlined,  label: 'Document', onTap: onDocument),
               ],
             ),
           ],
@@ -267,28 +321,22 @@ class _FilePickerSheet extends StatelessWidget {
 }
 
 class _SheetOption extends StatelessWidget {
-  final IconData icon;
-  final String label;
+  final IconData     icon;
+  final String       label;
   final VoidCallback onTap;
 
-  const _SheetOption({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
+  const _SheetOption({required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     const primary = Color(0xFF1A1A2E);
-
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Column(
         children: [
           Container(
-            width: 76,
-            height: 76,
+            width: 76, height: 76,
             decoration: BoxDecoration(
               color: primary.withOpacity(0.06),
               borderRadius: BorderRadius.circular(20),
@@ -297,14 +345,11 @@ class _SheetOption extends StatelessWidget {
             child: Icon(icon, size: 32, color: primary),
           ),
           const SizedBox(height: 10),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.grey.shade600,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w600)),
         ],
       ),
     );

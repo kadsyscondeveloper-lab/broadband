@@ -563,7 +563,7 @@ class _ServicesGrid extends StatelessWidget {
       case 'kyc':         return 'assets/images/kyc.png';
       case 'outstanding': return 'assets/images/document_17246597.png';
       case 'my_bills':    return 'assets/images/bills.png';
-      case 'collect':     return 'assets/images/collect.png'; // ← your icon
+      //case 'collect':     return 'assets/images/collect.png'; // ← your icon
       default:            return 'assets/images/pay_bills.png';
     }
   }
@@ -615,7 +615,7 @@ class _ServicesGrid extends StatelessWidget {
                   tutorialKey:            _keyFor(pair[0]['label']!),
                   onAvailabilityRequired: onAvailabilityRequired,
                   rentStatus:             rentStatus,
-                  isCollecting:           isCollecting,
+                  //isCollecting:           isCollecting,
                 ),
               ),
               const SizedBox(width: 10),
