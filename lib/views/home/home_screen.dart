@@ -102,12 +102,13 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isProfileComplete() {
     final profile = widget.viewModel.profile;
     if (profile == null) return false;
-    final addr = profile.address;
+
     return profile.name.isNotEmpty &&
-        addr.address.isNotEmpty &&
-        addr.city.isNotEmpty &&
-        addr.state.isNotEmpty &&
-        addr.pinCode.isNotEmpty;
+        profile.flatNo.isNotEmpty &&
+        profile.buildingName.isNotEmpty &&
+        profile.areaName.isNotEmpty &&
+        profile.localityName.isNotEmpty &&
+        profile.pinCode.isNotEmpty;
   }
 
   void _showProfileRequiredSheet() {

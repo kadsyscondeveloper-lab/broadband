@@ -19,12 +19,23 @@ class ProfileViewModel extends ChangeNotifier {
   bool    _imageUploading = false;
   String? _imageError;
 
-  // ── Location state ────────────────────────────────────────────────────────
-  List<AddressItem> _states        = [];
-  List<AddressItem> _cities        = [];
-  bool              _statesLoading = false;
-  bool              _citiesLoading = false;
-  String?           _locationsError;
+  // ── CRM address hierarchy ─────────────────────────────────────────────────
+  // Selections (IDs + names)
+  int?    _selectedLocalityId;
+  String  _selectedLocalityName = '';
+  int?    _selectedAreaId;
+  String  _selectedAreaName     = '';
+  int?    _selectedBuildingId;
+  String  _selectedBuildingName = '';
+
+  // Dropdown lists
+  List<AddressItem> _localities      = [];
+  List<AddressItem> _areas           = [];
+  List<AddressItem> _buildings       = [];
+  bool              _localitiesLoading = false;
+  bool              _areasLoading      = false;
+  bool              _buildingsLoading  = false;
+  String?           _addressError;
 
   // ── Getters ───────────────────────────────────────────────────────────────
 
@@ -36,29 +47,36 @@ class ProfileViewModel extends ChangeNotifier {
   bool         get updateSuccess  => _updateSuccess;
 
   // Image
-  String? get localImageBase64  => _localImageBase64;
-  bool    get imageUploading    => _imageUploading;
-  String? get imageError        => _imageError;
+  String? get localImageBase64 => _localImageBase64;
+  bool    get imageUploading   => _imageUploading;
+  String? get imageError       => _imageError;
 
-  // Locations
-  List<AddressItem> get states         => _states;
-  List<AddressItem> get cities         => _cities;
-  bool              get statesLoading  => _statesLoading;
-  bool              get citiesLoading  => _citiesLoading;
-  String?           get locationsError => _locationsError;
+  // Address dropdowns
+  List<AddressItem> get localities       => _localities;
+  List<AddressItem> get areas            => _areas;
+  List<AddressItem> get buildings        => _buildings;
+  bool              get localitiesLoading => _localitiesLoading;
+  bool              get areasLoading      => _areasLoading;
+  bool              get buildingsLoading  => _buildingsLoading;
+  String?           get addressError      => _addressError;
 
-  // Convenience getters
-  String get name          => _profile?.name          ?? '';
-  String get phone         => _profile?.phone         ?? '';
-  String get email         => _profile?.email         ?? '';
-  String get state         => _profile?.address.state   ?? '';
-  String get city          => _profile?.address.city    ?? '';
-  String get houseNo       => _profile?.address.houseNo ?? '';
-  String get address       => _profile?.address.address ?? '';
-  String get pinCode       => _profile?.address.pinCode ?? '';
-  double get walletBalance => _profile?.walletBalance ?? 0.0;
-  String get kycStatus     => _profile?.kycStatus     ?? 'not_submitted';
+  // Selected address values
+  int?   get selectedLocalityId   => _selectedLocalityId;
+  String get selectedLocalityName => _selectedLocalityName;
+  int?   get selectedAreaId       => _selectedAreaId;
+  String get selectedAreaName     => _selectedAreaName;
+  int?   get selectedBuildingId   => _selectedBuildingId;
+  String get selectedBuildingName => _selectedBuildingName;
+
+  // Basic profile getters
+  String get name          => _profile?.name            ?? '';
+  String get phone         => _profile?.phone           ?? '';
+  String get email         => _profile?.email           ?? '';
+  double get walletBalance => _profile?.walletBalance   ?? 0.0;
+  String get kycStatus     => _profile?.kycStatus       ?? 'not_submitted';
   String? get profileImageUrl => _profile?.profileImageUrl;
+  String get flatNo        => _profile?.flatNo          ?? '';
+  String get pinCode       => _profile?.pinCode         ?? '';
 
   // ── Load profile ──────────────────────────────────────────────────────────
 
@@ -70,53 +88,135 @@ class ProfileViewModel extends ChangeNotifier {
     _profile = await _service.getProfile();
     if (_profile == null) {
       _loadError = 'Failed to load profile. Please try again.';
+      _isLoading = false;
+      notifyListeners();
+      return;
     }
+
+    // Pre-populate selections from profile
+    _selectedLocalityId   = _profile!.localityId;
+    _selectedLocalityName = _profile!.localityName;
+    _selectedAreaId       = _profile!.areaId;
+    _selectedAreaName     = _profile!.areaName;
+    _selectedBuildingId   = _profile!.buildingId;
+    _selectedBuildingName = _profile!.buildingName;
 
     _isLoading = false;
     notifyListeners();
 
-    // Load states, then cities for the current state
-    await loadStates();
-    if (state.isNotEmpty) {
-      final match = _states.firstWhere(
-            (s) => s.name.toLowerCase() == state.toLowerCase(),
-        orElse: () => const AddressItem(id: 0, name: ''),
-      );
-      if (match.id > 0) await loadCitiesForState(match.id);
+    // Load all localities, then pre-fetch areas/buildings for current selection
+    await loadLocalities();
+    if (_selectedLocalityId != null && _selectedLocalityId! > 0) {
+      await loadAreasForLocality(_selectedLocalityId!);
+    }
+    if (_selectedAreaId != null && _selectedAreaId! > 0) {
+      await loadBuildingsForArea(_selectedAreaId!);
     }
   }
 
-  // ── Location loaders ──────────────────────────────────────────────────────
+  // ── Address dropdown loaders ──────────────────────────────────────────────
 
-  Future<void> loadStates() async {
-    if (_statesLoading) return;
-    _statesLoading  = true;
-    _locationsError = null;
+  Future<void> loadLocalities() async {
+    if (_localitiesLoading) return;
+    _localitiesLoading = true;
+    _addressError      = null;
     notifyListeners();
 
     try {
-      _states = await _service.getStates();
+      _localities = await _service.getLocalities();
     } catch (_) {
-      _locationsError = 'Could not load states.';
+      _addressError = 'Could not load localities.';
     }
 
-    _statesLoading = false;
+    _localitiesLoading = false;
     notifyListeners();
   }
 
-  Future<void> loadCitiesForState(int stateId) async {
-    if (_citiesLoading) return;
-    _cities        = [];
-    _citiesLoading = true;
+  Future<void> loadAreasForLocality(int localityId) async {
+    if (_areasLoading) return;
+    _areas         = [];
+    _buildings     = [];
+    _areasLoading  = true;
     notifyListeners();
 
     try {
-      _cities = await _service.getCities(stateId);
+      _areas = await _service.getAreas(localityId);
     } catch (_) {
-      _locationsError = 'Could not load cities.';
+      _addressError = 'Could not load areas.';
     }
 
-    _citiesLoading = false;
+    _areasLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> loadBuildingsForArea(int areaId) async {
+    if (_buildingsLoading) return;
+    _buildings        = [];
+    _buildingsLoading = true;
+    notifyListeners();
+
+    try {
+      _buildings = await _service.getBuildings(areaId);
+    } catch (_) {
+      _addressError = 'Could not load buildings.';
+    }
+
+    _buildingsLoading = false;
+    notifyListeners();
+  }
+
+  // ── Address selection updates ─────────────────────────────────────────────
+
+  void selectLocality(AddressItem item) {
+    _selectedLocalityId   = item.id;
+    _selectedLocalityName = item.name;
+    // Reset downstream selections
+    _selectedAreaId       = null;
+    _selectedAreaName     = '';
+    _selectedBuildingId   = null;
+    _selectedBuildingName = '';
+    _areas                = [];
+    _buildings            = [];
+    notifyListeners();
+    loadAreasForLocality(item.id);
+  }
+
+  void selectArea(AddressItem item) {
+    _selectedAreaId       = item.id;
+    _selectedAreaName     = item.name;
+    // Reset downstream selection
+    _selectedBuildingId   = null;
+    _selectedBuildingName = '';
+    _buildings            = [];
+    notifyListeners();
+    loadBuildingsForArea(item.id);
+  }
+
+  void selectBuilding(AddressItem item) {
+    _selectedBuildingId   = item.id;
+    _selectedBuildingName = item.name;
+    notifyListeners();
+  }
+
+  void updateFlatNo(String v) {
+    _profile = _profile?.copyWith(flatNo: v);
+    notifyListeners();
+  }
+
+  void updatePinCode(String v) {
+    _profile = _profile?.copyWith(pinCode: v);
+    notifyListeners();
+  }
+
+  // ── Basic field updates ───────────────────────────────────────────────────
+
+  void updateName(String v) {
+    _profile = _profile?.copyWith(name: v);
+    notifyListeners();
+  }
+
+  void updateEmail(String v) {
+    _profile = _profile?.copyWith(email: v);
     notifyListeners();
   }
 
@@ -145,54 +245,6 @@ class ProfileViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Local field updates ───────────────────────────────────────────────────
-
-  void updateName(String v)  { _profile = _profile?.copyWith(name: v);  notifyListeners(); }
-  void updateEmail(String v) { _profile = _profile?.copyWith(email: v); notifyListeners(); }
-
-  void updateState(String v) {
-    _profile = _profile?.copyWith(address: ProfileAddress(
-      houseNo: houseNo, address: address,
-      city: '', state: v, pinCode: pinCode,
-    ));
-    // Reload cities for new state
-    _cities = [];
-    final match = _states.firstWhere(
-          (s) => s.name == v,
-      orElse: () => const AddressItem(id: 0, name: ''),
-    );
-    if (match.id > 0) loadCitiesForState(match.id);
-    notifyListeners();
-  }
-
-  void updateCity(String v) {
-    _profile = _profile?.copyWith(address: ProfileAddress(
-      houseNo: houseNo, address: address, city: v, state: state, pinCode: pinCode,
-    ));
-    notifyListeners();
-  }
-
-  void updateHouseNo(String v) {
-    _profile = _profile?.copyWith(address: ProfileAddress(
-      houseNo: v, address: address, city: city, state: state, pinCode: pinCode,
-    ));
-    notifyListeners();
-  }
-
-  void updateAddress(String v) {
-    _profile = _profile?.copyWith(address: ProfileAddress(
-      houseNo: houseNo, address: v, city: city, state: state, pinCode: pinCode,
-    ));
-    notifyListeners();
-  }
-
-  void updatePinCode(String v) {
-    _profile = _profile?.copyWith(address: ProfileAddress(
-      houseNo: houseNo, address: address, city: city, state: state, pinCode: v,
-    ));
-    notifyListeners();
-  }
-
   // ── Save to API ───────────────────────────────────────────────────────────
 
   Future<void> updateProfile() async {
@@ -205,11 +257,11 @@ class ProfileViewModel extends ChangeNotifier {
     final results = await Future.wait([
       _service.updateProfile(name: name, email: email),
       _service.updatePrimaryAddress(
-        houseNo:  houseNo,
-        address:  address,
-        city:     city,
-        state:    state,
-        pinCode:  pinCode,
+        localityId: _selectedLocalityId,
+        areaId:     _selectedAreaId,
+        buildingId: _selectedBuildingId,
+        flatNo:     flatNo,
+        pinCode:    pinCode,
       ),
     ]);
 

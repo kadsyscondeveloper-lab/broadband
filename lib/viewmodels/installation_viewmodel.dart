@@ -72,12 +72,11 @@ class InstallationAddressViewModel extends ChangeNotifier {
 
     final profile = await _userService.getProfile();
     if (profile != null) {
-      final addr = profile.address;
-      _houseNo = addr.houseNo;
-      _address = addr.address;
-      _city    = addr.city;
-      _state   = addr.state;
-      _pinCode = addr.pinCode;
+      _houseNo = profile.flatNo;
+      _address = profile.buildingName;
+      _city    = profile.areaName;
+      _state   = profile.localityName;
+      _pinCode = profile.pinCode;
     }
 
     _step = InstallationAddressStep.form;

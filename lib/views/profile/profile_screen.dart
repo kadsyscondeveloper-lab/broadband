@@ -28,10 +28,10 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _emailController;
-  late final TextEditingController _stateController;
-  late final TextEditingController _cityController;
   late final TextEditingController _houseNoController;
-  late final TextEditingController _addressController;
+  late final TextEditingController _localityController;
+  late final TextEditingController _areaController;
+  late final TextEditingController _buildingController;
   late final TextEditingController _pinCodeController;
 
   bool _controllersInitialized = false;
@@ -42,10 +42,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     _nameController    = TextEditingController();
     _emailController   = TextEditingController();
-    _stateController   = TextEditingController();
-    _cityController    = TextEditingController();
+    _localityController = TextEditingController();
+    _areaController     = TextEditingController();
+    _buildingController = TextEditingController();
     _houseNoController = TextEditingController();
-    _addressController = TextEditingController();
     _pinCodeController = TextEditingController();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -73,10 +73,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final vm = widget.viewModel;
     _nameController.text    = vm.name;
     _emailController.text   = vm.email;
-    _stateController.text   = vm.state;
-    _cityController.text    = vm.city;
-    _houseNoController.text = vm.houseNo;
-    _addressController.text = vm.address;
+    _localityController.text = vm.selectedLocalityName;
+    _areaController.text     = vm.selectedAreaName;
+    _buildingController.text = vm.selectedBuildingName;
+    _houseNoController.text = vm.flatNo;
+
     _pinCodeController.text = vm.pinCode;
     _controllersInitialized = true;
   }
@@ -86,10 +87,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     widget.viewModel.removeListener(_onViewModelChange);
     _nameController.dispose();
     _emailController.dispose();
-    _stateController.dispose();
-    _cityController.dispose();
+    _localityController.dispose();
+    _areaController.dispose();
+    _buildingController.dispose();
+
     _houseNoController.dispose();
-    _addressController.dispose();
+
     _pinCodeController.dispose();
     super.dispose();
   }
@@ -103,14 +106,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final result = await LocationService.fetchCurrentLocation();
 
       // Update text controllers
-      if (result.address.isNotEmpty) _addressController.text = result.address;
-      if (result.pinCode.isNotEmpty) _pinCodeController.text = result.pinCode;
-      if (result.state.isNotEmpty)   _stateController.text   = result.state;
-      if (result.city.isNotEmpty)    _cityController.text    = result.city;
-
-      // Push into view-model too
-      if (result.state.isNotEmpty) widget.viewModel.updateState(result.state);
-      if (result.city.isNotEmpty)  widget.viewModel.updateCity(result.city);
+      if (result.pinCode.isNotEmpty) {
+        _pinCodeController.text = result.pinCode;
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -343,10 +341,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _update() async {
     widget.viewModel.updateName(_nameController.text);
     widget.viewModel.updateEmail(_emailController.text);
-    widget.viewModel.updateState(_stateController.text);
-    widget.viewModel.updateCity(_cityController.text);
-    widget.viewModel.updateHouseNo(_houseNoController.text);
-    widget.viewModel.updateAddress(_addressController.text);
+    widget.viewModel.updateFlatNo(_houseNoController.text);
     widget.viewModel.updatePinCode(_pinCodeController.text);
     await widget.viewModel.updateProfile();
 
@@ -536,37 +531,71 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // ── State dropdown ──────────────────────────────────────────
-                const _FieldLabel(text: 'State'),
+                //locality
+                const _FieldLabel(text: 'Locality'),
                 const SizedBox(height: 8),
+
                 _AddressDropdown(
-                  value: vm.state,
-                  items: vm.states,
-                  isLoading: vm.statesLoading,
-                  hint: 'Select State',
+                  value: vm.selectedLocalityName,
+                  items: vm.localities,
+                  isLoading: vm.localitiesLoading,
+                  hint: 'Select Locality',
                   onChanged: (name) {
-                    _stateController.text = name;
-                    _cityController.text  = '';
-                    widget.viewModel.updateState(name);
+                    final item =
+                    vm.localities.firstWhere((e) => e.name == name);
+
+                    _localityController.text = name;
+
+                    widget.viewModel.selectLocality(item);
                   },
                 ),
+
                 const SizedBox(height: 16),
 
-                // ── City dropdown ───────────────────────────────────────────
-                const _FieldLabel(text: 'City'),
+                //area
+                const _FieldLabel(text: 'Area'),
                 const SizedBox(height: 8),
+
                 _AddressDropdown(
-                  value: vm.city,
-                  items: vm.cities,
-                  isLoading: vm.citiesLoading,
-                  hint: vm.state.isEmpty
-                      ? 'Select state first'
-                      : vm.citiesLoading ? 'Loading cities…' : 'Select City',
+                  value: vm.selectedAreaName,
+                  items: vm.areas,
+                  isLoading: vm.areasLoading,
+                  hint: vm.selectedLocalityName.isEmpty
+                      ? 'Select locality first'
+                      : 'Select Area',
                   onChanged: (name) {
-                    _cityController.text = name;
-                    widget.viewModel.updateCity(name);
+                    final item =
+                    vm.areas.firstWhere((e) => e.name == name);
+
+                    _areaController.text = name;
+
+                    widget.viewModel.selectArea(item);
                   },
                 ),
+
+                const SizedBox(height: 16),
+
+                //building
+                const _FieldLabel(text: 'Building'),
+                const SizedBox(height: 8),
+
+                _AddressDropdown(
+                  value: vm.selectedBuildingName,
+                  items: vm.buildings,
+                  isLoading: vm.buildingsLoading,
+                  hint: vm.selectedAreaName.isEmpty
+                      ? 'Select area first'
+                      : 'Select Building',
+                  onChanged: (name) {
+                    final item =
+                    vm.buildings.firstWhere((e) => e.name == name);
+
+                    _buildingController.text = name;
+
+                    widget.viewModel.selectBuilding(item);
+                  },
+                ),
+
                 const SizedBox(height: 16),
 
                 // ── House No ────────────────────────────────────────────
@@ -577,11 +606,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 16),
 
                 // ── Address ─────────────────────────────────────────────
-                _ProfileField(
-                  label: 'Address',
-                  controller: _addressController,
-                ),
-                const SizedBox(height: 16),
 
                 // ── PIN Code ────────────────────────────────────────────
                 _ProfileField(

@@ -88,14 +88,14 @@ class KycViewModel extends ChangeNotifier {
     notifyListeners();
 
     final profile = await _userService.getProfile();
-    final addr    = profile?.address;
+
     final isComplete = profile != null &&
         profile.name.isNotEmpty &&
-        addr != null &&
-        addr.address.isNotEmpty &&
-        addr.city.isNotEmpty &&
-        addr.state.isNotEmpty &&
-        addr.pinCode.isNotEmpty;
+        profile.flatNo.isNotEmpty &&
+        profile.buildingName.isNotEmpty &&
+        profile.areaName.isNotEmpty &&
+        profile.localityName.isNotEmpty &&
+        profile.pinCode.isNotEmpty;
 
     if (!isComplete) {
       _step         = KycStep.error;
