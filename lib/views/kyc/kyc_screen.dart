@@ -1,11 +1,16 @@
 // lib/views/kyc/kyc_screen.dart
 //
-// Unified KYC screen with two tabs:
-//   1. Document KYC  — upload address proof + ID proof (multipart to server)
-//   2. Video KYC     — schedule a call + optionally upload a short video proof
+// Changes vs original:
+//  1. Video KYC tab — date picker and time slot removed.
+//     Tab now shows: video upload tile (required) + contact number (required).
+//  2. canSubmitVideo gating updated to match new viewmodel logic.
+//  3. _VideoScheduledCard still shows date/slot if the server returned them
+//     (backwards compatible with old scheduled requests).
+//  4. Success message updated to reflect upload-only flow.
 
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../viewmodels/kyc_viewmodel.dart';
 import '../../theme/app_theme.dart';
 import '../../services/kyc_service.dart';
@@ -33,7 +38,6 @@ class _KycScreenState extends State<KycScreen>
 
   void _onVmChange() {
     if (!mounted) return;
-    // Show video error snackbar if set
     if (_vm.videoError != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(_vm.videoError!),
@@ -105,7 +109,7 @@ class _KycScreenState extends State<KycScreen>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tab 1 — Document KYC
+// Tab 1 — Document KYC (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _DocKycTab extends StatelessWidget {
@@ -114,7 +118,6 @@ class _DocKycTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Already approved
     if (vm.kycStatus?.isApproved ?? false) {
       return _StatusBanner(
         icon: Icons.verified_rounded,
@@ -124,10 +127,8 @@ class _DocKycTab extends StatelessWidget {
       );
     }
 
-    // Pending/under review — show resubmit option
     final isPending = vm.kycStatus?.isPending ?? false;
 
-    // Submitting loader
     if (vm.step == KycStep.submitting) {
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -139,7 +140,6 @@ class _DocKycTab extends StatelessWidget {
       );
     }
 
-    // Success
     if (vm.step == KycStep.success) {
       return _StatusBanner(
         icon: Icons.check_circle_outline,
@@ -150,25 +150,15 @@ class _DocKycTab extends StatelessWidget {
       );
     }
 
+    // When pending, show a read-only status card.
+    // Do NOT show empty upload tiles — it makes users think docs weren't submitted.
+    if (isPending) {
+      return _PendingDocKycCard(vm: vm);
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Under review banner
-        if (isPending) ...[
-          _InfoBanner(
-            icon: Icons.badge_outlined,
-            bgColor: const Color(0xFFFFFBEB),
-            borderColor: const Color(0xFFF5C842),
-            iconBg: Colors.amber.shade100,
-            iconColor: const Color(0xFF8B6914),
-            title: 'Under Review',
-            message:
-            'Your documents have been submitted and are currently under review. You can resubmit if needed.',
-          ),
-          const SizedBox(height: 20),
-        ],
-
-        // Error banner
         if (vm.step == KycStep.error && !vm.isProfileIncomplete) ...[
           _InfoBanner(
             icon: Icons.error_outline,
@@ -182,7 +172,6 @@ class _DocKycTab extends StatelessWidget {
           const SizedBox(height: 16),
         ],
 
-        // ── Address Proof ──────────────────────────────────────────────────
         _SectionLabel(text: 'Address Proof'),
         const SizedBox(height: 8),
         _DocDropdown(
@@ -199,7 +188,6 @@ class _DocKycTab extends StatelessWidget {
         ),
         const SizedBox(height: 24),
 
-        // ── ID Proof ───────────────────────────────────────────────────────
         _SectionLabel(text: 'ID Proof'),
         const SizedBox(height: 8),
         _DocDropdown(
@@ -216,7 +204,6 @@ class _DocKycTab extends StatelessWidget {
         ),
         const SizedBox(height: 32),
 
-        // ── Submit button ──────────────────────────────────────────────────
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
@@ -242,7 +229,7 @@ class _DocKycTab extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tab 2 — Video KYC
+// Tab 2 — Video KYC (upload-only, no date/slot fields)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _VideoKycTab extends StatefulWidget {
@@ -270,10 +257,10 @@ class _VideoKycTabState extends State<_VideoKycTab> {
 
   @override
   Widget build(BuildContext context) {
-    final vm = widget.vm;
+    final vm      = widget.vm;
     final vStatus = vm.videoKycStatus;
 
-    // Already scheduled / pending
+    // Pending / scheduled — show status card
     if (vStatus != null && vStatus.isPending) {
       return _VideoScheduledCard(
         vm: vm,
@@ -292,21 +279,21 @@ class _VideoKycTabState extends State<_VideoKycTab> {
       );
     }
 
-    // Success after submission
+    // Success after upload
     if (vm.videoSuccess) {
       return _StatusBanner(
         icon: Icons.check_circle_outline,
         color: Colors.green,
-        title: 'Request Submitted',
+        title: 'Video Submitted',
         message:
-        'Your video KYC request has been received. We\'ll contact you on the selected date and time.',
+        'Your video KYC has been received and is under review. We\'ll notify you once verified.',
       );
     }
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Info card
+        // Info banner
         _InfoBanner(
           icon: Icons.videocam_outlined,
           bgColor: const Color(0xFFF0F4FF),
@@ -315,64 +302,26 @@ class _VideoKycTabState extends State<_VideoKycTab> {
           iconColor: AppColors.primary,
           title: 'Video Verification',
           message:
-          'Schedule a live video call with our team for identity verification. Optionally upload a short video proof.',
+          'Upload a short video for identity verification. Our team will review it and contact you if needed.',
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
 
-        // ── Preferred date ──────────────────────────────────────────────────
-        _SectionLabel(text: 'Preferred Date *'),
+        // ── Video upload (required) ─────────────────────────────────────
+        _SectionLabel(text: 'Video Proof *'),
+        const SizedBox(height: 4),
+        Text(
+          'MP4, MOV or WebM • Max 100 MB',
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+        ),
         const SizedBox(height: 8),
-        GestureDetector(
-          onTap: () async {
-            final now = DateTime.now();
-            final picked = await showDatePicker(
-              context: context,
-              initialDate: now.add(const Duration(days: 1)),
-              firstDate: now,
-              lastDate: now.add(const Duration(days: 30)),
-            );
-            if (picked != null) {
-              vm.setPreferredDate(
-                  '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}');
-            }
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.borderColor),
-            ),
-            child: Row(children: [
-              const Icon(Icons.calendar_today_outlined,
-                  size: 18, color: AppColors.textGrey),
-              const SizedBox(width: 12),
-              Text(
-                vm.preferredDate.isEmpty
-                    ? 'Select a date'
-                    : vm.preferredDate,
-                style: TextStyle(
-                    fontSize: 15,
-                    color: vm.preferredDate.isEmpty
-                        ? AppColors.textGrey
-                        : AppColors.textDark),
-              ),
-            ]),
-          ),
+        _VideoUploadTile(
+          file: vm.videoFile,
+          onPick: () => vm.pickVideoFile(context),
+          onRemove: vm.removeVideoFile,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 24),
 
-        // ── Time slot ───────────────────────────────────────────────────────
-        _SectionLabel(text: 'Preferred Time Slot'),
-        const SizedBox(height: 8),
-        _DocDropdown(
-          value: vm.preferredSlot,
-          items: vm.timeSlots,
-          onChanged: vm.setPreferredSlot,
-        ),
-        const SizedBox(height: 16),
-
-        // ── Call-back phone ─────────────────────────────────────────────────
+        // ── Contact number (required) ───────────────────────────────────
         _SectionLabel(text: 'Contact Number *'),
         const SizedBox(height: 8),
         TextField(
@@ -400,40 +349,9 @@ class _VideoKycTabState extends State<_VideoKycTab> {
             ),
           ),
         ),
-        const SizedBox(height: 24),
-
-        // ── Video upload (optional) ─────────────────────────────────────────
-        Row(children: [
-          _SectionLabel(text: 'Upload Video Proof'),
-          const SizedBox(width: 8),
-          Container(
-            padding:
-            const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Text('Optional',
-                style: TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textGrey,
-                    fontWeight: FontWeight.w500)),
-          ),
-        ]),
-        const SizedBox(height: 4),
-        Text(
-          'MP4, MOV or WebM • Max 100 MB',
-          style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-        ),
-        const SizedBox(height: 8),
-        _VideoUploadTile(
-          file: vm.videoFile,
-          onPick: () => vm.pickVideoFile(context),
-          onRemove: vm.removeVideoFile,
-        ),
         const SizedBox(height: 32),
 
-        // ── Submit ──────────────────────────────────────────────────────────
+        // ── Submit ──────────────────────────────────────────────────────
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
@@ -453,7 +371,7 @@ class _VideoKycTabState extends State<_VideoKycTab> {
                 height: 20, width: 20,
                 child: CircularProgressIndicator(
                     color: Colors.white, strokeWidth: 2))
-                : const Text('Submit Video KYC Request',
+                : const Text('Submit Video KYC',
                 style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
@@ -466,8 +384,301 @@ class _VideoKycTabState extends State<_VideoKycTab> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Small shared widgets
+// Shared widgets
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ── Pending doc KYC status card ─────────────────────────────────────────────
+
+class _PendingDocKycCard extends StatelessWidget {
+  final KycViewModel vm;
+  const _PendingDocKycCard({required this.vm});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = vm.kycStatus;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Status banner
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFFBEB),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFF5C842)),
+          ),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color: Colors.amber.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.hourglass_top_rounded,
+                  color: Color(0xFF8B6914), size: 22),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Documents Under Review',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        color: Color(0xFF8B6914))),
+                SizedBox(height: 4),
+                Text(
+                  'Your documents have been submitted successfully and are being reviewed by our team. '
+                      'We will notify you once verified.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF8B6914), height: 1.5),
+                ),
+              ]),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 24),
+
+        // Submitted doc details
+        const Text('Submitted Documents',
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textDark)),
+        const SizedBox(height: 12),
+        _SubmittedDocRow(
+          label: 'Address Proof',
+          type: s?.addressProofType ?? '—',
+          icon: Icons.home_outlined,
+          fileUrl: s?.addressProofUrl,
+        ),
+        const SizedBox(height: 12),
+        _SubmittedDocRow(
+          label: 'ID Proof',
+          type: s?.idProofType ?? '—',
+          icon: Icons.badge_outlined,
+          fileUrl: s?.idProofUrl,
+        ),
+        if (s?.submittedAt != null) ...[
+          const SizedBox(height: 16),
+          Text(
+            'Submitted on ${_formatDate(s!.submittedAt!)}',
+            style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
+          ),
+        ],
+      ]),
+    );
+  }
+
+  String _formatDate(String iso) {
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      return '${dt.day}/${dt.month}/${dt.year} at ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return iso;
+    }
+  }
+}
+
+// ── Submitted doc row: shows type name + preview thumbnail / PDF link ─────────
+class _SubmittedDocRow extends StatelessWidget {
+  final String   label;
+  final String   type;
+  final IconData icon;
+  final String?  fileUrl;
+
+  const _SubmittedDocRow({
+    required this.label,
+    required this.type,
+    required this.icon,
+    this.fileUrl,
+  });
+
+  bool get _isPdf => fileUrl != null &&
+      (fileUrl!.toLowerCase().endsWith('.pdf'));
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.green.shade200),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // ── Header row (label + type name + check) ──────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+          child: Row(children: [
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, size: 18, color: Colors.green.shade600),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(label,
+                    style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textGrey,
+                        fontWeight: FontWeight.w500)),
+                const SizedBox(height: 2),
+                Text(type,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textDark)),
+              ]),
+            ),
+            Icon(Icons.check_circle, size: 18, color: Colors.green.shade500),
+          ]),
+        ),
+
+        // ── Document preview ─────────────────────────────────────────────
+        if (fileUrl != null) ...[
+          Divider(height: 1, color: Colors.green.shade100),
+          if (_isPdf)
+          // PDF: tappable link row
+            InkWell(
+              onTap: () => _openUrl(context, fileUrl!),
+              borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 10),
+                child: Row(children: [
+                  Icon(Icons.picture_as_pdf,
+                      size: 16, color: Colors.red.shade400),
+                  const SizedBox(width: 8),
+                  const Text('View PDF',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary)),
+                  const Spacer(),
+                  const Icon(Icons.open_in_new,
+                      size: 14, color: AppColors.textGrey),
+                ]),
+              ),
+            )
+          else
+          // Image: thumbnail with tap-to-enlarge
+            GestureDetector(
+              onTap: () => _showFullImage(context, fileUrl!),
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                    bottom: Radius.circular(11)),
+                child: Stack(children: [
+                  Image.network(
+                    fileUrl!,
+                    width: double.infinity,
+                    height: 160,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (_, child, progress) {
+                      if (progress == null) return child;
+                      return Container(
+                        height: 160,
+                        color: Colors.green.shade50,
+                        child: const Center(
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2)),
+                      );
+                    },
+                    errorBuilder: (_, __, ___) => Container(
+                      height: 80,
+                      color: Colors.green.shade50,
+                      child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.broken_image_outlined,
+                                size: 18,
+                                color: Colors.green.shade300),
+                            const SizedBox(width: 8),
+                            Text('Could not load image',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.green.shade400)),
+                          ]),
+                    ),
+                  ),
+                  // Tap-to-enlarge hint overlay
+                  Positioned(
+                    bottom: 8, right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.zoom_in,
+                                size: 12, color: Colors.white),
+                            SizedBox(width: 4),
+                            Text('Tap to enlarge',
+                                style: TextStyle(
+                                    fontSize: 10, color: Colors.white)),
+                          ]),
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+        ],
+      ]),
+    );
+  }
+
+  void _openUrl(BuildContext context, String url) async {
+    // Opens the PDF URL — uses url_launcher if available, else shows a snackbar
+    try {
+      final uri = Uri.parse(url);
+      // ignore: deprecated_member_use
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Open: $url'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  void _showFullImage(BuildContext context, String url) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.black87,
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(children: [
+          InteractiveViewer(
+            child: Image.network(url, fit: BoxFit.contain),
+          ),
+          Positioned(
+            top: 8, right: 8,
+            child: GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                width: 32, height: 32,
+                decoration: const BoxDecoration(
+                    color: Colors.black54, shape: BoxShape.circle),
+                child: const Icon(Icons.close,
+                    size: 18, color: Colors.white),
+              ),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
 
 class _SectionLabel extends StatelessWidget {
   final String text;
@@ -523,8 +734,8 @@ class _DocDropdown extends StatelessWidget {
 }
 
 class _UploadTile extends StatelessWidget {
-  final File?    file;
-  final String   label;
+  final File?        file;
+  final String       label;
   final VoidCallback onPick;
   final VoidCallback onRemove;
 
@@ -565,7 +776,6 @@ class _UploadTile extends StatelessWidget {
       );
     }
 
-    // File selected
     final ext  = file!.path.split('.').last.toUpperCase();
     final name = file!.path.split('/').last;
 
@@ -624,7 +834,7 @@ class _UploadTile extends StatelessWidget {
 }
 
 class _VideoUploadTile extends StatelessWidget {
-  final File?    file;
+  final File?        file;
   final VoidCallback onPick;
   final VoidCallback onRemove;
 
@@ -640,7 +850,7 @@ class _VideoUploadTile extends StatelessWidget {
       return GestureDetector(
         onTap: onPick,
         child: Container(
-          height: 90,
+          height: 110,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
@@ -651,13 +861,16 @@ class _VideoUploadTile extends StatelessWidget {
           child: Center(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.videocam_outlined,
-                  size: 32, color: AppColors.primary.withOpacity(0.6)),
-              const SizedBox(height: 6),
-              Text('Tap to select video (optional)',
+                  size: 36, color: AppColors.primary.withOpacity(0.6)),
+              const SizedBox(height: 8),
+              Text('Tap to select video',
                   style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 14,
                       color: AppColors.primary.withOpacity(0.7),
-                      fontWeight: FontWeight.w500)),
+                      fontWeight: FontWeight.w600)),
+              const SizedBox(height: 2),
+              Text('MP4, MOV or WebM',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
             ]),
           ),
         ),
@@ -683,13 +896,18 @@ class _VideoUploadTile extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: Text(name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textDark)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textDark)),
+            const SizedBox(height: 2),
+            Text('Ready to upload',
+                style: TextStyle(fontSize: 11, color: Colors.green.shade600)),
+          ]),
         ),
         GestureDetector(
           onTap: onRemove,
@@ -758,8 +976,8 @@ class _InfoBanner extends StatelessWidget {
 
 class _StatusBanner extends StatelessWidget {
   final IconData icon;
-  final Color color;
-  final String title, message;
+  final Color    color;
+  final String   title, message;
 
   const _StatusBanner({
     required this.icon,
@@ -795,7 +1013,7 @@ class _StatusBanner extends StatelessWidget {
 }
 
 class _ProfileIncompleteCard extends StatelessWidget {
-  final String message;
+  final String       message;
   final VoidCallback onGoToProfile;
 
   const _ProfileIncompleteCard({
@@ -844,7 +1062,7 @@ class _ProfileIncompleteCard extends StatelessWidget {
   }
 }
 
-// ── Video scheduled card ─────────────────────────────────────────────────────
+// ── Video scheduled/pending status card ──────────────────────────────────────
 
 class _VideoScheduledCard extends StatelessWidget {
   final KycViewModel vm;
@@ -868,13 +1086,11 @@ class _VideoScheduledCard extends StatelessWidget {
           borderColor: const Color(0xFFBDD0FF),
           iconBg: const Color(0xFFDEE8FF),
           iconColor: AppColors.primary,
-          title: 'Video KYC Scheduled',
-          message: 'We\'ll call you on the selected date and time for verification.',
+          title: 'Video KYC Under Review',
+          message: 'Your video has been submitted and is being reviewed by our team.',
         ),
         const SizedBox(height: 20),
         _DetailRow(label: 'Reference', value: status.referenceId ?? '—'),
-        _DetailRow(label: 'Date',      value: status.preferredDate ?? '—'),
-        _DetailRow(label: 'Slot',      value: status.preferredSlot ?? '—'),
         _DetailRow(label: 'Phone',     value: status.callPhone ?? '—'),
         _DetailRow(label: 'Status',    value: status.status),
         const SizedBox(height: 28),

@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 import '../../theme/app_theme.dart';
-import '../../services/video_kyc_service.dart';
+import '../../services/kyc_service.dart';
 
 class VideoKycScreen extends StatefulWidget {
   final String docKycStatus;
@@ -22,10 +22,10 @@ class VideoKycScreen extends StatefulWidget {
 }
 
 class _VideoKycScreenState extends State<VideoKycScreen> {
-  final _service = VideoKycService();
+  final _service = KycService();
   final _picker  = ImagePicker();
 
-  VideoKycRequest? _existing;
+  VideoKycStatus? _existing;
 
   bool    _isLoading    = true;
   bool    _isSubmitting = false;
@@ -52,7 +52,7 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
 
   Future<void> _load() async {
     setState(() { _isLoading = true; _error = null; });
-    _existing = await _service.getStatus();
+    _existing = await _service.getVideoStatus();
     setState(() => _isLoading = false);
   }
 
@@ -112,7 +112,10 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
 
     setState(() { _isSubmitting = true; _error = null; });
 
-    final result = await _service.submitVideo(_videoFile!);
+    final result = await _service.submitVideoKyc(
+      callPhone: '',
+      videoFile: _videoFile!,
+    );
 
     if (!mounted) return;
 
@@ -149,17 +152,17 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
     if (confirmed != true) return;
 
     setState(() { _isCancelling = true; _error = null; });
-    final result = await _service.cancel();
+    final cancelled = await _service.cancelVideoKyc();
     if (!mounted) return;
 
-    if (result.success) {
+    if (cancelled) {
       setState(() {
         _existing     = null;
         _isCancelling = false;
       });
       await _load();
     } else {
-      setState(() { _error = result.error; _isCancelling = false; });
+      setState(() { _error = 'Could not cancel. Please try again.'; _isCancelling = false; });
     }
   }
 
@@ -206,7 +209,7 @@ class _VideoKycScreenState extends State<VideoKycScreen> {
       );
     }
 
-    // Under review (pending or under_review)
+    // Under review (pending or scheduled)
     if (_existing?.isInReview == true) {
       return _PendingView(
         request:      _existing!,
@@ -557,7 +560,7 @@ class _Chip extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PendingView extends StatelessWidget {
-  final VideoKycRequest request;
+  final VideoKycStatus request;
   final bool            isCancelling;
   final String?         error;
   final VoidCallback    onCancel;
@@ -573,7 +576,7 @@ class _PendingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isUnderReview = request.isUnderReview;
+    final isUnderReview = request.isInReview;
     final color = isUnderReview ? Colors.blue : Colors.orange;
     final title = isUnderReview
         ? 'Under Review'
@@ -639,12 +642,12 @@ class _PendingView extends StatelessWidget {
             child: Column(children: [
               _DetailRow(
                   label: 'Reference ID',
-                  value: request.referenceId,
+                  value: request.referenceId ?? '—',
                   mono: true),
               const Divider(height: 20),
               _DetailRow(
                   label: 'Submitted',
-                  value: _fmtDate(request.createdAt)),
+                  value: _fmtDate(request.createdAt ?? '')),
             ]),
           ),
           const SizedBox(height: 12),
@@ -738,7 +741,7 @@ class _PendingView extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _CompletedView extends StatelessWidget {
-  final VideoKycRequest request;
+  final VideoKycStatus request;
   const _CompletedView({required this.request});
 
   @override
@@ -814,7 +817,7 @@ class _CompletedView extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _FailedView extends StatelessWidget {
-  final VideoKycRequest request;
+  final VideoKycStatus request;
   final VoidCallback    onRetry;
   const _FailedView({required this.request, required this.onRetry});
 

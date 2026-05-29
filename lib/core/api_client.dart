@@ -23,9 +23,14 @@ class ApiClient {
       connectTimeout: AppConfig.connectTimeout,
       receiveTimeout: AppConfig.receiveTimeout,
       headers: {
-        'Content-Type': 'application/json',
-        'Accept':        'application/json',
-        'X-Tenant':      AppConfig.tenant,        // ← add this line
+        // NOTE: Do NOT set Content-Type here.
+        // Dio sets it automatically per-request:
+        //   → 'application/json'           for plain POST/PUT bodies
+        //   → 'multipart/form-data; boundary=...' for FormData (KYC uploads)
+        // A hardcoded 'application/json' here overrides multipart and breaks
+        // file uploads (Multer receives no files and returns 400).
+        'Accept':   'application/json',
+        'X-Tenant': AppConfig.tenant,
       },
     ));
 

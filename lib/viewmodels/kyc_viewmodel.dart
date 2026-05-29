@@ -1,3 +1,9 @@
+// lib/viewmodels/kyc_viewmodel.dart
+//
+// Changes vs original:
+//  1. preferredDate / preferredSlot / timeSlots removed entirely.
+//  2. submitVideoKyc only requires callPhone + optional videoFile.
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -25,41 +31,38 @@ class KycViewModel extends ChangeNotifier {
   // ── Video KYC state ───────────────────────────────────────────────────────
   VideoKycStatus? _videoKycStatus;
   File?   _videoFile;
-  String  _preferredDate  = '';
-  String  _preferredSlot  = 'Morning (9 AM – 12 PM)';
-  String  _callPhone      = '';
+  String  _callPhone       = '';
   bool    _videoSubmitting = false;
   String? _videoError;
   bool    _videoSuccess    = false;
 
   // ── Getters ───────────────────────────────────────────────────────────────
-  KycStep         get step           => _step;
-  String?         get errorMessage   => _errorMessage;
-  String?         get progressText   => _progressText;
-  KycStatus?      get kycStatus      => _kycStatus;
+  KycStep         get step             => _step;
+  String?         get errorMessage     => _errorMessage;
+  String?         get progressText     => _progressText;
+  KycStatus?      get kycStatus        => _kycStatus;
   String          get addressProofType => _addressProofType;
   String          get idProofType      => _idProofType;
-  File?           get addressFile    => _addressFile;
-  File?           get idFile         => _idFile;
+  File?           get addressFile      => _addressFile;
+  File?           get idFile           => _idFile;
 
-  VideoKycStatus? get videoKycStatus  => _videoKycStatus;
-  File?           get videoFile       => _videoFile;
-  String          get preferredDate   => _preferredDate;
-  String          get preferredSlot   => _preferredSlot;
-  String          get callPhone       => _callPhone;
-  bool            get videoSubmitting => _videoSubmitting;
-  String?         get videoError      => _videoError;
-  bool            get videoSuccess    => _videoSuccess;
+  VideoKycStatus? get videoKycStatus   => _videoKycStatus;
+  File?           get videoFile        => _videoFile;
+  String          get callPhone        => _callPhone;
+  bool            get videoSubmitting  => _videoSubmitting;
+  String?         get videoError       => _videoError;
+  bool            get videoSuccess     => _videoSuccess;
 
   bool get isSubmitting        => _step == KycStep.submitting;
   bool get hasAddressFile      => _addressFile != null;
   bool get hasIdFile           => _idFile != null;
   bool get canSubmit           => hasAddressFile && hasIdFile && !isSubmitting;
   bool get hasVideoFile        => _videoFile != null;
-  bool get canSubmitVideo      =>
-      _preferredDate.isNotEmpty && _callPhone.isNotEmpty && !_videoSubmitting;
   bool get isProfileIncomplete =>
       _step == KycStep.error && (_errorMessage?.contains('profile') ?? false);
+
+  /// Upload-only mode: a video file and a phone number are all that's needed.
+  bool get canSubmitVideo => hasVideoFile && _callPhone.isNotEmpty && !_videoSubmitting;
 
   String get addressFileName =>
       _addressFile != null ? _addressFile!.path.split('/').last : '';
@@ -73,11 +76,6 @@ class KycViewModel extends ChangeNotifier {
   ];
   final List<String> idProofTypes = [
     'Aadhar Card', 'Passport', 'Voter ID', 'Driving License', 'PAN Card',
-  ];
-  final List<String> timeSlots = [
-    'Morning (9 AM – 12 PM)',
-    'Afternoon (12 PM – 3 PM)',
-    'Evening (3 PM – 6 PM)',
   ];
 
   // ── Init ──────────────────────────────────────────────────────────────────
@@ -118,8 +116,6 @@ class KycViewModel extends ChangeNotifier {
   // ── Setters ───────────────────────────────────────────────────────────────
   void setAddressProofType(String v) { _addressProofType = v; notifyListeners(); }
   void setIdProofType(String v)      { _idProofType = v;      notifyListeners(); }
-  void setPreferredDate(String v)    { _preferredDate = v;    notifyListeners(); }
-  void setPreferredSlot(String v)    { _preferredSlot = v;    notifyListeners(); }
   void setCallPhone(String v)        { _callPhone = v;        notifyListeners(); }
 
   // ── File picking ──────────────────────────────────────────────────────────
@@ -206,7 +202,7 @@ class KycViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Submit video KYC ──────────────────────────────────────────────────────
+  // ── Submit video KYC (upload-only) ────────────────────────────────────────
   Future<void> submitVideoKyc() async {
     if (!canSubmitVideo) return;
 
@@ -216,10 +212,8 @@ class KycViewModel extends ChangeNotifier {
     notifyListeners();
 
     final result = await _service.submitVideoKyc(
-      preferredDate: _preferredDate,
-      preferredSlot: _preferredSlot,
-      callPhone:     _callPhone,
-      videoFile:     _videoFile,
+      callPhone: _callPhone,
+      videoFile: _videoFile,
     );
 
     _videoSubmitting = false;
@@ -290,7 +284,7 @@ class _FilePickerSheet extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             Text(
-              allowVideo ? 'Upload Video / Document' : 'Upload Document',
+              allowVideo ? 'Upload Video' : 'Upload Document',
               style: const TextStyle(
                   fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E)),
             ),
@@ -304,13 +298,13 @@ class _FilePickerSheet extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: allowVideo
                   ? [
-                _SheetOption(icon: Icons.videocam_outlined,     label: 'Gallery', onTap: onVideo),
-                _SheetOption(icon: Icons.description_outlined,  label: 'Files',   onTap: onDocument),
+                // Upload-only mode: gallery video picker only
+                _SheetOption(icon: Icons.videocam_outlined, label: 'Gallery', onTap: onVideo),
               ]
                   : [
-                _SheetOption(icon: Icons.camera_alt_outlined,   label: 'Camera',   onTap: onCamera),
-                _SheetOption(icon: Icons.photo_library_outlined, label: 'Gallery',  onTap: onGallery),
-                _SheetOption(icon: Icons.description_outlined,  label: 'Document', onTap: onDocument),
+                _SheetOption(icon: Icons.camera_alt_outlined,    label: 'Camera',   onTap: onCamera),
+                _SheetOption(icon: Icons.photo_library_outlined,  label: 'Gallery',  onTap: onGallery),
+                _SheetOption(icon: Icons.description_outlined,   label: 'Document', onTap: onDocument),
               ],
             ),
           ],
